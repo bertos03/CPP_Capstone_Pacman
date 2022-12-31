@@ -5,6 +5,9 @@
  *
  */
 Renderer::~Renderer() {
+
+//TODO: clean up images etc.
+
   SDL_DestroyWindow(sdl_window);
   sdl_window = NULL;
   TTF_Quit();
@@ -31,9 +34,11 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
   screen_res_y = DM.h;
   rows = map->get_map_rows();
   cols = map->get_map_cols();
+  int fontsize = screen_res_y / 35; // for top text - store it in a separate
+                                    // variable for better readability
 
   int element_size_x = (screen_res_y - rows - 1) / rows;
-  int element_size_y = (screen_res_x - cols - 1) / cols;
+  int element_size_y = (screen_res_x - cols - 1 - fontsize) / cols;
   // make sure elements have square, not rectangular shape
   if (element_size_x > element_size_y) {
     element_size = element_size_y;
@@ -42,7 +47,7 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
   }
 
   offset_x = (screen_res_x - (cols + 1) * element_size) / 2;
-  offset_y = (screen_res_y - (rows + 1) * element_size) / 2;
+  offset_y = (screen_res_y - (rows + 1) * element_size) / 2 + fontsize;
 
   // Create Window
   sdl_window = SDL_CreateWindow(
@@ -70,8 +75,7 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
 
   // Define Font Stuff
   TTF_Init();
-  int fontsize = screen_res_y / 35; // for top text - store it in a separate
-                                    // variable for better readability
+
   sdl_font = TTF_OpenFont("../data/font.ttf", fontsize);
   fontsize = screen_res_y / 8;
   sdl_font_winlose = TTF_OpenFont("../data/font.ttf", fontsize);
@@ -82,6 +86,29 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
   }
   sdl_font_color = SDL_Color{255, 255, 255};
   sdl_font_back_color = SDL_Color{COLOR_BACK};
+
+  // set up icons
+  sdl_wall_surface = SDL_LoadBMP(WALL_PATH);
+  sdl_wall_texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, sdl_wall_surface);
+
+  sdl_goodie_surface = SDL_LoadBMP(GOODIE_PATH);
+  sdl_goodie_texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, sdl_goodie_surface);
+
+  sdl_monster_surface = SDL_LoadBMP(MONSTER_PATH);
+  sdl_monster_texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, sdl_monster_surface);
+
+  sdl_pacman_surface = SDL_LoadBMP(PACMAN_PATH);
+  sdl_pacman_texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, sdl_pacman_surface);
+
+  if (sdl_goodie_surface == NULL || sdl_wall_surface == NULL ||
+      sdl_monster_surface == NULL || sdl_pacman_surface == NULL) {
+    std::cerr << "could not open icons .- " << SDL_GetError() << "\n";
+    exit(1);
+  }
 }
 
 void Renderer::Render() {
@@ -104,20 +131,32 @@ void Renderer::drawpacman() {
   game->pacman->px_coord = getPixelCoord(
       game->pacman->map_coord, element_size * game->pacman->px_delta.x / 100.,
       element_size * game->pacman->px_delta.y / 100.);
-  SDL_SetRenderDrawColor(sdl_renderer, COLOR_PACMAN, 0xFF);
-  SDL_RenderFillCircle(sdl_renderer,
-                       game->pacman->px_coord.x + element_size / 2,
-                       game->pacman->px_coord.y + element_size / 2,
-                       (element_size - SIZE_PACMAN) / 2);
+  // SDL_SetRenderDrawColor(sdl_renderer, COLOR_PACMAN, 0xFF);
+  // SDL_RenderFillCircle(sdl_renderer,
+  //                      game->pacman->px_coord.x + element_size / 2,
+  //                      game->pacman->px_coord.y + element_size / 2,
+  //                      (element_size - SIZE_PACMAN) / 2);
+  sdl_pacman_rect =
+        SDL_Rect{game->pacman->px_coord.x + int(element_size * 0.05),
+                 game->pacman->px_coord.y + int(element_size * 0.05),
+                 int(element_size * 0.9), int(element_size * 0.9)};
+    SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, NULL, &sdl_pacman_rect);
 }
 void Renderer::drawgoodies() {
   for (auto goodie : game->goodies) {
     if (goodie->is_active) {
       goodie->px_coord = getPixelCoord(goodie->map_coord, 0, 0);
-      SDL_SetRenderDrawColor(sdl_renderer, COLOR_GOODIE, 0xFF);
-      SDL_RenderFillCircle(sdl_renderer, goodie->px_coord.x + element_size / 2,
-                           goodie->px_coord.y + element_size / 2,
-                           (element_size - 2) / 4);
+      // SDL_SetRenderDrawColor(sdl_renderer, COLOR_GOODIE, 0xFF);
+      // SDL_RenderFillCircle(sdl_renderer, goodie->px_coord.x + element_size /
+      // 2,
+      //                      goodie->px_coord.y + element_size / 2,
+      //                      sin(std::chrono::system_clock::now()) *
+      //                          (element_size - 2) / 4);
+      sdl_goodie_rect =
+          SDL_Rect{goodie->px_coord.x + int(element_size * 0.15),
+                   goodie->px_coord.y + int(element_size * 0.15),
+                   int(element_size * 0.7), int(element_size * 0.7)};
+      SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, NULL, &sdl_goodie_rect);
     }
   }
 }
@@ -127,10 +166,16 @@ void Renderer::drawmonsters() {
     monster->px_coord = getPixelCoord(
         monster->map_coord, element_size * monster->px_delta.x / 100.,
         element_size * monster->px_delta.y / 100.);
-    SDL_SetRenderDrawColor(sdl_renderer, COLOR_MONSTER, 0xFF);
-    SDL_RenderFillCircle(sdl_renderer, monster->px_coord.x + element_size / 2,
-                         monster->px_coord.y + element_size / 2,
-                         (element_size - SIZE_MONSTER) / 2);
+    // SDL_SetRenderDrawColor(sdl_renderer, COLOR_MONSTER, 0xFF);
+    // SDL_RenderFillCircle(sdl_renderer, monster->px_coord.x + element_size /
+    // 2,
+    //                      monster->px_coord.y + element_size / 2,
+    //                      (element_size - SIZE_MONSTER) / 2);
+    sdl_monster_rect =
+        SDL_Rect{monster->px_coord.x + int(element_size * 0.05),
+                 monster->px_coord.y + int(element_size * 0.05),
+                 int(element_size * 0.9), int(element_size * 0.9)};
+    SDL_RenderCopy(sdl_renderer, sdl_monster_texture, NULL, &sdl_monster_rect);
   }
 }
 
@@ -161,8 +206,9 @@ void Renderer::drawtext() {
   sdl_font_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_text_surface);
   SDL_QueryTexture(sdl_font_texture, NULL, NULL, &texW, &texH);
-  sdl_text_rect = SDL_Rect{20, 30, texW, texH};
+  sdl_text_rect = SDL_Rect{(screen_res_x - texW) / 2, 30, texW, texH};
   SDL_RenderCopy(sdl_renderer, sdl_font_texture, NULL, &sdl_text_rect);
+  /////////
 }
 
 /**
@@ -184,19 +230,21 @@ void Renderer::drawmap() {
       y = offset_y + 1 + j * (element_size + 1);
       switch (temp) {
       case ElementType::TYPE_WALL:
-        SDL_SetRenderDrawColor(sdl_renderer, 50, 50, 50, 0xFF);
-        block.x = x;
-        block.y = y;
-        SDL_RenderFillRect(sdl_renderer, &block);
+        // SDL_SetRenderDrawColor(sdl_renderer, 50, 50, 50, 0xFF);
+        // block.x = x;
+        // block.y = y;
+        // SDL_RenderFillRect(sdl_renderer, &block);
+        sdl_wall_rect = SDL_Rect{x, y, element_size + 1, element_size + 1};
+        SDL_RenderCopy(sdl_renderer, sdl_wall_texture, NULL, &sdl_wall_rect);
         break;
       case ElementType::TYPE_PATH:
-        SDL_SetRenderDrawColor(sdl_renderer, COLOR_WALL, 0xFF);
+        SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
         block.x = x;
         block.y = y;
         SDL_RenderFillRect(sdl_renderer, &block);
         break;
       default:
-        SDL_SetRenderDrawColor(sdl_renderer, COLOR_WALL, 0xFF);
+        SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
         block.x = x;
         block.y = y;
         SDL_RenderFillRect(sdl_renderer, &block);

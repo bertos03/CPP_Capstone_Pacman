@@ -11,9 +11,9 @@ Audio::Audio() {
     exit(1);
   }
 
-  SFX_coin = Mix_LoadWAV("../data/coin.wav");
-  SFX_win = Mix_LoadWAV("../data/win.wav");
-  SFX_gameover = Mix_LoadWAV("../data/gameover.wav");
+  SFX_coin = Mix_LoadWAV(COIN_SOUND_PATH);
+  SFX_win = Mix_LoadWAV(WIN_SOUND_PATH);
+  SFX_gameover = Mix_LoadWAV(GAMEOVER_SOUND_PATH);
   // Mix_PlayChannel(-1, SFX_coin, 0);
   if (SFX_coin == NULL || SFX_win == NULL | SFX_gameover == NULL) {
     printf("Failed to load SFX ... SDL_mixer Error: %s\n", Mix_GetError());

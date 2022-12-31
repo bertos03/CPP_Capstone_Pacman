@@ -32,14 +32,14 @@ void Game::Update() {
 
   // Check for collision with Goodies ... game is won if all goodies are
   // collected
+  win = true;
   for (auto i : goodies) {
     if (i->map_coord.u == pacman->map_coord.u &&
         i->map_coord.v == pacman->map_coord.v && i->is_active) {
       score += SCORE_PER_GOODIE;
       audio->PlayCoin();
       i->Deactivate();
-    }
-    win = true;
+    }    
     win = (i->is_active) ? false : win;
   }
   if (win) {
@@ -57,13 +57,13 @@ void Game::Update() {
 }
 
 Game::~Game() {
-  std::cout << "Waiting for threads to finish ... \n";
+  // std::cout << "Waiting for threads to finish ... \n";
   for (int i = 0; i < monster_threads.size(); i++) {
     monster_threads[i].join();
   }
   pacman_thread.join();
 
-  std::cout << "Threads finished.\n";
+  // std::cout << "Threads finished.\n";
 
   for (auto p : monsters) {
     delete p;

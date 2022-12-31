@@ -20,7 +20,7 @@ void Events::update() {
   }
   
   if (sdl_events->type == SDL_MOUSEBUTTONDOWN) {
-    quit = true;
+    //quit = true;
   }
   if (sdl_events->type == SDL_KEYDOWN) {
     switch (sdl_events->key.keysym.sym) {

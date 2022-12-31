@@ -5,6 +5,8 @@
 #include <thread>
 #include <vector>
 
+#include "definitions.h"
+
 class Audio {
 public:
   Audio();
