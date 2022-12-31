@@ -37,20 +37,26 @@ void Game::Update() {
     if (i->map_coord.u == pacman->map_coord.u &&
         i->map_coord.v == pacman->map_coord.v && i->is_active) {
       score += SCORE_PER_GOODIE;
+#ifdef AUDIO
       audio->PlayCoin();
+#endif
       i->Deactivate();
-    }    
+    }
     win = (i->is_active) ? false : win;
   }
   if (win) {
+#ifdef AUDIO
     audio->PlayWin();
+#endif
   }
 
   // Check for collision with Monsters ... game is lost if collision occurs
   for (auto i : monsters) {
     if (pacman->map_coord.u == i->map_coord.u &&
         pacman->map_coord.v == i->map_coord.v) {
+#ifdef AUDIO
       audio->PlayGameOver();
+#endif
       dead = true;
     }
   }

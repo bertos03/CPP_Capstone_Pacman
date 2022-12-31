@@ -1,3 +1,5 @@
+// #define AUDIO 
+
 #define COLOR_BACK 10,0,35
 #define COLOR_PACMAN 200, 200, 0
 #define COLOR_MONSTER 255, 10, 10
@@ -7,6 +9,7 @@
 #define MAP_PATH "../data/map.txt"
 #define FONT_PATH "../data/font.ttf"
 #define FONT_COLOR &white
+// #define FONT_FINE
 
 #define COIN_SOUND_PATH "../data/coin.wav"
 #define WIN_SOUND_PATH "../data/win.wav"

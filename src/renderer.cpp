@@ -6,7 +6,7 @@
  */
 Renderer::~Renderer() {
 
-//TODO: clean up images etc.
+  // TODO: clean up images etc.
 
   SDL_DestroyWindow(sdl_window);
   sdl_window = NULL;
@@ -137,10 +137,10 @@ void Renderer::drawpacman() {
   //                      game->pacman->px_coord.y + element_size / 2,
   //                      (element_size - SIZE_PACMAN) / 2);
   sdl_pacman_rect =
-        SDL_Rect{game->pacman->px_coord.x + int(element_size * 0.05),
-                 game->pacman->px_coord.y + int(element_size * 0.05),
-                 int(element_size * 0.9), int(element_size * 0.9)};
-    SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, NULL, &sdl_pacman_rect);
+      SDL_Rect{game->pacman->px_coord.x + int(element_size * 0.05),
+               game->pacman->px_coord.y + int(element_size * 0.05),
+               int(element_size * 0.9), int(element_size * 0.9)};
+  SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, NULL, &sdl_pacman_rect);
 }
 void Renderer::drawgoodies() {
   for (auto goodie : game->goodies) {
@@ -200,9 +200,14 @@ void Renderer::drawtext() {
     SDL_RenderCopy(sdl_renderer, sdl_font_texture_winlose, NULL,
                    &sdl_text_rect);
   }
-
+#ifdef FONT_FINE
   sdl_text_surface = TTF_RenderUTF8_LCD(sdl_font, pactext.c_str(),
                                         sdl_font_color, sdl_font_back_color);
+#endif
+#ifndef FONT_FINE
+  sdl_text_surface = TTF_RenderText_Solid(sdl_font, pactext.c_str(),
+                                        sdl_font_color);
+#endif
   sdl_font_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_text_surface);
   SDL_QueryTexture(sdl_font_texture, NULL, NULL, &texW, &texH);
