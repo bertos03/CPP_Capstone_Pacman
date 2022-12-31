@@ -1,0 +1,37 @@
+cmake_minimum_required(VERSION 3.11.3)
+
+set(CMAKE_CXX_STANDARD 17)
+
+add_definitions(-std=c++17)
+
+project(pacman)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread")
+
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl2)
+
+
+find_package(SDL2 REQUIRED)
+find_package(SDL2TTF REQUIRED)
+find_package(SDL2_image REQUIRED)
+find_package(SDL2_mixer REQUIRED)
+#include_directories(${SDL2_INCLUDE_DIRS} ${SDL2_TTF_INCLUDE_DIRS} ${SDL2_IMAGE_INCLUDE_DIRS}  src)
+include_directories(${SDL2_INCLUDE_DIRS} ${SDL2_IMAGE_INCLUDE_DIRS} ${SDL2TTF_INCLUDE_DIR} ${SDL2_MIXER_INCLUDE_DIRS} src)
+
+# Find all executables 
+file(GLOB project_SRCS src/*.cpp) #src/*.h
+
+# Add project executable
+add_executable(pacman ${project_SRCS})
+#string(STRIP ${SDL2_LIBRARIES} SDL2_LIBRARIES)
+target_link_libraries(pacman ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES} ${SDL2TTF_LIBRARY} ${SDL2_MIXER_LIBRARIES})
+
+message ([STATUS] "SDL2_INCLUDE_DIR" ${SDL2_INCLUDE_DIR})
+message ([STATUS] "SDL2_LIBRARY" ${SDL2_LIBRARY})
+message ([STATUS] "SDL2_IMAGE_INCLUDE_DIR" ${SDL2_IMAGE_INCLUDE_DIR})
+message ([STATUS] "SDL2_IMAGE_LIBRARY" ${SDL2_IMAGE_LIBRARY})
+message ([STATUS] "SDL2TTF_INCLUDE_DIR" ${SDL2TTF_INCLUDE_DIR})
+message ([STATUS] "SDL2TTF_LIBRARY" ${SDL2TTF_LIBRARY})
+message ([STATUS] "SDL2_MIXER_INCLUDE_DIRS" ${SDL2_MIXER_INCLUDE_DIRS})
+message ([STATUS] "SDL2_MIXER_LIBRARIES" ${SDL2_MIXER_LIBRARIES})
