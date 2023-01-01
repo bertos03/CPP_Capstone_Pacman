@@ -15,13 +15,17 @@ Renderer::~Renderer() {
   SDL_FreeSurface(sdl_monster_surface);
   SDL_FreeSurface(sdl_pacman_surface);
   SDL_FreeSurface(sdl_text_surface);
-  SDL_FreeSurface(sdl_text_surface_winlose);
+  if (game->is_lost() || game->is_won()) {
+    SDL_FreeSurface(sdl_text_surface_winlose);
+  }
   SDL_DestroyTexture(sdl_wall_texture);
   SDL_DestroyTexture(sdl_goodie_texture);
   SDL_DestroyTexture(sdl_monster_texture);
   SDL_DestroyTexture(sdl_pacman_texture);
   SDL_DestroyTexture(sdl_font_texture);
-  SDL_DestroyTexture(sdl_font_texture_winlose);
+  if (game->is_lost() || game->is_won()) {
+    SDL_DestroyTexture(sdl_font_texture_winlose);
+  }
   TTF_CloseFont(sdl_font);
   TTF_CloseFont(sdl_font_winlose);
 
@@ -64,7 +68,7 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
   }
 
   offset_x = (screen_res_x - (cols + 1) * element_size) / 2;
-  offset_y = (screen_res_y - (rows + 1) * element_size) / 2 + fontsize*2;
+  offset_y = (screen_res_y - (rows + 1) * element_size) / 2 + fontsize * 2;
 
   // Create Window
   sdl_window = SDL_CreateWindow(
@@ -86,8 +90,8 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
 
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
-  std::cout << "Block size x:" << element_size << " (" << rows
-            << " rows - " << cols << " cols)\n";
+  std::cout << "Block size x:" << element_size << " (" << rows << " rows - "
+            << cols << " cols)\n";
   std::cout << "Offset x:" << offset_x << " y:" << offset_y << "\n";
 
   // Define Font Stuff
