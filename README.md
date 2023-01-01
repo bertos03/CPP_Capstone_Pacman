@@ -41,6 +41,8 @@ cmake ..
 make 
 ./pacman
 ```
+**Note: On the udacity workspace, the cmake command will show an error - seems to be kind of a bug. Nevertheless, the make command will still build the project.**
+
 It is possible to make adjustments in 'src/definitions.h', such as defining the macro AUDIO for systems where audio is supported.
 
 The program can be ended by pressing the esc key or by normally ending it (title menu->quit).
