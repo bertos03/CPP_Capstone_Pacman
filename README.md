@@ -6,9 +6,11 @@ A kind of a pacman style game - for the final assignment ("capstone") in the Uda
 ## Features
 
 - The map can be configured to the user's preferences (see './data/map.txt). You can add 1 (P)acman and multiple (M)onsters and (G)oodies. The map itself is constructed by paths (.) and walls (x). Additionally, you can for example adjust the speed of pacman and the monsters.
+- Yor are free to design a map in the dimensions you like. The element size will adapt accordingly.
 - The map has basic checks for integrity and will fix some bugs automatically.
 - Sound support is given as long as the system supports that (enable it by uncommenting 'AUDIO' in './src/definitions.h').
 - The goal of the game is to collect all goodies and not getting caught by the monsters.
+
 
 
 ## Installation
@@ -80,9 +82,11 @@ src/renderer.cpp    -> the class definition for the renderer
 |Y|At least two variables are defined as references, or two functions use pass-by-reference in the project code.|
 |Y|At least one class that uses unmanaged dynamically allocated memory, along with any class that otherwise needs to modify state upon the termination of an object, uses a destructor.|
 |Y|The project follows the Resource Acquisition Is Initialization pattern where appropriate, by allocating objects at compile-time, initializing objects when they are declared, and utilizing scope to ensure their automatic destruction.|
-|Y|For all classes, if any one of the copy constructor, copy assignment operator, move constructor, move assignment operator, and destructor are defined, then all of these functions are defined.|
-|Y|For classes with move constructors, the project returns objects of that class by value, and relies on the move constructor, instead of copying the object.|
-|ToDO|The project uses at least one smart pointer: unique_ptr, shared_ptr, or weak_ptr. The project does not use raw pointers.|
+|n.r.|For all classes, if any one of the copy constructor, copy assignment operator, move constructor, move assignment operator, and destructor are defined, then all of these functions are defined.|
+|n.r.|For classes with move constructors, the project returns objects of that class by value, and relies on the move constructor, instead of copying the object.|
+|Y|The project uses at least one smart pointer: unique_ptr, shared_ptr, or weak_ptr. The project does not use raw pointers.|
+
+Annotation: No need for creating copy/move constructor or copy/move assignment operator.
 
 #### Concurrency
 |(Y)es/(N)o|Task|
@@ -91,5 +95,3 @@ src/renderer.cpp    -> the class definition for the renderer
 |N|A promise and future is used to pass data from a worker thread to a parent thread in the project code.|
 |Y|A mutex or lock (e.g. std::lock_guard or `std::unique_lock) is used to protect data that is shared across multiple threads in the project code.|
 |N|A std::condition_variable is used in the project code to synchronize thread execution.|
-
-

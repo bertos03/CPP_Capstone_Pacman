@@ -9,6 +9,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <memory>
 
 #include "definitions.h"
 #include "game.h"

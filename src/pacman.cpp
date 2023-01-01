@@ -19,7 +19,7 @@ void Pacman::simulate(Events *events, Map *map) {
   Directions next_move;
 
   std::unique_lock<std::mutex> lck(mtx);
-  std::cout << "Simulating Pacman\n";
+  // std::cout << "Simulating Pacman\n";
   lck.unlock();
 
   while (!events->is_quit()) {

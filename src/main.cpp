@@ -1,7 +1,9 @@
 #include <SDL.h>
 #include <iostream>
+#include <memory>
 #include <thread>
 
+#include "audio.h"
 #include "events.h"
 #include "game.h"
 #include "map.h"
@@ -9,7 +11,7 @@
 #include "monster.h"
 #include "pacman.h"
 #include "renderer.h"
-#include "audio.h"
+#include "globaltypes.h"
 
 /* TODO
  Spielfeld um Text verkleinern
@@ -18,24 +20,22 @@
 */
 
 int main() {
-  Map *map = new Map();                 // map loading, map interfaces
-  Events *events = new Events();        // SDL event handling
-  Audio *audio = new Audio();                         // Audio effects
-  Game *game = new Game(map, events, audio); // game logic
-  Renderer renderer(map, game);         // for rendering the screen
+  std::shared_ptr<Map> map(new Map());          // map loading, map interfaces
+  std::shared_ptr<Events> events(new Events()); // SDL event handling
+  std::shared_ptr<Audio> audio(new Audio());    // Audio effects
+  std::shared_ptr<Game> game(
+      new Game(map.get(), events.get(), audio.get())); // game logic
+  Renderer renderer(map.get(), game.get()); // for rendering the screen
 
-  while (!events->is_quit()) {
-    events->update();
-    if (!game->is_lost() && !game->is_won()) {
-      game->Update();    // check for updates/collisions
+  while (!events.get()->is_quit()) {
+    events.get()->update();
+    if (!game.get()->is_lost() && !game.get()->is_won()) {
+      game.get()->Update();    // check for updates/collisions
       renderer.Render(); // update screen
       // something around 25 fps should be sufficient, so sleep for 40ms to keep
       // CPU load low
-      std::this_thread::sleep_for(std::chrono::milliseconds(40));
+      sleep(40);
     }
   }
   std::cout << "Quitting app.\n";
-  delete game;
-  delete events;
-  delete map;
 }

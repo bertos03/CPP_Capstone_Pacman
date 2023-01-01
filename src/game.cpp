@@ -29,7 +29,6 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
 };
 
 void Game::Update() {
-
   // Check for collision with Goodies ... game is won if all goodies are
   // collected
   win = true;

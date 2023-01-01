@@ -1,4 +1,7 @@
+
+// Flags to comment out for compatibility with Udacity workspace
 // #define AUDIO 
+// #define FONT_FINE
 
 #define COLOR_BACK 10,0,35
 #define COLOR_PACMAN 200, 200, 0
@@ -9,7 +12,7 @@
 #define MAP_PATH "../data/map.txt"
 #define FONT_PATH "../data/font.ttf"
 #define FONT_COLOR &white
-// #define FONT_FINE
+
 
 #define COIN_SOUND_PATH "../data/coin.wav"
 #define WIN_SOUND_PATH "../data/win.wav"
