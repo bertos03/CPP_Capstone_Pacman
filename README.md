@@ -59,7 +59,7 @@ src/renderer.cpp    -> the class definition for the renderer
 #### Loops, Functions, I/O
 |(Y)es/(N)o|Task|
 |--|--|
-|Y|A variety of control structures are used in the project. *There are plenty of all kinds of control structures to make the game run* |
+|Y|A variety of control structures are used in the project. +++++ *There are plenty of all kinds of control structures to make the game run* |
 |Y|The project code is clearly organized into functions. *I tried to divide the whole project in smaller functions. Additionally, I tried to keep the source code files small - instead I've split the codebase in several files*|
 |Y|The project reads data from an external file or writes data to a file as part of the necessary operation of the program. *The map design is loaded from an ascii file which contains all the map structure and the placement of goodies/pacman/monsters* |
 |Y|The project accepts input from a user as part of the necessary operation of the program. *The program take keyboard input for controlling pacman and for quitting the game* |
