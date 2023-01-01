@@ -58,8 +58,8 @@ src/renderer.cpp    -> the class definition for the renderer
 #### Loops, Functions, I/O
 |(Y)es/(N)o|Task|
 |--|--|
-|Y|A variety of control structures are used in the project.|
-|Y|The project code is clearly organized into functions.|
+|Y|A variety of control structures are used in the project.**there are plenty of all kinds of control structures to make the game run**|
+|Y|The project code is clearly organized into functions.**I tried to divide the whole project in smaller functions. Additionally, I tried to keep the source code files small - instead I've split the codebase in several files**|
 |Y|The project reads data from an external file or writes data to a file as part of the necessary operation of the program.|
 |Y|The project accepts input from a user as part of the necessary operation of the program.|
 
@@ -86,7 +86,7 @@ src/renderer.cpp    -> the class definition for the renderer
 |n.r.|For classes with move constructors, the project returns objects of that class by value, and relies on the move constructor, instead of copying the object.|
 |Y|The project uses at least one smart pointer: unique_ptr, shared_ptr, or weak_ptr. The project does not use raw pointers.|
 
-Annotation: No need for creating copy/move constructor or copy/move assignment operator.
+Annotation: No technical need for creating copy/move constructor or copy/move assignment operator in this project.
 
 #### Concurrency
 |(Y)es/(N)o|Task|
