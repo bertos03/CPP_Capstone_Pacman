@@ -31,6 +31,6 @@
 
 #define SPEED_PACMAN 8 // 1..10
 #define SPEED_MONSTER 6 // 1..10
-#define SIZE_PACMAN 5 // cellwidth - 2*X
-#define SIZE_MONSTER 10 // cellwidth - 2*X
+// #define SIZE_PACMAN 5 // cellwidth - 2*X
+// #define SIZE_MONSTER 10 // cellwidth - 2*X
 #define SCORE_PER_GOODIE 10 //

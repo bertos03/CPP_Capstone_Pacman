@@ -1,5 +1,10 @@
 #include "pacman.h"
 
+/**
+ * @brief Construct a new Pacman:: Pacman object
+ * 
+ * @param _coord map coordinates for placing pacman
+ */
 Pacman::Pacman(MapCoord _coord) {
   std::unique_lock<std::mutex> lck(mtx);
   // std::cout << "Creating Pacman\n";
@@ -7,12 +12,22 @@ Pacman::Pacman(MapCoord _coord) {
   map_coord = _coord;
 };
 
+/**
+ * @brief Destroy the Pacman:: Pacman object
+ * 
+ */
 Pacman::~Pacman() {
   std::unique_lock<std::mutex> lck(mtx);
   // std::cout << "Pacman is being destroyed \n";
   lck.unlock();
 };
 
+/**
+ * @brief The simulation loop for pacman
+ * 
+ * @param events Events object to read keyboard inputs
+ * @param map  Map object to check the possible options for pacman
+ */
 void Pacman::simulate(Events *events, Map *map) {
   std::vector<Directions> options;
   bool valid_choice = false;

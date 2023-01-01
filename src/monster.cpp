@@ -1,7 +1,12 @@
 #include "monster.h"
 
 
-
+/**
+ * @brief Construct a new Monster:: Monster object
+ * 
+ * @param _coord : the map coordinates for placing the monster
+ * @param _id: A unique "monster ID" (currently not used)
+ */
 Monster::Monster(MapCoord _coord, int _id) {
   id = _id;
   // std::cout << "Creating monster #" << id << "\n";
@@ -10,6 +15,12 @@ Monster::Monster(MapCoord _coord, int _id) {
   px_delta.y = 0;
 }
 
+/**
+ * @brief Simulation loop for monster object
+ * 
+ * @param events for reading keyboard input (signal for ending thread)
+ * @param map for calculating the possible directions per move
+ */
 void Monster::simulate(Events *events, Map *map) {
   std::vector<Directions> options;
   Directions next_move;
@@ -104,6 +115,10 @@ void Monster::simulate(Events *events, Map *map) {
   lck.unlock();
 }
 
+/**
+ * @brief Destroy the Monster:: Monster object
+ * 
+ */
 Monster::~Monster() {
   std::unique_lock<std::mutex> lck(mtx);
   // std::cout << "Monster #" << id << " is being destroyed \n";

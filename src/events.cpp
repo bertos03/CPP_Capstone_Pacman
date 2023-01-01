@@ -1,18 +1,34 @@
 #include "events.h"
 
+/**
+ * @brief Construct a new Events:: Events object
+ * Events object takes care of all keyboard inputs which are required for the game
+ */
 Events::Events() {
   sdl_events = new SDL_Event;
   quit = false;
 }
 
+/**
+ * @brief Destroy the Events:: Events object
+ * 
+ */
 Events::~Events() {
   delete sdl_events;
 }
 
+/**
+ * @brief Make sure there is only one pacman move per key press
+ * 
+ */
 void Events::Keyreset(){
   current_direction = Directions::None;
 }
 
+/**
+ * @brief Updates the input buffer each cycle
+ * 
+ */
 void Events::update() {
   SDL_PollEvent(sdl_events);
   if (sdl_events->type == SDL_QUIT) {

@@ -10,6 +10,21 @@ Renderer::~Renderer() {
 
   SDL_DestroyWindow(sdl_window);
   sdl_window = NULL;
+  SDL_FreeSurface(sdl_wall_surface);
+  SDL_FreeSurface(sdl_goodie_surface);
+  SDL_FreeSurface(sdl_monster_surface);
+  SDL_FreeSurface(sdl_pacman_surface);
+  SDL_FreeSurface(sdl_text_surface);
+  SDL_FreeSurface(sdl_text_surface_winlose);
+  SDL_DestroyTexture(sdl_wall_texture);
+  SDL_DestroyTexture(sdl_goodie_texture);
+  SDL_DestroyTexture(sdl_monster_texture);
+  SDL_DestroyTexture(sdl_pacman_texture);
+  SDL_DestroyTexture(sdl_font_texture);
+  SDL_DestroyTexture(sdl_font_texture_winlose);
+  TTF_CloseFont(sdl_font);
+  TTF_CloseFont(sdl_font_winlose);
+
   TTF_Quit();
   SDL_Quit();
 }
@@ -17,7 +32,9 @@ Renderer::~Renderer() {
 /**
  * @brief Construct a new Renderer:: Renderer object
  *
- * @param _map: pointer to the _map object
+ * @param
+ * _map: pointer to the Map object
+ * _game: pointer to the Game object
  */
 Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
   // Initialize SDL
@@ -47,7 +64,7 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
   }
 
   offset_x = (screen_res_x - (cols + 1) * element_size) / 2;
-  offset_y = (screen_res_y - (rows + 1) * element_size) / 2 + fontsize;
+  offset_y = (screen_res_y - (rows + 1) * element_size) / 2 + fontsize*2;
 
   // Create Window
   sdl_window = SDL_CreateWindow(
@@ -70,7 +87,7 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
   std::cout << "Block size x:" << element_size << " (" << rows
-            << " rows) y:" << element_size << " (" << cols << " cols)\n";
+            << " rows - " << cols << " cols)\n";
   std::cout << "Offset x:" << offset_x << " y:" << offset_y << "\n";
 
   // Define Font Stuff
@@ -111,6 +128,11 @@ Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
   }
 }
 
+/**
+ * @brief Refresh screen, draw map and all dynamic game elements
+ * calls subfunctions for the different graphic elements.
+ *
+ */
 void Renderer::Render() {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
@@ -124,7 +146,7 @@ void Renderer::Render() {
 }
 
 /**
- * @brief Draws the elements of the game
+ * @brief Draws pacman
  *
  */
 void Renderer::drawpacman() {
@@ -142,6 +164,11 @@ void Renderer::drawpacman() {
                int(element_size * 0.9), int(element_size * 0.9)};
   SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, NULL, &sdl_pacman_rect);
 }
+
+/**
+ * @brief Draw goodies on screen
+ *
+ */
 void Renderer::drawgoodies() {
   for (auto goodie : game->goodies) {
     if (goodie->is_active) {
@@ -161,6 +188,10 @@ void Renderer::drawgoodies() {
   }
 }
 
+/**
+ * @brief Draw monsters on screen
+ *
+ */
 void Renderer::drawmonsters() {
   for (auto monster : game->monsters) {
     monster->px_coord = getPixelCoord(
@@ -179,6 +210,10 @@ void Renderer::drawmonsters() {
   }
 }
 
+/**
+ * @brief Draw text on screen
+ *
+ */
 void Renderer::drawtext() {
   string pactext =
       "\\\\\\\\ PACMAN ////         Score: " + std::to_string(game->score);
@@ -205,8 +240,8 @@ void Renderer::drawtext() {
                                         sdl_font_color, sdl_font_back_color);
 #endif
 #ifndef FONT_FINE
-  sdl_text_surface = TTF_RenderText_Solid(sdl_font, pactext.c_str(),
-                                        sdl_font_color);
+  sdl_text_surface =
+      TTF_RenderText_Solid(sdl_font, pactext.c_str(), sdl_font_color);
 #endif
   sdl_font_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_text_surface);
@@ -316,10 +351,10 @@ int Renderer::SDL_RenderDrawCircle(SDL_Renderer *renderer, int x, int y,
  * taken from
  * https://gist.github.com/Gumichan01/332c26f6197a432db91cc4327fcabb1c
  * @param renderer Pointer to renderer
- * @param x
- * @param y
+ * @param x screen coordinate x (pixel)
+ * @param y screen coordinate y (pixel)
  * @param radius
- * @return int
+ * @return int amount of draw operations (0 means failure)
  */
 int Renderer::SDL_RenderFillCircle(SDL_Renderer *renderer, int x, int y,
                                    int radius) {
@@ -365,6 +400,14 @@ int Renderer::SDL_RenderFillCircle(SDL_Renderer *renderer, int x, int y,
   return status;
 }
 
+/**
+ * @brief Helper function to calculate pixel coordinates out of map coordinates
+ *
+ * @param _in map coordinates struct
+ * @param delta_x offset in x (pixel)
+ * @param delta_y offset in y (pixel)
+ * @return PixelCoord  screen coordinates (pixel)
+ */
 PixelCoord Renderer::getPixelCoord(MapCoord _in, int delta_x, int delta_y) {
   PixelCoord out;
   out.x = offset_x + 1 + _in.v * (element_size + 1) + delta_x;

@@ -1,5 +1,12 @@
 #include "game.h"
 
+/**
+ * @brief Construct a new Game:: Game object
+ * 
+ * @param _map: Pointer to Map object
+ * @param _events: Pointer to Events object
+ * @param _audio: Pointer to Audio object
+ */
 Game::Game(Map *_map, Events *_events, Audio *_audio)
     : map(_map), events(_events), audio(_audio) {
   win = false;
@@ -28,6 +35,10 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   pacman_thread = std::thread(&Pacman::simulate, pacman, events, map);
 };
 
+/**
+ * @brief Game logic - is called during each cyclee
+ * 
+ */
 void Game::Update() {
   // Check for collision with Goodies ... game is won if all goodies are
   // collected
@@ -61,6 +72,10 @@ void Game::Update() {
   }
 }
 
+/**
+ * @brief Destroy the Game:: Game object
+ * 
+ */
 Game::~Game() {
   // std::cout << "Waiting for threads to finish ... \n";
   for (int i = 0; i < monster_threads.size(); i++) {

@@ -20,6 +20,7 @@
 */
 
 int main() {
+  std::cout << "Pacman starting up ...\n";
   std::shared_ptr<Map> map(new Map());          // map loading, map interfaces
   std::shared_ptr<Events> events(new Events()); // SDL event handling
   std::shared_ptr<Audio> audio(new Audio());    // Audio effects

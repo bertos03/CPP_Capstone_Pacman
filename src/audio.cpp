@@ -1,5 +1,9 @@
 #include "audio.h"
 
+/**
+ * @brief Construct a new Audio:: Audio object
+ * Takes care of all sound effects
+ */
 Audio::Audio() {
   #ifndef AUDIO
   std::cout << "No Audio\n";
@@ -25,15 +29,22 @@ Audio::Audio() {
   }
   #endif
 };
+
+/**
+ * @brief Destroy the Audio:: Audio object
+ * 
+ */
 Audio::~Audio() {
   #ifndef AUDIO
-  std::cout << "No Audio\n";
+  // std::cout << "No Audio\n";
   #endif
   #ifdef AUDIO
   for (int i =0; i< audio_threads.size();i++) {
     audio_threads[i].join();
-    audio_threads.clear();
   }
+  audio_threads.clear();
+  
+  
   Mix_FreeChunk(SFX_coin);
   Mix_FreeChunk(SFX_win);
   Mix_FreeChunk(SFX_gameover);
@@ -42,14 +53,29 @@ Audio::~Audio() {
 };
 
 #ifdef AUDIO
+
+/**
+ * @brief as the name says
+ * 
+ */
 void Audio::PlayCoin() {
   audio_threads.emplace_back(
       std::thread([&]() { Mix_PlayChannel(-1, SFX_coin, 0); }));
 };
+
+/**
+ * @brief as the name says
+ * 
+ */
 void Audio::PlayGameOver(){
   audio_threads.emplace_back(
       std::thread([&]() { Mix_PlayChannel(-1, SFX_gameover, 0); }));
 };
+
+/**
+ * @brief as the name says
+ * 
+ */
 void Audio::PlayWin(){
   audio_threads.emplace_back(
       std::thread([&]() { Mix_PlayChannel(-1, SFX_win, 0); }));
