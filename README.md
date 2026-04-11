@@ -1,109 +1,259 @@
+# BobMan (Pacman Capstone in C++)
 
-# Pacman
+```text
+██████╗  ██████╗ ██████╗ ███╗   ███╗ █████╗ ███╗   ██╗
+██╔══██╗██╔═══██╗██╔══██╗████╗ ████║██╔══██╗████╗  ██║
+██████╔╝██║   ██║██████╔╝██╔████╔██║███████║██╔██╗ ██║
+██╔══██╗██║   ██║██╔══██╗██║╚██╔╝██║██╔══██║██║╚██╗██║
+██████╔╝╚██████╔╝██████╔╝██║ ╚═╝ ██║██║  ██║██║ ╚████║
+╚═════╝  ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
 
-A kind of a pacman style game - for the final assignment ("capstone") in the Udacity C++ nanodegree :)
+      (\_/)
+   __(o.o)   BobMan frisst Goodies statt Möhren.
+  /__ >🍒
+```
 
-## Features
+BobMan ist ein Pacman-inspiriertes 2D-Spiel, umgesetzt mit **C++17**, **SDL2** und mehreren SDL-Erweiterungen.  
+Das Projekt wurde so strukturiert, dass Spiel-Logik, Rendering, Eingaben, Audio und Kartenverwaltung klar getrennt sind.
 
-- The map can be configured to the user's preferences (see './data/map.txt). You can add 1 (P)acman and multiple (M)onsters and (G)oodies. The map itself is constructed by paths (.) and walls (x). Additionally, you can for example adjust the speed of pacman and the monsters.
-- Yor are free to design a map in the dimensions you like. The element size will adapt accordingly.
-- The map has basic checks for integrity and will fix some bugs automatically.
-- Sound support is given as long as the system supports that (enable it by uncommenting 'AUDIO' in './src/definitions.h').
-- The goal of the game is to collect all goodies and not getting caught by the monsters.
+---
 
+## 1) Funktionsumfang
 
+- **ASCII-basierte Map-Konfiguration** über `data/map.txt`.
+- **Dynamische Objekte**: Pacman, Monster, Goodies.
+- **Parallele Bewegung per Threads**: Pacman und jedes Monster in eigener Simulation.
+- **Kollisionserkennung**:
+  - Pacman + Goodie => Punkte + Goodie wird deaktiviert.
+  - Pacman + Monster => Spiel verloren.
+- **Win-Condition**: Alle Goodies gesammelt.
+- **Optionale Audioausgabe** (compile-time steuerbar via `AUDIO` in `src/definitions.h`).
 
-## Installation
+---
 
-The whole project uses cmake/make. All necessary files for finding the SDL libraries are located in the 'cmake' subdirectory.
-(Works fine on Mac and Udacity workspace)
+## 2) Architektur (High-Level)
 
-The following C++ frameworks were used and have to be installed to make the program compile correctly:
+Das Projekt folgt einer einfachen, aber sauberen Schichtenaufteilung:
+
+1. **Konfiguration + Basistypen**
+   - `src/definitions.h`: Konstanten, Makros, Asset-Pfade, Symbolik der Map.
+   - `src/globaltypes.h/.cpp`: Koordinatentypen, Richtungen, Sleep-Helfer.
+
+2. **Domänenmodell / Spielobjekte**
+   - `src/mapelement.h/.cpp`: Basisklasse für bewegliche/aktive Elemente.
+   - `src/pacman.*`, `src/monster.*`, `src/goodie.*`: konkrete Spielobjekte.
+
+3. **System-Services**
+   - `src/events.*`: SDL-Event-Verarbeitung (Tasten + Quit).
+   - `src/audio.*`: Laden/Abspielen von Soundeffekten.
+
+4. **Orchestrierung**
+   - `src/map.*`: Laden/Validieren/Abfragen der Karte.
+   - `src/game.*`: Regeln, Score, Sieg-/Niederlage-Logik.
+   - `src/renderer.*`: Zeichenpipeline für Karte, Sprites, Text.
+
+5. **Einstiegspunkt**
+   - `src/main.cpp`: Initialisierung, Hauptloop, zyklisches Update/Render.
+
+---
+
+## 3) Implementierungsdetails
+
+### 3.1 Karte und Spielwelt
+
+- Die Datei `data/map.txt` verwendet Zeichen für den Aufbau:
+  - `x` = Wand
+  - `.` = Pfad
+  - `G` = Goodie
+  - `P` = Pacman-Start
+  - `M` = Monster-Start
+- `Map::LoadMap(...)` liest die Datei zeilenweise ein, konvertiert Zeichen nach `ElementType` und speichert Koordinatenlisten für Entitäten.
+
+### 3.2 Bewegung und Threading
+
+- Pacman und Monster laufen in **eigenen Threads** (`simulate(...)`).
+- Bewegungsanimation erfolgt per `px_delta` in kleinen Inkrementen, damit Bewegung flüssiger wirkt.
+- Ein gemeinsamer Mutex in `MapElement` schützt kritische Bereiche (einfaches Synchronisationsmuster).
+
+### 3.3 Rendering
+
+- SDL initialisiert ein Fenster passend zur Displaygröße.
+- Elementgröße wird aus Auflösung und Map-Dimensionen berechnet.
+- Renderer zeichnet:
+  1. Map-Hintergrund/Wände,
+  2. Goodies,
+  3. Monster,
+  4. Pacman,
+  5. HUD-/Status-Text.
+
+### 3.4 Audio (optional)
+
+- Wenn `AUDIO` aktiv ist, lädt `Audio` die WAV-Dateien aus `data/`.
+- Beim Einsammeln, Sieg oder Game Over wird der jeweilige Effekt abgespielt.
+- Ohne `AUDIO` bleibt der Build kompatibel mit Umgebungen ohne Mixer-Unterstützung.
+
+---
+
+## 4) Abhängigkeiten (präzise)
+
+### 4.1 Build-Werkzeuge
+
+- `g++` oder `clang++` mit C++17-Unterstützung
+- `cmake` (empfohlen >= 3.11)
+- `make`
+
+### 4.2 Laufzeit-/Dev-Bibliotheken
+
 - SDL2
-- SDL2_ttf
 - SDL2_image
-- SDL2_audio (which will not run Udacity Workspace)
+- SDL2_ttf
+- SDL2_mixer (für Audio-Feature)
 
-**Note: On the udacity workspace, the installed frameworks get cleared after each session. So it is necessary to re-install it each time.**
+### 4.3 Ubuntu/Debian Installation
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake \
+  libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev
 ```
-sudo apt-get install -y libsdl2-dev
-sudo apt-get install -y libsdl2-mixer-dev
-sudo apt-get install -y libsdl2-ttf-dev
-sudo apt install -y libsdl2-image-dev
 
+### 4.4 macOS (Homebrew)
+
+```bash
+brew install cmake sdl2 sdl2_image sdl2_ttf sdl2_mixer
 ```
 
-To build the project, simply run
+---
+
+## 5) Build-Anleitung für Newbies (Schritt für Schritt)
+
+> Die folgenden Schritte sind absichtlich sehr detailliert gehalten.
+
+### Schritt 0: Projekt holen und ins Projekt wechseln
+
+```bash
+git clone <DEIN_REPO_URL>
+cd CPP_Capstone_Pacman
+```
+
+### Schritt 1: Prüfen, ob Tools installiert sind
+
+```bash
+cmake --version
+make --version
+g++ --version
+```
+
+Wenn ein Befehl „not found“ meldet: erst Abhängigkeiten aus Abschnitt 4 installieren.
+
+### Schritt 2: Build-Ordner anlegen
+
+```bash
+mkdir -p build
+cd build
+```
+
+### Schritt 3: CMake konfigurieren
+
+```bash
+cmake ..
+```
+
+Was passiert hier?
+- CMake sucht Compiler und SDL-Bibliotheken.
+- Es erzeugt die Build-Dateien (Makefiles).
+
+### Schritt 4: Kompilieren
+
+```bash
+make -j$(nproc)
+```
+
+Falls `nproc` nicht existiert (z. B. macOS), nutze einfach:
+
+```bash
+make
+```
+
+### Schritt 5: Spiel starten
+
+```bash
+./pacman
+```
+
+### Schritt 6: Steuerung
+
+- Pfeiltasten: Bewegung
+- ESC: Beenden
+- Fenster schließen: Beenden
+
+---
+
+## 6) Audio aktivieren/deaktivieren
+
+In `src/definitions.h`:
+
+- **Audio aktivieren**: `#define AUDIO` einkommentieren.
+- **Audio deaktivieren**: `#define AUDIO` auskommentiert lassen.
+
+Danach immer neu bauen:
 
 ```bash
 cd build
 cmake ..
-make 
-./pacman
-```
-**Note: On the udacity workspace, the cmake command will show an error - seems to be kind of a bug. Nevertheless, the make command will still build the project.**
-
-It is possible to make adjustments in 'src/definitions.h', such as defining the macro AUDIO for systems where audio is supported.
-
-The program can be ended by pressing the esc key or by normally ending it (title menu->quit).
-## Details
-
-### File structure
-```bash
-data/  -> directory with all audio/image/map data
-cmake/ -> directory with all necessary functions to locate the SDL libraries
-src/main.cpp        -> main functions
-src/definitions.h   -> basic pre-compilation settings
-src/audio.cpp       -> audio functions
-src/events.cpp      -> for evaluating keyboard events
-src/game.cpp        -> the game logic
-src/globaltypes.cpp -> some globally used datatypes
-src/goodie.cpp      -> the class definition for goodie objects
-src/map.cpp         -> the class definition for map object
-src/mapelement.cpp  -> the base class for goodie/monster/pacman
-src/monster.cpp     -> the class definition for monster objects
-src/pacman.cpp      -> the class definition for pacman object
-src/renderer.cpp    -> the class definition for the renderer
+make
 ```
 
-### Udacity criteria
-#### Loops, Functions, I/O
-|(Y)es/(N)o|Task|
-|--|--|
-|Y|A variety of control structures are used in the project. +++++ *There are plenty of all kinds of control structures to make the game run* |
-|Y|The project code is clearly organized into functions. +++++ *I tried to divide the whole project in smaller functions. Additionally, I tried to keep the source code files small - instead I've split the codebase in several files*|
-|Y|The project reads data from an external file or writes data to a file as part of the necessary operation of the program. +++++ *The map design is loaded from an ascii file which contains all the map structure and the placement of goodies/pacman/monsters* |
-|Y|The project accepts input from a user as part of the necessary operation of the program. +++++ *The program take keyboard input for controlling pacman and for quitting the game* |
+---
 
-#### Object Oriented Programming
-|(Y)es/(N)o|Task|
-|--|--|
-|Y|The project code is organized into classes with class attributes to hold the data, and class methods to perform tasks. +++++ *Is done this way througout the whole project.* |
-|Y|All class data members are explicitly specified as public, protected, or private. +++++ *Check.* |
-|Y|All class members that are set to argument values are initialized through member initialization lists. +++++ *Check.*|
-|Y|All class member functions document their effects, either through function names, comments, or formal documentation. Member functions do not change program state in undocumented ways. +++++ *Check.*|
-|Y|Appropriate data and functions are grouped into classes. Member data that is subject to an invariant is hidden from the user. State is accessed via member functions. +++++ *Check .. some of the classes are friends to others for read-only access to particular data*|
-|Y|Inheritance hierarchies are logical. Composition is used instead of inheritance when appropriate. Abstract classes are composed of pure virtual functions. Override functions are specified. +++++ *Pacman, Goodies and Monster class is inherited from Base class Mapelement. Overloading of functions was technically not necessary*|
-|N|One function is overloaded with different signatures for the same function name. +++++ *Was not not necessary from a technical point of view.*|
-|N|One member function in an inherited class overrides a virtual base class member function. +++++ *Was not not necessary from a technical point of view.*|
-|N|One function is declared with a template that allows it to accept a generic parameter. +++++ *Was not not necessary from a technical point of view.*|
+## 7) Häufige Fehler und Lösungen
 
-#### Memory Management
-|(Y)es/(N)o|Task|
-|--|--|
-|Y|At least two variables are defined as references, or two functions use pass-by-reference in the project code. +++++ *Check.*|
-|Y|At least one class that uses unmanaged dynamically allocated memory, along with any class that otherwise needs to modify state upon the termination of an object, uses a destructor. +++++ *Implemented in almost in every class.*|
-|Y|The project follows the Resource Acquisition Is Initialization pattern where appropriate, by allocating objects at compile-time, initializing objects when they are declared, and utilizing scope to ensure their automatic destruction. +++++ *Was followed whenever it was possible.*|
-|n.r.|For all classes, if any one of the copy constructor, copy assignment operator, move constructor, move assignment operator, and destructor are defined, then all of these functions are defined.|
-|n.r.|For classes with move constructors, the project returns objects of that class by value, and relies on the move constructor, instead of copying the object.|
-|Y|The project uses at least one smart pointer: unique_ptr, shared_ptr, or weak_ptr. The project does not use raw pointers. +++++ *The main thread uses smart pointers. For the underlying classes, those pointers are handed over as raw pointers. The SDL objects are defined as raw pointers (like it is adviced in the SDL documentation.*|
+1. **SDL nicht gefunden**
+   - Prüfe, ob `libsdl2-...-dev` installiert sind.
+   - Danach `cmake ..` erneut ausführen.
 
-Annotation: No technical need for creating copy/move constructor or copy/move assignment operator in this project.
+2. **Kein Sound**
+   - Prüfen, ob `AUDIO` definiert ist.
+   - `libsdl2-mixer-dev` installiert?
+   - Existieren WAV-Dateien in `data/`?
 
-#### Concurrency
-|(Y)es/(N)o|Task|
-|--|--|
-|Y|roject uses multiple threads in the execution. +++++ *Monsters and Pacman run in their own threads.*|
-|N|A promise and future is used to pass data from a worker thread to a parent thread in the project code. +++++ *Was not necessary from a technical perspective*|
-|Y|A mutex or lock (e.g. std::lock_guard or `std::unique_lock) is used to protect data that is shared across multiple threads in the project code. +++++ *Was not necessary from a technical perspectiv.e*|
-|N|A std::condition_variable is used in the project code to synchronize thread execution. +++++ *Was not necessary from a technical perspective.*|
+3. **Schwarzes Fenster / sofortiger Exit**
+   - Prüfe Assets und Pfade in `src/definitions.h`.
+   - Stelle sicher, dass du aus `build/` mit `./pacman` startest.
+
+---
+
+## 8) Verzeichnisstruktur
+
+```text
+.
+├── CMakeLists.txt
+├── cmake/                  # Find-Module für SDL-Komponenten
+├── data/                   # Karten-, Bild-, Font- und Sound-Ressourcen
+├── src/
+│   ├── main.cpp            # App-Start + Hauptloop
+│   ├── game.*              # Spielregeln + Thread-Orchestrierung
+│   ├── renderer.*          # SDL-Rendering
+│   ├── map.*               # Kartendaten + Navigationsoptionen
+│   ├── pacman.*            # Spielerlogik
+│   ├── monster.*           # Gegnerlogik
+│   ├── goodie.*            # Sammelobjektlogik
+│   ├── events.*            # Tastatur-/Quit-Eingaben
+│   ├── audio.*             # Soundeffekte
+│   ├── mapelement.*        # Gemeinsame Basisklasse
+│   ├── globaltypes.*       # Koordinaten, Richtungen, Sleep-Helfer
+│   └── definitions.h       # zentrale Compile-Time-Konfiguration
+└── README.md
+```
+
+---
+
+## 9) Kurzfazit
+
+BobMan zeigt ein kompaktes, gut verständliches C++-Game-Projekt mit:
+- klarer Klassenstruktur,
+- SDL-basierter Ausgabe,
+- threadbasierter Bewegung,
+- und leicht anpassbarer Kartenlogik.
+
+Ideal als Lernprojekt für OOP, Nebenläufigkeit und Build-Systeme mit CMake.
