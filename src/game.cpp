@@ -30,8 +30,10 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   dead = false;
   score = 0;
   simulation_started = false;
+  death_started_ticks = 0;
   // create Pacman object
   pacman = new Pacman(map->get_coord_pacman());
+  death_coord = pacman->map_coord;
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -89,10 +91,14 @@ void Game::Update() {
   for (auto i : monsters) {
     if (pacman->map_coord.u == i->map_coord.u &&
         pacman->map_coord.v == i->map_coord.v) {
+      if (!dead) {
+        death_coord = pacman->map_coord;
+        death_started_ticks = SDL_GetTicks();
 #ifdef AUDIO
-      audio->PlayGameOver();
+        audio->PlayGameOver();
 #endif
-      dead = true;
+        dead = true;
+      }
     }
   }
 }

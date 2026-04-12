@@ -18,6 +18,8 @@
 #ifndef GAME_H
 #define GAME_H
 
+#include <SDL.h>
+
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -60,6 +62,8 @@ private:
   std::thread pacman_thread;
   int score;
   bool simulation_started;
+  Uint32 death_started_ticks;
+  MapCoord death_coord;
   friend class Renderer;
   bool dead;
   bool win;

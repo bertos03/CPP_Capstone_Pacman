@@ -101,7 +101,7 @@ Audio::Audio() {
 
   SFX_coin = Mix_LoadWAV(COIN_SOUND_PATH);
   SFX_win = Mix_LoadWAV(WIN_SOUND_PATH);
-  SFX_gameover = Mix_LoadWAV(GAMEOVER_SOUND_PATH);
+  SFX_gameover = CreateViolinLamentChunk();
   SFX_menu_move = CreateSynthChunk({1396, 1865}, 70, 0.30, 4.0, 38.0);
   SFX_menu_select = CreateSynthChunk({784, 988, 1175}, 150, 0.42, 6.0, 90.0);
   SFX_countdown_tick = CreateSynthChunk({880, 1320}, 85, 0.25, 2.0, 48.0);
@@ -258,6 +258,71 @@ Mix_Chunk *Audio::CreateTrumpetChunk() {
       pcm_samples.push_back(pcm);
       pcm_samples.push_back(pcm);
     }
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
+Mix_Chunk *Audio::CreateViolinLamentChunk() {
+  struct ViolinNote {
+    double frequency;
+    int duration_ms;
+    double volume;
+  };
+
+  const std::vector<ViolinNote> melody{
+      {659.25, 180, 0.16}, {587.33, 210, 0.18}, {523.25, 260, 0.22},
+      {493.88, 240, 0.20}, {440.00, 420, 0.24}};
+  std::vector<Sint16> pcm_samples;
+
+  double note_time_offset = 0.0;
+  for (const auto &note : melody) {
+    const int sample_count = std::max(1, note.duration_ms * kSampleRate / 1000);
+    const int attack_samples = std::max(1, sample_count / 8);
+    const int release_samples = std::max(1, sample_count / 4);
+
+    for (int i = 0; i < sample_count; i++) {
+      double envelope = 1.0;
+      if (i < attack_samples) {
+        envelope = static_cast<double>(i) / attack_samples;
+      } else if (i > sample_count - release_samples) {
+        envelope =
+            static_cast<double>(sample_count - i) / std::max(1, release_samples);
+      }
+      envelope = std::clamp(envelope, 0.0, 1.0);
+
+      const double time = static_cast<double>(i) / kSampleRate;
+      const double absolute_time = note_time_offset + time;
+      const double vibrato =
+          1.0 + 0.010 * std::sin(2.0 * kPi * 5.1 * absolute_time);
+      const double detuned =
+          1.0 + 0.004 * std::sin(2.0 * kPi * 2.7 * absolute_time + 0.8);
+      const double fundamental =
+          std::sin(2.0 * kPi * note.frequency * vibrato * time);
+      const double upper =
+          0.48 * std::sin(2.0 * kPi * note.frequency * 2.0 * detuned * time +
+                          0.32);
+      const double airy =
+          0.18 * std::sin(2.0 * kPi * note.frequency * 3.0 * time + 1.1);
+      const double bow_noise =
+          0.035 * std::sin(2.0 * kPi * 91.0 * absolute_time + 0.4);
+      double sample_value =
+          (fundamental + upper + airy + bow_noise) * envelope * note.volume;
+
+      sample_value = std::clamp(sample_value, -1.0, 1.0);
+      const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+      pcm_samples.push_back(pcm);
+      pcm_samples.push_back(pcm);
+    }
+
+    note_time_offset += static_cast<double>(note.duration_ms) / 1000.0;
   }
 
   std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);

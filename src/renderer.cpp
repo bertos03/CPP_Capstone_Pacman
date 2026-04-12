@@ -18,6 +18,7 @@
 #include "renderer.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "game.h"
 #include "goodie.h"
@@ -316,11 +317,15 @@ void Renderer::RenderEditorSizeSelectionMenu(int selected_index) {
 void Renderer::RenderEditor(const std::vector<std::string> &layout,
                             const std::string &map_name, MapCoord cursor,
                             const std::string &warning_message,
-                            bool show_exit_dialog, int exit_dialog_selected) {
+                            bool show_exit_dialog, int exit_dialog_selected,
+                            bool show_name_dialog,
+                            const std::string &name_input,
+                            const std::string &name_dialog_message) {
   renderLayoutFrame(layout);
-  drawDimmer(72);
+  drawDimmer(20);
   drawEditorOverlay(map_name, cursor, warning_message, show_exit_dialog,
-                    exit_dialog_selected);
+                    exit_dialog_selected, show_name_dialog, name_input,
+                    name_dialog_message);
   SDL_RenderPresent(sdl_renderer);
 }
 
@@ -361,6 +366,13 @@ void Renderer::drawhud() {
     return;
   }
 
+  if (game->dead) {
+    renderBrickText(sdl_font_display, "Game Over", screen_res_x / 2,
+                    (screen_res_y - TTF_FontHeight(sdl_font_display)) / 2,
+                    kBrickOutlineColor);
+    return;
+  }
+
   const std::string title_text =
       "BOBMAN        Score: " + std::to_string(game->score);
   renderSimpleText(sdl_font_hud, title_text, sdl_font_color, screen_res_x / 2,
@@ -368,11 +380,6 @@ void Renderer::drawhud() {
 
   if (game->win) {
     renderBrickText(sdl_font_display, "You Won", screen_res_x / 2,
-                    (screen_res_y - TTF_FontHeight(sdl_font_display)) / 2,
-                    kBrickOutlineColor);
-  }
-  if (game->dead) {
-    renderBrickText(sdl_font_display, "Game Over", screen_res_x / 2,
                     (screen_res_y - TTF_FontHeight(sdl_font_display)) / 2,
                     kBrickOutlineColor);
   }
@@ -697,7 +704,10 @@ void Renderer::drawEditorSizeSelectionOverlay(int selected_index) {
 void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
                                  const std::string &warning_message,
                                  bool show_exit_dialog,
-                                 int exit_dialog_selected) {
+                                 int exit_dialog_selected,
+                                 bool show_name_dialog,
+                                 const std::string &name_input,
+                                 const std::string &name_dialog_message) {
   const int header_top = 16;
   renderBrickText(sdl_font_logo, "Map Editor", screen_res_x / 2, header_top,
                   kBrickOutlineColor);
@@ -719,7 +729,14 @@ void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
   const int info_height = std::max(116, screen_res_y / 6);
   SDL_Rect info_panel{(screen_res_x - info_width) / 2, screen_res_y - info_height - 28,
                       info_width, info_height};
-  drawPanel(info_panel, kPanelFillColor, kPanelBorderColor);
+  SDL_SetRenderDrawColor(sdl_renderer, 10, 6, 18, 92);
+  SDL_RenderFillRect(sdl_renderer, &info_panel);
+  SDL_SetRenderDrawColor(sdl_renderer, 196, 130, 92, 150);
+  SDL_RenderDrawRect(sdl_renderer, &info_panel);
+  SDL_Rect info_inner_panel{info_panel.x + 6, info_panel.y + 6,
+                            info_panel.w - 12, info_panel.h - 12};
+  SDL_SetRenderDrawColor(sdl_renderer, 196, 130, 92, 70);
+  SDL_RenderDrawRect(sdl_renderer, &info_inner_panel);
 
   const std::string line_one =
       "Pfeile bewegen | X/W=Mauer | Leer/Entf=Weg | G=Goodie";
@@ -737,11 +754,49 @@ void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
   renderSimpleText(sdl_font_hud, status_text, status_color, screen_res_x / 2,
                    info_panel.y + info_panel.h - TTF_FontHeight(sdl_font_hud) - 16);
 
-  if (!show_exit_dialog) {
+  if (!show_exit_dialog && !show_name_dialog) {
     return;
   }
 
   drawDimmer(160);
+  if (show_name_dialog) {
+    const int dialog_width = std::min(820, screen_res_x * 48 / 100);
+    const int dialog_height = std::max(280, screen_res_y * 30 / 100);
+    SDL_Rect dialog{(screen_res_x - dialog_width) / 2,
+                    (screen_res_y - dialog_height) / 2, dialog_width,
+                    dialog_height};
+    drawPanel(dialog, kPanelFillColor, kPanelBorderColor);
+    renderSimpleText(sdl_font_menu, "Kartenname", kHudTextColor,
+                     screen_res_x / 2, dialog.y + 22);
+
+    SDL_Rect input_rect{dialog.x + 40, dialog.y + 92, dialog.w - 80, 68};
+    SDL_SetRenderDrawColor(sdl_renderer, 22, 16, 32, 220);
+    SDL_RenderFillRect(sdl_renderer, &input_rect);
+    SDL_SetRenderDrawColor(sdl_renderer, 235, 182, 140, 255);
+    SDL_RenderDrawRect(sdl_renderer, &input_rect);
+
+    std::string visible_name = name_input;
+    if (((SDL_GetTicks() / 500) % 2) == 0) {
+      visible_name.push_back('_');
+    }
+    if (visible_name.empty()) {
+      visible_name = "_";
+    }
+    renderSimpleText(sdl_font_menu, visible_name, kSelectedMenuTextColor,
+                     screen_res_x / 2,
+                     input_rect.y +
+                         (input_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2);
+
+    const SDL_Color message_color =
+        name_dialog_message.empty() ? kHudTextColor : kWarningTextColor;
+    const std::string message_text =
+        name_dialog_message.empty() ? "Enter speichert, Esc kehrt zum Dialog zurueck"
+                                    : name_dialog_message;
+    renderSimpleText(sdl_font_hud, message_text, message_color,
+                     screen_res_x / 2, dialog.y + dialog.h - 56);
+    return;
+  }
+
   const int dialog_width = std::min(720, screen_res_x * 42 / 100);
   const int dialog_height = std::max(260, screen_res_y * 28 / 100);
   SDL_Rect dialog{(screen_res_x - dialog_width) / 2,
@@ -1007,6 +1062,11 @@ void Renderer::drawpacman() {
     return;
   }
 
+  if (game->dead) {
+    drawDefeatEffect();
+    return;
+  }
+
   game->pacman->px_coord = getPixelCoord(
       game->pacman->map_coord, element_size * game->pacman->px_delta.x / 100.0,
       element_size * game->pacman->px_delta.y / 100.0);
@@ -1017,8 +1077,100 @@ void Renderer::drawpacman() {
   SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, nullptr, &sdl_pacman_rect);
 }
 
+void Renderer::drawDefeatEffect() {
+  if (game == nullptr) {
+    return;
+  }
+
+  const PixelCoord base_coord = getPixelCoord(game->death_coord, 0, 0);
+  const int center_x = base_coord.x + element_size / 2;
+  const int center_y = base_coord.y + element_size / 2;
+  const Uint32 elapsed =
+      (game->death_started_ticks == 0)
+          ? 1000
+          : (SDL_GetTicks() - game->death_started_ticks);
+
+  if (elapsed < 900) {
+    const double progress =
+        std::clamp(static_cast<double>(elapsed) / 900.0, 0.0, 1.0);
+    const double pulse = 0.70 + 0.30 * std::sin(progress * 5.0 * 3.1415926535);
+    const int outer_radius =
+        std::max(8, static_cast<int>(element_size * (0.32 + progress * 0.72)));
+    const int mid_radius =
+        std::max(5, static_cast<int>(element_size * (0.22 + progress * 0.52)));
+    const int core_radius =
+        std::max(3, static_cast<int>(element_size * (0.12 + progress * 0.28)));
+    const Uint8 outer_alpha =
+        static_cast<Uint8>(std::clamp(120.0 * (1.0 - progress), 0.0, 120.0));
+    const Uint8 mid_alpha = static_cast<Uint8>(
+        std::clamp(180.0 * (1.0 - progress * 0.55), 0.0, 180.0));
+    const Uint8 core_alpha = static_cast<Uint8>(
+        std::clamp(220.0 * (1.0 - progress * 0.35), 0.0, 220.0));
+
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 92, 28, outer_alpha);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 170, 48, mid_alpha);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y, mid_radius);
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 228, 108, core_alpha);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y, core_radius);
+
+    const int spark_count = 7;
+    for (int spark = 0; spark < spark_count; spark++) {
+      const double angle =
+          progress * 4.6 + spark * (2.0 * 3.1415926535 / spark_count);
+      const int spark_start =
+          std::max(2, static_cast<int>(element_size * (0.10 + 0.20 * pulse)));
+      const int spark_end = std::max(
+          spark_start + 2,
+          static_cast<int>(element_size * (0.42 + 0.70 * progress)));
+      const int x1 = center_x + static_cast<int>(std::cos(angle) * spark_start);
+      const int y1 = center_y + static_cast<int>(std::sin(angle) * spark_start);
+      const int x2 = center_x + static_cast<int>(std::cos(angle) * spark_end);
+      const int y2 = center_y + static_cast<int>(std::sin(angle) * spark_end);
+      SDL_SetRenderDrawColor(
+          sdl_renderer, 255, 210 - spark * 10, 90,
+          static_cast<Uint8>(std::clamp(210.0 * (1.0 - progress), 0.0, 210.0)));
+      SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
+    }
+    return;
+  }
+
+  const int skull_radius = std::max(6, static_cast<int>(element_size * 0.24f));
+  SDL_SetRenderDrawColor(sdl_renderer, 240, 236, 230, 220);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y - skull_radius / 3,
+                       skull_radius);
+
+  SDL_Rect jaw_rect{center_x - skull_radius / 2, center_y, skull_radius,
+                    std::max(4, skull_radius / 2)};
+  SDL_SetRenderDrawColor(sdl_renderer, 240, 236, 230, 220);
+  SDL_RenderFillRect(sdl_renderer, &jaw_rect);
+
+  SDL_SetRenderDrawColor(sdl_renderer, 28, 18, 18, 230);
+  SDL_RenderFillCircle(sdl_renderer, center_x - skull_radius / 3,
+                       center_y - skull_radius / 2, std::max(2, skull_radius / 4));
+  SDL_RenderFillCircle(sdl_renderer, center_x + skull_radius / 3,
+                       center_y - skull_radius / 2, std::max(2, skull_radius / 4));
+  const SDL_Point nose_points[4] = {
+      {center_x, center_y - skull_radius / 5},
+      {center_x - std::max(2, skull_radius / 6), center_y + skull_radius / 6},
+      {center_x + std::max(2, skull_radius / 6), center_y + skull_radius / 6},
+      {center_x, center_y - skull_radius / 5}};
+  SDL_RenderDrawLines(sdl_renderer, nose_points, 4);
+
+  SDL_SetRenderDrawColor(sdl_renderer, 210, 206, 198, 220);
+  for (int tooth = -1; tooth <= 1; tooth++) {
+    const int tooth_x = center_x + tooth * std::max(2, skull_radius / 4);
+    SDL_RenderDrawLine(sdl_renderer, tooth_x, center_y + 1, tooth_x,
+                       center_y + jaw_rect.h - 2);
+  }
+}
+
 void Renderer::drawgoodies() {
   if (game == nullptr) {
+    return;
+  }
+
+  if (game->dead) {
     return;
   }
 
@@ -1037,6 +1189,10 @@ void Renderer::drawgoodies() {
 
 void Renderer::drawmonsters() {
   if (game == nullptr) {
+    return;
+  }
+
+  if (game->dead) {
     return;
   }
 

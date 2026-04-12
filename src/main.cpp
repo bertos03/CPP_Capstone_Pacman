@@ -80,11 +80,15 @@ struct MapValidationResult {
 struct EditorState {
   MapFileData map_file;
   std::string map_path;
+  bool is_new_map{false};
   MapCoord cursor{1, 1};
   bool show_exit_dialog{false};
+  bool show_name_dialog{false};
   int exit_dialog_selected{0};
   MapValidationResult validation;
   std::string transient_error;
+  std::string name_input;
+  std::string name_dialog_message;
 };
 
 constexpr int kEditorExitSave = 0;
@@ -202,31 +206,50 @@ std::string Slugify(const std::string &text) {
   return slug.empty() ? "eigene_karte" : slug;
 }
 
-EditorRequest CreateNewMapRequest(NewMapSize size) {
+std::string TrimWhitespace(const std::string &text) {
+  const auto first = std::find_if_not(text.begin(), text.end(), [](unsigned char ch) {
+    return std::isspace(ch) != 0;
+  });
+  if (first == text.end()) {
+    return "";
+  }
+
+  const auto last =
+      std::find_if_not(text.rbegin(), text.rend(), [](unsigned char ch) {
+        return std::isspace(ch) != 0;
+      }).base();
+  return std::string(first, last);
+}
+
+std::string CreateUniqueMapPath(const std::string &display_name) {
   namespace fs = std::filesystem;
 
-  const auto [rows, cols] = GetDimensionsForSize(size);
-  const std::string size_label = GetSizeLabel(size);
-  int suffix = 1;
+  const std::string slug = Slugify(display_name);
+  fs::path base_path = fs::path(MAPS_DIRECTORY_PATH) / (slug + ".txt");
+  if (!fs::exists(base_path)) {
+    return base_path.string();
+  }
 
+  int suffix = 2;
   while (true) {
-    const std::string display_name =
-        "Eigene Karte " + size_label + " " + std::to_string(suffix);
-    const fs::path file_path =
-        fs::path(MAPS_DIRECTORY_PATH) / (Slugify(display_name) + ".txt");
-
-    if (!fs::exists(file_path)) {
-      EditorRequest request;
-      request.is_new_map = true;
-      request.map_path = file_path.string();
-      request.display_name = display_name;
-      request.rows = rows;
-      request.cols = cols;
-      return request;
+    fs::path candidate =
+        fs::path(MAPS_DIRECTORY_PATH) /
+        (slug + "_" + std::to_string(suffix) + ".txt");
+    if (!fs::exists(candidate)) {
+      return candidate.string();
     }
-
     suffix++;
   }
+}
+
+EditorRequest CreateNewMapRequest(NewMapSize size) {
+  const auto [rows, cols] = GetDimensionsForSize(size);
+  EditorRequest request;
+  request.is_new_map = true;
+  request.display_name = "Neue Karte " + GetSizeLabel(size);
+  request.rows = rows;
+  request.cols = cols;
+  return request;
 }
 
 MapFileData CreateEmptyMapFile(const std::string &display_name, int rows,
@@ -382,6 +405,7 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
   namespace fs = std::filesystem;
 
   EditorState editor_state;
+  editor_state.is_new_map = editor_request.is_new_map;
   editor_state.map_path = editor_request.map_path;
 
   if (editor_request.is_new_map) {
@@ -402,6 +426,18 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
   bool finished = false;
   bool should_reload_maps = false;
   std::string preferred_map_path;
+  auto begin_name_dialog = [&]() {
+    editor_state.show_exit_dialog = false;
+    editor_state.show_name_dialog = true;
+    editor_state.name_input.clear();
+    editor_state.name_dialog_message.clear();
+    SDL_StartTextInput();
+  };
+  auto end_name_dialog = [&]() {
+    editor_state.show_name_dialog = false;
+    editor_state.name_dialog_message.clear();
+    SDL_StopTextInput();
+  };
 
   while (!quit_requested && !finished) {
     SDL_Event event;
@@ -410,6 +446,61 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
       if (event.type == SDL_QUIT) {
         quit_requested = true;
         break;
+      }
+
+      if (editor_state.show_name_dialog) {
+        if (event.type == SDL_TEXTINPUT) {
+          if (editor_state.name_input.size() < 40) {
+            editor_state.name_input += event.text.text;
+            editor_state.name_dialog_message.clear();
+          }
+          continue;
+        }
+
+        if (event.type != SDL_KEYDOWN) {
+          continue;
+        }
+
+        switch (event.key.keysym.sym) {
+        case SDLK_BACKSPACE:
+          if (!editor_state.name_input.empty()) {
+            editor_state.name_input.pop_back();
+            editor_state.name_dialog_message.clear();
+          }
+          break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER: {
+          audio->PlayMenuSelect();
+          const std::string trimmed_name =
+              TrimWhitespace(editor_state.name_input);
+          if (trimmed_name.empty()) {
+            editor_state.name_dialog_message =
+                "Warnung: Bitte einen Kartennamen eingeben";
+            break;
+          }
+
+          editor_state.map_file.display_name = trimmed_name;
+          editor_state.map_path = CreateUniqueMapPath(trimmed_name);
+          fs::create_directories(fs::path(editor_state.map_path).parent_path());
+          if (Map::SaveMapFile(editor_state.map_path, editor_state.map_file)) {
+            finished = true;
+            should_reload_maps = true;
+            preferred_map_path = editor_state.map_path;
+            end_name_dialog();
+          } else {
+            editor_state.name_dialog_message =
+                "Warnung: Speichern fehlgeschlagen";
+          }
+          break;
+        }
+        case SDLK_ESCAPE:
+          end_name_dialog();
+          editor_state.show_exit_dialog = true;
+          break;
+        default:
+          break;
+        }
+        continue;
       }
 
       if (event.type != SDL_KEYDOWN) {
@@ -432,14 +523,21 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
         case SDLK_KP_ENTER:
           audio->PlayMenuSelect();
           if (editor_state.exit_dialog_selected == kEditorExitSave) {
-            fs::create_directories(fs::path(editor_state.map_path).parent_path());
-            if (Map::SaveMapFile(editor_state.map_path, editor_state.map_file)) {
-              finished = true;
-              should_reload_maps = true;
-              preferred_map_path = editor_state.map_path;
+            if (editor_state.is_new_map) {
+              begin_name_dialog();
             } else {
-              editor_state.transient_error = "Warnung: Speichern fehlgeschlagen";
-              editor_state.show_exit_dialog = false;
+              fs::create_directories(
+                  fs::path(editor_state.map_path).parent_path());
+              if (Map::SaveMapFile(editor_state.map_path,
+                                   editor_state.map_file)) {
+                finished = true;
+                should_reload_maps = true;
+                preferred_map_path = editor_state.map_path;
+              } else {
+                editor_state.transient_error =
+                    "Warnung: Speichern fehlgeschlagen";
+                editor_state.show_exit_dialog = false;
+              }
             }
           } else if (editor_state.exit_dialog_selected == kEditorExitCancel) {
             editor_state.show_exit_dialog = false;
@@ -517,10 +615,14 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
                           editor_state.map_file.display_name, editor_state.cursor,
                           GetEditorWarningMessage(editor_state),
                           editor_state.show_exit_dialog,
-                          editor_state.exit_dialog_selected);
+                          editor_state.exit_dialog_selected,
+                          editor_state.show_name_dialog,
+                          editor_state.name_input,
+                          editor_state.name_dialog_message);
     sleep(40);
   }
 
+  SDL_StopTextInput();
   return {quit_requested, should_reload_maps, preferred_map_path};
 }
 
@@ -774,20 +876,17 @@ void processOverlayEvents(bool &quit_requested) {
   }
 }
 
-void processEndScreenEvents(Events *events, bool &return_to_menu,
-                            bool &quit_requested) {
+void processEndScreenEvents(bool &return_to_menu, bool &quit_requested) {
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+    if (event.type == SDL_QUIT) {
       quit_requested = true;
-      events->RequestQuit();
       return;
     }
 
-    if (event.type == SDL_KEYDOWN) {
+    if (event.type == SDL_KEYDOWN || event.type == SDL_MOUSEBUTTONDOWN) {
       return_to_menu = true;
-      events->RequestQuit();
       return;
     }
   }
@@ -939,14 +1038,24 @@ int main() {
     game->StartSimulation();
 
     bool return_to_menu = false;
-    while (!events->is_quit() && !return_to_menu) {
+    bool frozen_loss_screen = false;
+    while ((!events->is_quit() || frozen_loss_screen) && !return_to_menu &&
+           !quit_application) {
       if (!game->is_lost() && !game->is_won()) {
         events->update();
         if (!events->is_quit()) {
           game->Update();
         }
+        if (game->is_lost() && !frozen_loss_screen) {
+          events->RequestQuit();
+          frozen_loss_screen = true;
+        }
       } else {
-        processEndScreenEvents(events.get(), return_to_menu, quit_application);
+        if (game->is_lost() && !frozen_loss_screen) {
+          events->RequestQuit();
+          frozen_loss_screen = true;
+        }
+        processEndScreenEvents(return_to_menu, quit_application);
       }
 
       renderer.Render();

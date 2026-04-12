@@ -51,7 +51,9 @@ public:
   void RenderEditor(const std::vector<std::string> &layout,
                     const std::string &map_name, MapCoord cursor,
                     const std::string &warning_message,
-                    bool show_exit_dialog, int exit_dialog_selected);
+                    bool show_exit_dialog, int exit_dialog_selected,
+                    bool show_name_dialog, const std::string &name_input,
+                    const std::string &name_dialog_message);
   void RenderCountdown(int seconds_left);
 
 private:
@@ -67,6 +69,7 @@ private:
   void drawStaticMonsters();
   void drawStaticGoodies();
   void drawLayoutEntities(const std::vector<std::string> &layout);
+  void drawDefeatEffect();
   void drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
                        int shimmer_seed);
   void drawhud();
@@ -84,7 +87,9 @@ private:
   void drawEditorSizeSelectionOverlay(int selected_index);
   void drawEditorOverlay(const std::string &map_name, MapCoord cursor,
                          const std::string &warning_message,
-                         bool show_exit_dialog, int exit_dialog_selected);
+                         bool show_exit_dialog, int exit_dialog_selected,
+                         bool show_name_dialog, const std::string &name_input,
+                         const std::string &name_dialog_message);
   void drawCountdownOverlay(int seconds_left);
   void renderSimpleText(TTF_Font *font, const std::string &text,
                         const SDL_Color &color, int center_x, int top_y);

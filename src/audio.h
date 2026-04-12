@@ -46,6 +46,7 @@ private:
                               int duration_ms, double volume, double attack_ms,
                               double release_ms);
   Mix_Chunk *CreateTrumpetChunk();
+  Mix_Chunk *CreateViolinLamentChunk();
   void PlayChunk(Mix_Chunk *);
 
   Mix_Chunk *SFX_coin;
