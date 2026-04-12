@@ -254,12 +254,6 @@ void Game::TriggerLoss(MapCoord coord, Uint32 now) {
 
 void Game::ApplyTeleporters() {
   TryTeleportElement(pacman);
-  for (auto monster : monsters) {
-    if (!monster->is_alive) {
-      continue;
-    }
-    TryTeleportElement(monster);
-  }
 }
 
 void Game::TryTeleportElement(MapElement *element) {

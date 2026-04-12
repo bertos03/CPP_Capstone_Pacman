@@ -270,27 +270,28 @@ void Map::LoadMap(const std::string mappath) {
       const char map_char =
           (j < static_cast<int>(map_line.length())) ? map_line[j] : BRICK;
       const ElementType entry = Char2Type(map_char);
+      const int column_index = border_necessary ? j + 1 : j;
       (*map)[i].push_back(entry);
 
       if (entry == ElementType::TYPE_MONSTER) {
         temp_coord.u = i;
-        temp_coord.v = j;
+        temp_coord.v = column_index;
         monster_coord.push_back(temp_coord);
         monster_chars.push_back(map_char);
       }
       if (entry == ElementType::TYPE_GOODIE) {
         temp_coord.u = i;
-        temp_coord.v = j;
+        temp_coord.v = column_index;
         goodie_coord.push_back(temp_coord);
       }
       if (entry == ElementType::TYPE_PACMAN) {
         temp_coord.u = i;
-        temp_coord.v = j;
+        temp_coord.v = column_index;
         pacman_coord = temp_coord;
       }
       if (IsTeleporterChar(map_char)) {
         temp_coord.u = i;
-        temp_coord.v = j;
+        temp_coord.v = column_index;
         teleporter_slots[map_char - '1'].push_back(temp_coord);
       }
     }
@@ -323,8 +324,17 @@ size_t Map::get_map_cols() { return (this->map.get()->at(0).size()); };
 int Map::get_number_monsters() { return this->monster_coord.size(); }
 int Map::get_number_goodies() { return this->goodie_coord.size(); }
 
-ElementType Map::map_entry(size_t row, size_t col) {
-  return (this->map.get()->at(row).at(col));
+ElementType Map::map_entry(size_t row, size_t col) const {
+  if (map == nullptr || row >= map->size()) {
+    return ElementType::TYPE_WALL;
+  }
+
+  const auto &map_row = map->at(row);
+  if (col >= map_row.size()) {
+    return ElementType::TYPE_WALL;
+  }
+
+  return map_row[col];
 };
 
 MapCoord Map::get_coord_monster(int i) { return this->monster_coord[i]; }
@@ -358,27 +368,43 @@ bool Map::TryGetTeleporterDestination(MapCoord origin, MapCoord &destination,
   return false;
 }
 
+bool Map::IsInsideBounds(MapCoord coord) const {
+  if (coord.u < 0 || coord.v < 0 || map == nullptr) {
+    return false;
+  }
+
+  const size_t row = static_cast<size_t>(coord.u);
+  if (row >= map->size()) {
+    return false;
+  }
+
+  return static_cast<size_t>(coord.v) < map->at(row).size();
+}
+
 void Map::get_options(MapCoord in_coord, std::vector<Directions> &options) {
   options.clear();
-  if (in_coord.u != 0) {
-    if (map.get()->at(in_coord.u - 1).at(in_coord.v) != ElementType::TYPE_WALL) {
-      options.emplace_back(Directions::Up);
-    }
+  if (!IsInsideBounds(in_coord)) {
+    return;
   }
-  if (in_coord.u != get_map_rows()) {
-    if (map.get()->at(in_coord.u + 1).at(in_coord.v) != ElementType::TYPE_WALL) {
-      options.emplace_back(Directions::Down);
-    }
+
+  if (in_coord.u > 0 &&
+      map_entry(static_cast<size_t>(in_coord.u - 1),
+                static_cast<size_t>(in_coord.v)) != ElementType::TYPE_WALL) {
+    options.emplace_back(Directions::Up);
   }
-  if (in_coord.v != 0) {
-    if (map.get()->at(in_coord.u).at(in_coord.v - 1) != ElementType::TYPE_WALL) {
-      options.emplace_back(Directions::Left);
-    }
+  if (in_coord.u + 1 < static_cast<int>(get_map_rows()) &&
+      map_entry(static_cast<size_t>(in_coord.u + 1),
+                static_cast<size_t>(in_coord.v)) != ElementType::TYPE_WALL) {
+    options.emplace_back(Directions::Down);
   }
-  if (in_coord.v != get_map_cols()) {
-    if (map.get()->at(in_coord.u).at(in_coord.v + 1) != ElementType::TYPE_WALL) {
-      options.emplace_back(Directions::Right);
-    }
+  if (in_coord.v > 0 &&
+      map_entry(static_cast<size_t>(in_coord.u),
+                static_cast<size_t>(in_coord.v - 1)) != ElementType::TYPE_WALL) {
+    options.emplace_back(Directions::Left);
   }
-  return;
+  if (in_coord.v + 1 < static_cast<int>(get_map_cols()) &&
+      map_entry(static_cast<size_t>(in_coord.u),
+                static_cast<size_t>(in_coord.v + 1)) != ElementType::TYPE_WALL) {
+    options.emplace_back(Directions::Right);
+  }
 }
