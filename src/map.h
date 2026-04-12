@@ -78,7 +78,7 @@ public:
   static bool IsTeleporterChar(char);
   size_t get_map_rows();
   size_t get_map_cols();
-  ElementType map_entry(size_t, size_t);
+  ElementType map_entry(size_t, size_t) const;
   ElementType Char2Type(char);
   char Type2Char(ElementType);
   int get_number_monsters();
@@ -94,6 +94,7 @@ public:
 
 protected:
 private:
+  bool IsInsideBounds(MapCoord) const;
   void LoadMap(const std::string);
   bool IsMonsterChar(char);
   bool IsMonsterEnabled(char);

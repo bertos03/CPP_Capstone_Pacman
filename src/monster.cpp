@@ -53,6 +53,9 @@ void Monster::simulate(Events *events, Map *map) {
   // std::cout << "Simulating monster #" << id << "\n";
   lck.unlock();
   map->get_options(map_coord, options);
+  if (options.empty()) {
+    return;
+  }
   next_move = options[rand() % options.size()];
 
   while (!events->is_quit() && is_alive) {
@@ -114,6 +117,12 @@ void Monster::simulate(Events *events, Map *map) {
 
     
     map->get_options(map_coord, options);
+    if (options.empty()) {
+      px_delta.x = 0;
+      px_delta.y = 0;
+      sleep(1);
+      continue;
+    }
     way_clear = false;
     for (auto i : options) {
       if (i == next_move) {
