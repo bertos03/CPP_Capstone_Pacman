@@ -1,14 +1,14 @@
 Kleiner Kringel
 xxxxxxxxxxxxxxxxxxxxxx
-xPx...x.......x.....xx
-x.x.x.xxx.xxx.x.xxx.xx
-x.x.x...x...x...x...xx
-x.x.xxx.xxx.xxxxx.x.xx
-x.x.x.x...x...x...x.xx
-x.x.x.xxx.xxxxx.xxxxxx
-x.x...x.x.....x....Oxx
-x.xxx.x.xxxxx.x.xxxNxx
-x.x...x.x.....x.x.GGxx
-x.x.xxx.xxxxxxxxxGxGxx
-x..............OMGxGxx
+xP..x.............xOxx
+x.x.x.x.x.x.x.xxx.x.xx
+x.....x...x.xG......xx
+x.xxx.x.x.x.x.xxx.x.xx
+x...........x..G...Gxx
+x.x.xxxxxxxxxxxxxxx.xx
+x.x...............xMxx
+x.xxx.x.x.xxx.x.x.x.xx
+x.....x...xG..x...xOxx
+x.x.x.xxx.x.x.x.x.x.xx
+x........G..x..Gx..Nxx
 xxxxxxxxxxxxxxxxxxxxxx
