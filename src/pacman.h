@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "mapelement.h"
+#include "events.h"
 #include "map.h"
 #include "renderer.h"
 #include "globaltypes.h"
@@ -30,6 +31,7 @@
 
 class Map;
 class Renderer;
+class Events;
 
 /**
  * @brief The class for Pacman

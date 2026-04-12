@@ -853,6 +853,7 @@ CMakeFiles/pacman.dir/src/audio.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_
   /opt/homebrew/include/SDL2/SDL_messagebox.h \
   /opt/homebrew/include/SDL2/SDL_metal.h \
   /opt/homebrew/include/SDL2/SDL_misc.h \
+  /opt/homebrew/include/SDL2/SDL_mixer.h \
   /opt/homebrew/include/SDL2/SDL_mouse.h \
   /opt/homebrew/include/SDL2/SDL_mutex.h \
   /opt/homebrew/include/SDL2/SDL_pixels.h \
@@ -2632,6 +2633,7 @@ CMakeFiles/pacman.dir/src/game.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_P
   /opt/homebrew/include/SDL2/SDL_messagebox.h \
   /opt/homebrew/include/SDL2/SDL_metal.h \
   /opt/homebrew/include/SDL2/SDL_misc.h \
+  /opt/homebrew/include/SDL2/SDL_mixer.h \
   /opt/homebrew/include/SDL2/SDL_mouse.h \
   /opt/homebrew/include/SDL2/SDL_mutex.h \
   /opt/homebrew/include/SDL2/SDL_pixels.h \
@@ -4306,16 +4308,11 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdarg.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stddef.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdint.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/definitions.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/monster.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/pacman.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.h \
   /opt/homebrew/include/SDL2/SDL.h \
   /opt/homebrew/include/SDL2/SDL_assert.h \
@@ -5251,6 +5248,7 @@ CMakeFiles/pacman.dir/src/main.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_P
   /opt/homebrew/include/SDL2/SDL_messagebox.h \
   /opt/homebrew/include/SDL2/SDL_metal.h \
   /opt/homebrew/include/SDL2/SDL_misc.h \
+  /opt/homebrew/include/SDL2/SDL_mixer.h \
   /opt/homebrew/include/SDL2/SDL_mouse.h \
   /opt/homebrew/include/SDL2/SDL_mutex.h \
   /opt/homebrew/include/SDL2/SDL_pixels.h \
@@ -6116,16 +6114,9 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdarg.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stddef.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdint.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/definitions.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/monster.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/pacman.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.h \
   /opt/homebrew/include/SDL2/SDL.h \
   /opt/homebrew/include/SDL2/SDL_assert.h \
@@ -7831,16 +7822,12 @@ CMakeFiles/pacman.dir/src/monster.cpp.o: /Users/robert/Documents/dev/CPP_Capston
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdarg.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stddef.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdint.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/definitions.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/monster.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/pacman.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.h \
   /opt/homebrew/include/SDL2/SDL.h \
   /opt/homebrew/include/SDL2/SDL_assert.h \
@@ -8736,15 +8723,11 @@ CMakeFiles/pacman.dir/src/pacman.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdarg.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stddef.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdint.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/definitions.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/monster.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/pacman.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.h \
   /opt/homebrew/include/SDL2/SDL.h \
@@ -9681,6 +9664,7 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
   /opt/homebrew/include/SDL2/SDL_messagebox.h \
   /opt/homebrew/include/SDL2/SDL_metal.h \
   /opt/homebrew/include/SDL2/SDL_misc.h \
+  /opt/homebrew/include/SDL2/SDL_mixer.h \
   /opt/homebrew/include/SDL2/SDL_mouse.h \
   /opt/homebrew/include/SDL2/SDL_mutex.h \
   /opt/homebrew/include/SDL2/SDL_pixels.h \
@@ -9765,6 +9749,8 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /opt/homebrew/include/SDL2/SDL_power.h:
 
 /opt/homebrew/include/SDL2/SDL_mouse.h:
+
+/opt/homebrew/include/SDL2/SDL_mixer.h:
 
 /opt/homebrew/include/SDL2/SDL_misc.h:
 

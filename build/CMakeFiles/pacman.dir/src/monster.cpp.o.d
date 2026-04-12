@@ -897,8 +897,4 @@ CMakeFiles/pacman.dir/src/monster.cpp.o: \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/definitions.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.h \
   /opt/homebrew/include/SDL2/SDL_image.h \
-  /opt/homebrew/include/SDL2/SDL_ttf.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/pacman.h
+  /opt/homebrew/include/SDL2/SDL_ttf.h

@@ -858,6 +858,8 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__fwd/stack.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/print \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/unistd.h \
+  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/definitions.h \
+  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/thread \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/formatter.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/jthread.h \
@@ -873,11 +875,10 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/chrono \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/file_clock.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/forward_list \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/definitions.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.h \
+  /opt/homebrew/include/SDL2/SDL_mixer.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.h \

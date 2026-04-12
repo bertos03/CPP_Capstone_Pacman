@@ -872,6 +872,7 @@ CMakeFiles/pacman.dir/src/game.cpp.o: \
   /opt/homebrew/include/SDL2/SDL_version.h \
   /opt/homebrew/include/SDL2/SDL_locale.h \
   /opt/homebrew/include/SDL2/SDL_misc.h \
+  /opt/homebrew/include/SDL2/SDL_mixer.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/iostream \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \

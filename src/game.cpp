@@ -29,6 +29,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   win = false;
   dead = false;
   score = 0;
+  simulation_started = false;
   // create Pacman object
   pacman = new Pacman(map->get_coord_pacman());
 
@@ -41,16 +42,22 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   for (int i = 0; i < map->get_number_goodies(); i++) {
     goodies.emplace_back(new Goodie(map->get_coord_goodie(i), i));
   }
+};
 
-  // start simulation loop for each monster in an own thread
-  for (int i = 0; i < monsters.size(); i++) {
-    monster_threads.emplace_back(
-        std::thread(&Monster::simulate, monsters[i], events, map));
+void Game::StartSimulation() {
+  if (simulation_started) {
+    return;
   }
 
-  // start simulation loop for pacman in an own thread
+  events->Keyreset();
+
+  for (size_t i = 0; i < monsters.size(); i++) {
+    monster_threads.emplace_back(&Monster::simulate, monsters[i], events, map);
+  }
+
   pacman_thread = std::thread(&Pacman::simulate, pacman, events, map);
-};
+  simulation_started = true;
+}
 
 /**
  * @brief Game logic - is called during each cyclee
@@ -95,10 +102,14 @@ void Game::Update() {
  */
 Game::~Game() {
   // std::cout << "Waiting for threads to finish ... \n";
-  for (int i = 0; i < monster_threads.size(); i++) {
-    monster_threads[i].join();
+  for (size_t i = 0; i < monster_threads.size(); i++) {
+    if (monster_threads[i].joinable()) {
+      monster_threads[i].join();
+    }
   }
-  pacman_thread.join();
+  if (pacman_thread.joinable()) {
+    pacman_thread.join();
+  }
 
   // std::cout << "Threads finished.\n";
 

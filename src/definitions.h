@@ -17,8 +17,8 @@
 
 
 // Flags to comment out for compatibility with Udacity workspace
-// #define AUDIO 
-// #define FONT_FINE
+#define AUDIO 
+#define FONT_FINE
 
 #define COLOR_BACK 10,0,35
 #define COLOR_PACMAN 200, 200, 0
@@ -28,8 +28,11 @@
 
 #define MAP_PATH "../data/map.txt"
 #define FONT_PATH "../data/font.ttf"
+#define LOGO_BRICK_TEXTURE_PATH "../data/brick.png"
 #define FONT_COLOR &white
+#define WINDOW_TITLE "Bobman"
 
+#define GAME_START_COUNTDOWN 5 // allowed values: 3..9 seconds
 
 #define COIN_SOUND_PATH "../data/coin.wav"
 #define WIN_SOUND_PATH "../data/win.wav"

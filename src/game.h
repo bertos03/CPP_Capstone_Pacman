@@ -45,6 +45,7 @@ public:
   ~Game();
   bool is_won();
   bool is_lost();
+  void StartSimulation();
   void Update();
 
 protected:
@@ -58,6 +59,7 @@ private:
   std::vector<std::thread> monster_threads;
   std::thread pacman_thread;
   int score;
+  bool simulation_started;
   friend class Renderer;
   bool dead;
   bool win;

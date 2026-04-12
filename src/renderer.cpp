@@ -17,324 +17,646 @@
 
 #include "renderer.h"
 
-/**
- * @brief Destroy the Renderer:: Renderer object
- *
- */
-Renderer::~Renderer() {
+#include <algorithm>
 
-  // TODO: clean up images etc.
+#include "game.h"
+#include "goodie.h"
+#include "map.h"
+#include "monster.h"
+#include "pacman.h"
 
-  SDL_DestroyWindow(sdl_window);
-  sdl_window = NULL;
-  SDL_FreeSurface(sdl_wall_surface);
-  SDL_FreeSurface(sdl_goodie_surface);
-  SDL_FreeSurface(sdl_monster_surface);
-  SDL_FreeSurface(sdl_pacman_surface);
-  SDL_FreeSurface(sdl_text_surface);
-  if (game->is_lost() || game->is_won()) {
-    SDL_FreeSurface(sdl_text_surface_winlose);
-  }
-  SDL_DestroyTexture(sdl_wall_texture);
-  SDL_DestroyTexture(sdl_goodie_texture);
-  SDL_DestroyTexture(sdl_monster_texture);
-  SDL_DestroyTexture(sdl_pacman_texture);
-  SDL_DestroyTexture(sdl_font_texture);
-  if (game->is_lost() || game->is_won()) {
-    SDL_DestroyTexture(sdl_font_texture_winlose);
-  }
-  TTF_CloseFont(sdl_font);
-  TTF_CloseFont(sdl_font_winlose);
+namespace {
 
-  TTF_Quit();
-  SDL_Quit();
-}
+const SDL_Color kHudTextColor{243, 236, 222, 255};
+const SDL_Color kMenuTextColor{225, 223, 218, 255};
+const SDL_Color kSelectedMenuTextColor{255, 248, 238, 255};
+const SDL_Color kStatusTextColor{255, 189, 163, 255};
+const SDL_Color kPanelFillColor{10, 6, 18, 205};
+const SDL_Color kPanelBorderColor{196, 130, 92, 255};
+const SDL_Color kBrickOutlineColor{78, 20, 14, 255};
 
-/**
- * @brief Construct a new Renderer:: Renderer object
- *
- * @param
- * _map: pointer to the Map object
- * _game: pointer to the Game object
- */
-Renderer::Renderer(Map *_map, Game *_game) : map(_map), game(_game) {
-  // Initialize SDL
+} // namespace
+
+Renderer::Renderer(Map *_map, Game *_game)
+    : screen_res_x(0), screen_res_y(0), element_size(0), offset_x(0),
+      offset_y(0), rows(0), cols(0), map(_map), game(_game),
+      sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
+      sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
+      sdl_goodie_texture(nullptr), sdl_monster_surface(nullptr),
+      sdl_monster_texture(nullptr), sdl_pacman_surface(nullptr),
+      sdl_pacman_texture(nullptr), sdl_logo_brick_surface(nullptr),
+      sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
+      sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
+      sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
     std::cerr << "SDL could not initialize.\n";
     std::cerr << "SDL_Error: " << SDL_GetError() << "\n";
     exit(1);
   }
-  // calculate size of map elements
-  SDL_DisplayMode DM;
-  SDL_GetCurrentDisplayMode(0, &DM);
-  std::cout << "Screen size is " << DM.w << "x" << DM.h << "px\n";
-  screen_res_x = DM.w;
-  screen_res_y = DM.h;
+
+  if (TTF_Init() < 0) {
+    std::cerr << "SDL_ttf could not initialize.\n";
+    std::cerr << "SDL_Error: " << TTF_GetError() << "\n";
+    exit(1);
+  }
+
+  const int image_flags = IMG_INIT_PNG;
+  if ((IMG_Init(image_flags) & image_flags) != image_flags) {
+    std::cerr << "SDL_image PNG support not fully available: "
+              << IMG_GetError() << "\n";
+  }
+
+  SDL_DisplayMode display_mode;
+  SDL_GetCurrentDisplayMode(0, &display_mode);
+  screen_res_x = display_mode.w;
+  screen_res_y = display_mode.h;
   rows = map->get_map_rows();
   cols = map->get_map_cols();
-  int fontsize = screen_res_y / 35; // for top text - store it in a separate
-                                    // variable for better readability
+  const int row_count = static_cast<int>(rows);
+  const int col_count = static_cast<int>(cols);
 
-  int element_size_x = (screen_res_y - rows - 1) / rows;
-  int element_size_y = (screen_res_x - cols - 1 - fontsize) / cols;
-  // make sure elements have square, not rectangular shape
-  if (element_size_x > element_size_y) {
-    element_size = element_size_y;
-  } else {
-    element_size = element_size_x;
-  }
+  const int hud_fontsize = std::max(22, screen_res_y / 35);
+  const int reserved_top_space = hud_fontsize * 2;
 
-  offset_x = (screen_res_x - (cols + 1) * element_size) / 2;
-  offset_y = (screen_res_y - (rows + 1) * element_size) / 2 + fontsize * 2;
+  const int element_size_x =
+      (screen_res_y - row_count - 1 - reserved_top_space) /
+      std::max(1, row_count);
+  const int element_size_y = (screen_res_x - col_count - 1) /
+                             std::max(1, col_count);
+  element_size = std::max(8, std::min(element_size_x, element_size_y));
 
-  // Create Window
-  sdl_window = SDL_CreateWindow(
-      "Pacman", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DM.w, DM.h,
-      SDL_WINDOW_BORDERLESS); // SDL_WINDOW_BORDERLESS //SDL_WINDOW_FULLSCREEN
+  offset_x = (screen_res_x - static_cast<int>((cols + 1) * element_size)) / 2;
+  offset_y =
+      (screen_res_y - static_cast<int>((rows + 1) * element_size)) / 2 +
+      reserved_top_space;
 
-  if (nullptr == sdl_window) {
+  sdl_window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
+                                SDL_WINDOWPOS_CENTERED, display_mode.w,
+                                display_mode.h, SDL_WINDOW_BORDERLESS);
+  if (sdl_window == nullptr) {
     std::cerr << "Window could not be created.\n";
-    std::cerr << " SDL_Error: " << SDL_GetError() << "\n";
+    std::cerr << "SDL_Error: " << SDL_GetError() << "\n";
     exit(1);
   }
 
-  // Create renderer
-  sdl_renderer = SDL_CreateRenderer(sdl_window, -1, SDL_RENDERER_ACCELERATED);
-  if (nullptr == sdl_renderer) {
+  sdl_renderer = SDL_CreateRenderer(
+      sdl_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  if (sdl_renderer == nullptr) {
+    sdl_renderer = SDL_CreateRenderer(sdl_window, -1, SDL_RENDERER_SOFTWARE);
+  }
+  if (sdl_renderer == nullptr) {
     std::cerr << "Renderer could not be created.\n";
     std::cerr << "SDL_Error: " << SDL_GetError() << "\n";
-  }
-
-  SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
-  SDL_RenderClear(sdl_renderer);
-  std::cout << "Block size x:" << element_size << " (" << rows << " rows - "
-            << cols << " cols)\n";
-  std::cout << "Offset x:" << offset_x << " y:" << offset_y << "\n";
-
-  // Define Font Stuff
-  TTF_Init();
-
-  sdl_font = TTF_OpenFont("../data/font.ttf", fontsize);
-  fontsize = screen_res_y / 8;
-  sdl_font_winlose = TTF_OpenFont("../data/font.ttf", fontsize);
-
-  if (sdl_font == NULL || sdl_font_winlose == NULL) {
-    std::cerr << "could not open font .- " << SDL_GetError() << "\n";
     exit(1);
   }
-  sdl_font_color = SDL_Color{255, 255, 255};
-  sdl_font_back_color = SDL_Color{COLOR_BACK};
 
-  // set up icons
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
+  SDL_RenderClear(sdl_renderer);
+
+  sdl_font_hud = TTF_OpenFont(FONT_PATH, hud_fontsize);
+  sdl_font_menu = TTF_OpenFont(FONT_PATH, std::max(30, screen_res_y / 22));
+  sdl_font_logo = TTF_OpenFont(FONT_PATH, std::max(84, screen_res_y / 5));
+  sdl_font_display = TTF_OpenFont(FONT_PATH, std::max(72, screen_res_y / 7));
+
+  if (sdl_font_hud == nullptr || sdl_font_menu == nullptr ||
+      sdl_font_logo == nullptr || sdl_font_display == nullptr) {
+    std::cerr << "Could not open font: " << TTF_GetError() << "\n";
+    exit(1);
+  }
+
+  sdl_font_color = kHudTextColor;
+
   sdl_wall_surface = SDL_LoadBMP(WALL_PATH);
+  sdl_goodie_surface = SDL_LoadBMP(GOODIE_PATH);
+  sdl_monster_surface = SDL_LoadBMP(MONSTER_PATH);
+  sdl_pacman_surface = SDL_LoadBMP(PACMAN_PATH);
+
+  if (sdl_goodie_surface == nullptr || sdl_wall_surface == nullptr ||
+      sdl_monster_surface == nullptr || sdl_pacman_surface == nullptr) {
+    std::cerr << "Could not open sprite assets: " << SDL_GetError() << "\n";
+    exit(1);
+  }
+
   sdl_wall_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_wall_surface);
-
-  sdl_goodie_surface = SDL_LoadBMP(GOODIE_PATH);
   sdl_goodie_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_goodie_surface);
-
-  sdl_monster_surface = SDL_LoadBMP(MONSTER_PATH);
   sdl_monster_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_monster_surface);
-
-  sdl_pacman_surface = SDL_LoadBMP(PACMAN_PATH);
   sdl_pacman_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_pacman_surface);
 
-  if (sdl_goodie_surface == NULL || sdl_wall_surface == NULL ||
-      sdl_monster_surface == NULL || sdl_pacman_surface == NULL) {
-    std::cerr << "could not open icons .- " << SDL_GetError() << "\n";
+  SDL_Surface *brick_surface = IMG_Load(LOGO_BRICK_TEXTURE_PATH);
+  if (brick_surface == nullptr) {
+    brick_surface = SDL_LoadBMP(WALL_PATH);
+  }
+  if (brick_surface == nullptr) {
+    std::cerr << "Could not open brick texture for logo: " << IMG_GetError()
+              << "\n";
+    exit(1);
+  }
+  sdl_logo_brick_surface =
+      SDL_ConvertSurfaceFormat(brick_surface, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_FreeSurface(brick_surface);
+
+  if (sdl_logo_brick_surface == nullptr) {
+    std::cerr << "Could not convert brick texture: " << SDL_GetError() << "\n";
     exit(1);
   }
 }
 
-/**
- * @brief Refresh screen, draw map and all dynamic game elements
- * calls subfunctions for the different graphic elements.
- *
- */
+Renderer::~Renderer() {
+  if (sdl_wall_texture != nullptr) {
+    SDL_DestroyTexture(sdl_wall_texture);
+  }
+  if (sdl_goodie_texture != nullptr) {
+    SDL_DestroyTexture(sdl_goodie_texture);
+  }
+  if (sdl_monster_texture != nullptr) {
+    SDL_DestroyTexture(sdl_monster_texture);
+  }
+  if (sdl_pacman_texture != nullptr) {
+    SDL_DestroyTexture(sdl_pacman_texture);
+  }
+  if (sdl_renderer != nullptr) {
+    SDL_DestroyRenderer(sdl_renderer);
+  }
+  if (sdl_window != nullptr) {
+    SDL_DestroyWindow(sdl_window);
+  }
+
+  if (sdl_wall_surface != nullptr) {
+    SDL_FreeSurface(sdl_wall_surface);
+  }
+  if (sdl_goodie_surface != nullptr) {
+    SDL_FreeSurface(sdl_goodie_surface);
+  }
+  if (sdl_monster_surface != nullptr) {
+    SDL_FreeSurface(sdl_monster_surface);
+  }
+  if (sdl_pacman_surface != nullptr) {
+    SDL_FreeSurface(sdl_pacman_surface);
+  }
+  if (sdl_logo_brick_surface != nullptr) {
+    SDL_FreeSurface(sdl_logo_brick_surface);
+  }
+
+  if (sdl_font_hud != nullptr) {
+    TTF_CloseFont(sdl_font_hud);
+  }
+  if (sdl_font_menu != nullptr) {
+    TTF_CloseFont(sdl_font_menu);
+  }
+  if (sdl_font_logo != nullptr) {
+    TTF_CloseFont(sdl_font_logo);
+  }
+  if (sdl_font_display != nullptr) {
+    TTF_CloseFont(sdl_font_display);
+  }
+
+  IMG_Quit();
+  TTF_Quit();
+  SDL_Quit();
+}
+
 void Renderer::Render() {
+  renderFrame(true);
+  SDL_RenderPresent(sdl_renderer);
+}
+
+void Renderer::RenderStartMenu(int selected_item,
+                               const std::string &status_message) {
+  renderFrame(false);
+  drawDimmer(120);
+  drawStartMenuOverlay(selected_item, status_message);
+  SDL_RenderPresent(sdl_renderer);
+}
+
+void Renderer::RenderCountdown(int seconds_left) {
+  renderFrame(false);
+  drawDimmer(145);
+  drawCountdownOverlay(seconds_left);
+  SDL_RenderPresent(sdl_renderer);
+}
+
+void Renderer::renderFrame(bool show_hud) {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
   drawmap();
   drawgoodies();
   drawpacman();
   drawmonsters();
-  drawtext();
-  // Update Screen
-  SDL_RenderPresent(sdl_renderer);
+  if (show_hud) {
+    drawhud();
+  }
 }
 
-/**
- * @brief Draws pacman
- *
- */
+void Renderer::drawhud() {
+  const std::string title_text =
+      "BOBMAN        Score: " + std::to_string(game->score);
+  renderSimpleText(sdl_font_hud, title_text, sdl_font_color, screen_res_x / 2,
+                   30);
+
+  if (game->win) {
+    renderBrickText(sdl_font_display, "You Won", screen_res_x / 2,
+                    (screen_res_y - TTF_FontHeight(sdl_font_display)) / 2,
+                    kBrickOutlineColor);
+  }
+  if (game->dead) {
+    renderBrickText(sdl_font_display, "Game Over", screen_res_x / 2,
+                    (screen_res_y - TTF_FontHeight(sdl_font_display)) / 2,
+                    kBrickOutlineColor);
+  }
+}
+
+void Renderer::drawDimmer(Uint8 alpha) {
+  SDL_Rect screen_rect{0, 0, screen_res_x, screen_res_y};
+  SDL_SetRenderDrawColor(sdl_renderer, 0, 0, 0, alpha);
+  SDL_RenderFillRect(sdl_renderer, &screen_rect);
+}
+
+void Renderer::drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
+                         const SDL_Color &border_color) {
+  SDL_SetRenderDrawColor(sdl_renderer, fill_color.r, fill_color.g, fill_color.b,
+                         fill_color.a);
+  SDL_RenderFillRect(sdl_renderer, &panel);
+
+  SDL_SetRenderDrawColor(sdl_renderer, border_color.r, border_color.g,
+                         border_color.b, border_color.a);
+  SDL_RenderDrawRect(sdl_renderer, &panel);
+
+  SDL_Rect inner_panel{panel.x + 6, panel.y + 6, panel.w - 12, panel.h - 12};
+  SDL_SetRenderDrawColor(sdl_renderer, border_color.r, border_color.g,
+                         border_color.b, 100);
+  SDL_RenderDrawRect(sdl_renderer, &inner_panel);
+}
+
+void Renderer::drawStartMenuOverlay(int selected_item,
+                                    const std::string &status_message) {
+  const int logo_top = screen_res_y / 18;
+  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+                  kBrickOutlineColor);
+
+  const int panel_width = std::min(720, screen_res_x * 42 / 100);
+  const int panel_height = std::max(260, screen_res_y * 28 / 100);
+  const int panel_top =
+      std::min(screen_res_y - panel_height - 70,
+               logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 20);
+  SDL_Rect panel{(screen_res_x - panel_width) / 2, panel_top, panel_width,
+                 panel_height};
+
+  drawPanel(panel, kPanelFillColor, kPanelBorderColor);
+
+  const std::vector<std::string> menu_items{
+      "Start Spiel", "Konfiguration", "Ende"};
+  const int item_height = std::max(58, TTF_FontHeight(sdl_font_menu) + 22);
+  const int highlight_width = panel.w - 56;
+  const int item_start_y =
+      panel.y + 26 + std::max(0, (panel.h - 52 - static_cast<int>(menu_items.size()) *
+                                               item_height) /
+                                       2);
+
+  for (int i = 0; i < static_cast<int>(menu_items.size()); i++) {
+    const SDL_Rect highlight_rect{panel.x + 28, item_start_y + i * item_height,
+                                  highlight_width, item_height - 8};
+    if (i == selected_item) {
+      SDL_SetRenderDrawColor(sdl_renderer, 138, 46, 29, 185);
+      SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      SDL_SetRenderDrawColor(sdl_renderer, 235, 182, 140, 255);
+      SDL_RenderDrawRect(sdl_renderer, &highlight_rect);
+
+      SDL_Rect accent_rect{highlight_rect.x + 10, highlight_rect.y + 8, 10,
+                           highlight_rect.h - 16};
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 215, 160, 255);
+      SDL_RenderFillRect(sdl_renderer, &accent_rect);
+    }
+
+    const SDL_Color item_color =
+        (i == selected_item) ? kSelectedMenuTextColor : kMenuTextColor;
+    const int text_top =
+        highlight_rect.y +
+        (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
+    renderSimpleText(sdl_font_menu, menu_items[i], item_color, screen_res_x / 2,
+                     text_top);
+  }
+
+  const std::string controls_hint =
+      "Pfeiltasten hoch/runter, Enter bestaetigt";
+  renderSimpleText(sdl_font_hud, controls_hint, kHudTextColor, screen_res_x / 2,
+                   panel.y + panel.h + 18);
+
+  if (!status_message.empty()) {
+    renderSimpleText(sdl_font_hud, status_message, kStatusTextColor,
+                     screen_res_x / 2,
+                     panel.y + panel.h - TTF_FontHeight(sdl_font_hud) - 22);
+  }
+}
+
+void Renderer::drawCountdownOverlay(int seconds_left) {
+  const int panel_width = std::max(260, screen_res_x / 4);
+  const int panel_height = std::max(240, screen_res_y / 3);
+  SDL_Rect panel{(screen_res_x - panel_width) / 2,
+                 (screen_res_y - panel_height) / 2, panel_width, panel_height};
+
+  drawPanel(panel, kPanelFillColor, kPanelBorderColor);
+  renderSimpleText(sdl_font_hud, "Spielstart in", kHudTextColor,
+                   screen_res_x / 2, panel.y + 30);
+  renderBrickText(
+      sdl_font_display, std::to_string(seconds_left), screen_res_x / 2,
+      panel.y + (panel.h - TTF_FontHeight(sdl_font_display)) / 2,
+      kBrickOutlineColor);
+}
+
+void Renderer::renderSimpleText(TTF_Font *font, const std::string &text,
+                                const SDL_Color &color, int center_x,
+                                int top_y) {
+  if (text.empty()) {
+    return;
+  }
+
+  SDL_Surface *text_surface =
+      TTF_RenderUTF8_Blended(font, text.c_str(), color);
+  if (text_surface == nullptr) {
+    return;
+  }
+
+  SDL_Texture *text_texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, text_surface);
+  if (text_texture != nullptr) {
+    SDL_Rect destination{center_x - text_surface->w / 2, top_y, text_surface->w,
+                         text_surface->h};
+    SDL_RenderCopy(sdl_renderer, text_texture, nullptr, &destination);
+    SDL_DestroyTexture(text_texture);
+  }
+
+  SDL_FreeSurface(text_surface);
+}
+
+void Renderer::renderBrickText(TTF_Font *font, const std::string &text,
+                               int center_x, int top_y,
+                               const SDL_Color &outline_color) {
+  if (text.empty()) {
+    return;
+  }
+
+  const int shadow_offset = std::max(4, TTF_FontHeight(font) / 28);
+  SDL_Surface *shadow_surface =
+      TTF_RenderUTF8_Blended(font, text.c_str(), SDL_Color{0, 0, 0, 220});
+  if (shadow_surface != nullptr) {
+    SDL_Texture *shadow_texture =
+        SDL_CreateTextureFromSurface(sdl_renderer, shadow_surface);
+    if (shadow_texture != nullptr) {
+      SDL_SetTextureAlphaMod(shadow_texture, 170);
+      SDL_Rect shadow_rect{center_x - shadow_surface->w / 2 + shadow_offset,
+                           top_y + shadow_offset, shadow_surface->w,
+                           shadow_surface->h};
+      SDL_RenderCopy(sdl_renderer, shadow_texture, nullptr, &shadow_rect);
+      SDL_DestroyTexture(shadow_texture);
+    }
+    SDL_FreeSurface(shadow_surface);
+  }
+
+  SDL_Surface *brick_surface = createBrickTextSurface(font, text, outline_color);
+  if (brick_surface == nullptr) {
+    return;
+  }
+
+  SDL_Texture *brick_texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, brick_surface);
+  if (brick_texture != nullptr) {
+    SDL_Rect destination{center_x - brick_surface->w / 2, top_y, brick_surface->w,
+                         brick_surface->h};
+    SDL_RenderCopy(sdl_renderer, brick_texture, nullptr, &destination);
+    SDL_DestroyTexture(brick_texture);
+  }
+
+  SDL_FreeSurface(brick_surface);
+}
+
+SDL_Surface *Renderer::createBrickTextSurface(TTF_Font *font,
+                                              const std::string &text,
+                                              const SDL_Color &outline_color) {
+  SDL_Surface *glyph_surface_raw =
+      TTF_RenderUTF8_Blended(font, text.c_str(), SDL_Color{255, 255, 255, 255});
+  if (glyph_surface_raw == nullptr) {
+    return nullptr;
+  }
+
+  SDL_Surface *glyph_surface =
+      SDL_ConvertSurfaceFormat(glyph_surface_raw, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_FreeSurface(glyph_surface_raw);
+  if (glyph_surface == nullptr) {
+    return nullptr;
+  }
+
+  SDL_Surface *output_surface = SDL_CreateRGBSurfaceWithFormat(
+      0, glyph_surface->w, glyph_surface->h, 32, SDL_PIXELFORMAT_RGBA32);
+  if (output_surface == nullptr) {
+    SDL_FreeSurface(glyph_surface);
+    return nullptr;
+  }
+
+  SDL_FillRect(output_surface, nullptr,
+               SDL_MapRGBA(output_surface->format, 0, 0, 0, 0));
+
+  const bool lock_glyph = SDL_MUSTLOCK(glyph_surface);
+  const bool lock_output = SDL_MUSTLOCK(output_surface);
+  const bool lock_brick =
+      sdl_logo_brick_surface != nullptr && SDL_MUSTLOCK(sdl_logo_brick_surface);
+
+  if (lock_glyph) {
+    SDL_LockSurface(glyph_surface);
+  }
+  if (lock_output) {
+    SDL_LockSurface(output_surface);
+  }
+  if (lock_brick) {
+    SDL_LockSurface(sdl_logo_brick_surface);
+  }
+
+  const SDL_Color accent_color{177, 60, 45, 255};
+  const int glyph_height = std::max(1, glyph_surface->h - 1);
+  auto glyph_alpha = [&](int px, int py) -> Uint8 {
+    if (px < 0 || py < 0 || px >= glyph_surface->w || py >= glyph_surface->h) {
+      return 0;
+    }
+
+    Uint8 red = 0;
+    Uint8 green = 0;
+    Uint8 blue = 0;
+    Uint8 alpha = 0;
+    SDL_GetRGBA(readPixel(glyph_surface, px, py), glyph_surface->format, &red,
+                &green, &blue, &alpha);
+    return alpha;
+  };
+
+  for (int y = 0; y < glyph_surface->h; y++) {
+    for (int x = 0; x < glyph_surface->w; x++) {
+      const Uint8 alpha = glyph_alpha(x, y);
+      if (alpha == 0) {
+        continue;
+      }
+
+      Uint8 brick_r = accent_color.r;
+      Uint8 brick_g = accent_color.g;
+      Uint8 brick_b = accent_color.b;
+      Uint8 brick_a = 255;
+
+      if (sdl_logo_brick_surface != nullptr) {
+        const int sample_x =
+            (x * 3 + (y / 6) * 5) % sdl_logo_brick_surface->w;
+        const int sample_y =
+            (y * 3 + (x / 8) * 3) % sdl_logo_brick_surface->h;
+        SDL_GetRGBA(readPixel(sdl_logo_brick_surface, sample_x, sample_y),
+                    sdl_logo_brick_surface->format, &brick_r, &brick_g, &brick_b,
+                    &brick_a);
+      }
+
+      float brightness = 1.16f - 0.36f * static_cast<float>(y) / glyph_height;
+      int red = static_cast<int>((brick_r * 0.72f + accent_color.r * 0.28f) *
+                                 brightness);
+      int green =
+          static_cast<int>((brick_g * 0.64f + accent_color.g * 0.36f) *
+                           brightness);
+      int blue =
+          static_cast<int>((brick_b * 0.54f + accent_color.b * 0.46f) *
+                           brightness);
+
+      const Uint8 left = glyph_alpha(x - 1, y);
+      const Uint8 right = glyph_alpha(x + 1, y);
+      const Uint8 up = glyph_alpha(x, y - 1);
+      const Uint8 down = glyph_alpha(x, y + 1);
+      const bool edge = left == 0 || right == 0 || up == 0 || down == 0;
+      const bool highlight_edge = left == 0 || up == 0;
+      const bool shadow_edge = right == 0 || down == 0;
+
+      if (highlight_edge) {
+        red = std::min(255, static_cast<int>(red * 1.08f + 16));
+        green = std::min(255, static_cast<int>(green * 1.05f + 10));
+        blue = std::min(255, static_cast<int>(blue * 1.02f + 8));
+      }
+      if (shadow_edge) {
+        red = static_cast<int>(red * 0.82f);
+        green = static_cast<int>(green * 0.78f);
+        blue = static_cast<int>(blue * 0.74f);
+      }
+      if (edge) {
+        red = (red * 2 + outline_color.r * 3) / 5;
+        green = (green * 2 + outline_color.g * 3) / 5;
+        blue = (blue * 2 + outline_color.b * 3) / 5;
+      }
+
+      red = std::clamp(red, 0, 255);
+      green = std::clamp(green, 0, 255);
+      blue = std::clamp(blue, 0, 255);
+
+      writePixel(output_surface, x, y,
+                 SDL_MapRGBA(output_surface->format, red, green, blue, alpha));
+    }
+  }
+
+  if (lock_brick) {
+    SDL_UnlockSurface(sdl_logo_brick_surface);
+  }
+  if (lock_output) {
+    SDL_UnlockSurface(output_surface);
+  }
+  if (lock_glyph) {
+    SDL_UnlockSurface(glyph_surface);
+  }
+
+  SDL_FreeSurface(glyph_surface);
+  return output_surface;
+}
+
+Uint32 Renderer::readPixel(SDL_Surface *surface, int x, int y) {
+  Uint32 *pixels = static_cast<Uint32 *>(surface->pixels);
+  return pixels[(y * surface->pitch / 4) + x];
+}
+
+void Renderer::writePixel(SDL_Surface *surface, int x, int y, Uint32 pixel) {
+  Uint32 *pixels = static_cast<Uint32 *>(surface->pixels);
+  pixels[(y * surface->pitch / 4) + x] = pixel;
+}
+
 void Renderer::drawpacman() {
   game->pacman->px_coord = getPixelCoord(
-      game->pacman->map_coord, element_size * game->pacman->px_delta.x / 100.,
-      element_size * game->pacman->px_delta.y / 100.);
-  // SDL_SetRenderDrawColor(sdl_renderer, COLOR_PACMAN, 0xFF);
-  // SDL_RenderFillCircle(sdl_renderer,
-  //                      game->pacman->px_coord.x + element_size / 2,
-  //                      game->pacman->px_coord.y + element_size / 2,
-  //                      (element_size - SIZE_PACMAN) / 2);
+      game->pacman->map_coord, element_size * game->pacman->px_delta.x / 100.0,
+      element_size * game->pacman->px_delta.y / 100.0);
   sdl_pacman_rect =
       SDL_Rect{game->pacman->px_coord.x + int(element_size * 0.05),
                game->pacman->px_coord.y + int(element_size * 0.05),
                int(element_size * 0.9), int(element_size * 0.9)};
-  SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, NULL, &sdl_pacman_rect);
+  SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, nullptr, &sdl_pacman_rect);
 }
 
-/**
- * @brief Draw goodies on screen
- *
- */
 void Renderer::drawgoodies() {
   for (auto goodie : game->goodies) {
     if (goodie->is_active) {
       goodie->px_coord = getPixelCoord(goodie->map_coord, 0, 0);
-      // SDL_SetRenderDrawColor(sdl_renderer, COLOR_GOODIE, 0xFF);
-      // SDL_RenderFillCircle(sdl_renderer, goodie->px_coord.x + element_size /
-      // 2,
-      //                      goodie->px_coord.y + element_size / 2,
-      //                      sin(std::chrono::system_clock::now()) *
-      //                          (element_size - 2) / 4);
       sdl_goodie_rect =
           SDL_Rect{goodie->px_coord.x + int(element_size * 0.15),
                    goodie->px_coord.y + int(element_size * 0.15),
                    int(element_size * 0.7), int(element_size * 0.7)};
-      SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, NULL, &sdl_goodie_rect);
+      SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr,
+                     &sdl_goodie_rect);
     }
   }
 }
 
-/**
- * @brief Draw monsters on screen
- *
- */
 void Renderer::drawmonsters() {
   for (auto monster : game->monsters) {
     monster->px_coord = getPixelCoord(
-        monster->map_coord, element_size * monster->px_delta.x / 100.,
-        element_size * monster->px_delta.y / 100.);
-    // SDL_SetRenderDrawColor(sdl_renderer, COLOR_MONSTER, 0xFF);
-    // SDL_RenderFillCircle(sdl_renderer, monster->px_coord.x + element_size /
-    // 2,
-    //                      monster->px_coord.y + element_size / 2,
-    //                      (element_size - SIZE_MONSTER) / 2);
+        monster->map_coord, element_size * monster->px_delta.x / 100.0,
+        element_size * monster->px_delta.y / 100.0);
     sdl_monster_rect =
         SDL_Rect{monster->px_coord.x + int(element_size * 0.05),
                  monster->px_coord.y + int(element_size * 0.05),
                  int(element_size * 0.9), int(element_size * 0.9)};
-    SDL_RenderCopy(sdl_renderer, sdl_monster_texture, NULL, &sdl_monster_rect);
+    SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
+                   &sdl_monster_rect);
   }
 }
 
-/**
- * @brief Draw text on screen
- *
- */
-void Renderer::drawtext() {
-  string pactext =
-      "\\\\\\\\ PACMAN ////         Score: " + std::to_string(game->score);
-  if (game->win) {
-    sdl_text_surface_winlose = TTF_RenderText_Solid(
-        sdl_font_winlose, "+++ You won +++", sdl_font_color);
-  }
-  if (game->dead) {
-    sdl_text_surface_winlose = TTF_RenderText_Solid(
-        sdl_font_winlose, "+++ Game over +++", sdl_font_color);
-  }
-
-  if (game->dead || game->win) {
-    sdl_font_texture_winlose =
-        SDL_CreateTextureFromSurface(sdl_renderer, sdl_text_surface_winlose);
-    SDL_QueryTexture(sdl_font_texture_winlose, NULL, NULL, &texW, &texH);
-    sdl_text_rect = SDL_Rect{(screen_res_x - texW) / 2,
-                             (screen_res_y - texH) / 2, texW, texH};
-    SDL_RenderCopy(sdl_renderer, sdl_font_texture_winlose, NULL,
-                   &sdl_text_rect);
-  }
-#ifdef FONT_FINE
-  sdl_text_surface = TTF_RenderUTF8_LCD(sdl_font, pactext.c_str(),
-                                        sdl_font_color, sdl_font_back_color);
-#endif
-#ifndef FONT_FINE
-  sdl_text_surface =
-      TTF_RenderText_Solid(sdl_font, pactext.c_str(), sdl_font_color);
-#endif
-  sdl_font_texture =
-      SDL_CreateTextureFromSurface(sdl_renderer, sdl_text_surface);
-  SDL_QueryTexture(sdl_font_texture, NULL, NULL, &texW, &texH);
-  sdl_text_rect = SDL_Rect{(screen_res_x - texW) / 2, 30, texW, texH};
-  SDL_RenderCopy(sdl_renderer, sdl_font_texture, NULL, &sdl_text_rect);
-  /////////
-}
-
-/**
- * @brief draws the map
- *
- */
 void Renderer::drawmap() {
-  // SDL_RenderClear(sdl_renderer);
   SDL_Rect block;
-  block.w = element_size; // screen_width / grid_width;
-  block.h = element_size; // screen_height / grid_height;
+  block.w = element_size;
+  block.h = element_size;
   SDL_SetRenderDrawColor(sdl_renderer, 50, 50, 50, 0xFF);
-  int x;
-  int y;
+
   for (size_t i = 0; i < cols; i++) {
     for (size_t j = 0; j < rows; j++) {
-      ElementType temp = map->map_entry(j, i); // for debugging reasons
-      x = offset_x + 1 + i * (element_size + 1);
-      y = offset_y + 1 + j * (element_size + 1);
-      switch (temp) {
+      const ElementType entry = map->map_entry(j, i);
+      const int x = offset_x + 1 + static_cast<int>(i) * (element_size + 1);
+      const int y = offset_y + 1 + static_cast<int>(j) * (element_size + 1);
+
+      switch (entry) {
       case ElementType::TYPE_WALL:
-        // SDL_SetRenderDrawColor(sdl_renderer, 50, 50, 50, 0xFF);
-        // block.x = x;
-        // block.y = y;
-        // SDL_RenderFillRect(sdl_renderer, &block);
         sdl_wall_rect = SDL_Rect{x, y, element_size + 1, element_size + 1};
-        SDL_RenderCopy(sdl_renderer, sdl_wall_texture, NULL, &sdl_wall_rect);
+        SDL_RenderCopy(sdl_renderer, sdl_wall_texture, nullptr, &sdl_wall_rect);
         break;
       case ElementType::TYPE_PATH:
-        SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
-        block.x = x;
-        block.y = y;
-        SDL_RenderFillRect(sdl_renderer, &block);
-        break;
+      case ElementType::TYPE_GOODIE:
+      case ElementType::TYPE_PACMAN:
+      case ElementType::TYPE_MONSTER:
       default:
         SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
         block.x = x;
         block.y = y;
         SDL_RenderFillRect(sdl_renderer, &block);
-      };
+        break;
+      }
     }
   }
 }
 
-/**
- * @brief Draw circle primitive on SDL2 renderer
- * taken from
- * https://gist.github.com/Gumichan01/332c26f6197a432db91cc4327fcabb1c
- * @param renderer Pointer to renderer
- * @param x
- * @param y
- * @param radius
- * @return int
- */
 int Renderer::SDL_RenderDrawCircle(SDL_Renderer *renderer, int x, int y,
                                    int radius) {
-  int offsetx, offsety, d;
-  int status;
-
-  // CHECK_RENDERER_MAGIC(renderer, -1);
-
-  offsetx = 0;
-  offsety = radius;
-  d = radius - 1;
-  status = 0;
+  int offsetx = 0;
+  int offsety = radius;
+  int d = radius - 1;
+  int status = 0;
 
   while (offsety >= offsetx) {
     status += SDL_RenderDrawPoint(renderer, x + offsetx, y + offsety);
@@ -367,30 +689,14 @@ int Renderer::SDL_RenderDrawCircle(SDL_Renderer *renderer, int x, int y,
   return status;
 }
 
-/**
- * @brief Draw filled circle primitive on SDL2 renderer
- * taken from
- * https://gist.github.com/Gumichan01/332c26f6197a432db91cc4327fcabb1c
- * @param renderer Pointer to renderer
- * @param x screen coordinate x (pixel)
- * @param y screen coordinate y (pixel)
- * @param radius
- * @return int amount of draw operations (0 means failure)
- */
 int Renderer::SDL_RenderFillCircle(SDL_Renderer *renderer, int x, int y,
                                    int radius) {
-  int offsetx, offsety, d;
-  int status;
-
-  // CHECK_RENDERER_MAGIC(renderer, -1);
-
-  offsetx = 0;
-  offsety = radius;
-  d = radius - 1;
-  status = 0;
+  int offsetx = 0;
+  int offsety = radius;
+  int d = radius - 1;
+  int status = 0;
 
   while (offsety >= offsetx) {
-
     status += SDL_RenderDrawLine(renderer, x - offsety, y + offsetx,
                                  x + offsety, y + offsetx);
     status += SDL_RenderDrawLine(renderer, x - offsetx, y + offsety,
@@ -421,17 +727,10 @@ int Renderer::SDL_RenderFillCircle(SDL_Renderer *renderer, int x, int y,
   return status;
 }
 
-/**
- * @brief Helper function to calculate pixel coordinates out of map coordinates
- *
- * @param _in map coordinates struct
- * @param delta_x offset in x (pixel)
- * @param delta_y offset in y (pixel)
- * @return PixelCoord  screen coordinates (pixel)
- */
-PixelCoord Renderer::getPixelCoord(MapCoord _in, int delta_x, int delta_y) {
+PixelCoord Renderer::getPixelCoord(MapCoord in_coord, int delta_x,
+                                   int delta_y) {
   PixelCoord out;
-  out.x = offset_x + 1 + _in.v * (element_size + 1) + delta_x;
-  out.y = offset_y + 1 + _in.u * (element_size + 1) + delta_y;
+  out.x = offset_x + 1 + in_coord.v * (element_size + 1) + delta_x;
+  out.y = offset_y + 1 + in_coord.u * (element_size + 1) + delta_y;
   return out;
 }

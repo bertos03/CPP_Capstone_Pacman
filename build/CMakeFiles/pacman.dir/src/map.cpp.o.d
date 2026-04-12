@@ -894,11 +894,4 @@ CMakeFiles/pacman.dir/src/map.cpp.o: \
   /opt/homebrew/include/SDL2/SDL_locale.h \
   /opt/homebrew/include/SDL2/SDL_misc.h \
   /opt/homebrew/include/SDL2/SDL_image.h \
-  /opt/homebrew/include/SDL2/SDL_ttf.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/monster.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/pacman.h
+  /opt/homebrew/include/SDL2/SDL_ttf.h
