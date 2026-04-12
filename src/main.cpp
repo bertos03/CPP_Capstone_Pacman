@@ -36,6 +36,7 @@
 
 namespace {
 
+// Auswahl im Startmenue.
 enum MenuSelection {
   MENU_START = 0,
   MENU_MAP = 1,
@@ -44,6 +45,7 @@ enum MenuSelection {
   MENU_END = 4,
 };
 
+// Auswahl im Konfigurationsmenue.
 enum ConfigSelection {
   CONFIG_MONSTER_AMOUNT = 0,
   CONFIG_BACK = 1,
@@ -57,8 +59,10 @@ enum class MenuScreen {
   EditorSizeSelection
 };
 
+// Vordefinierte Groessen fuer neue Karten im Editor.
 enum class NewMapSize { Small = 0, Medium = 1, Large = 2 };
 
+// Parameter, mit denen der Editor gestartet wird.
 struct EditorRequest {
   bool is_new_map{false};
   std::string map_path;
@@ -67,17 +71,20 @@ struct EditorRequest {
   int cols{0};
 };
 
+// Rueckgabe nach dem Verlassen des Editors.
 struct EditorResult {
   bool quit_requested{false};
   bool should_reload_maps{false};
   std::string preferred_map_path;
 };
 
+// Ergebnis der Layout-Validierung.
 struct MapValidationResult {
   bool is_valid{false};
   std::string message;
 };
 
+// Gesamter Laufzeitzustand des Editors.
 struct EditorState {
   MapFileData map_file;
   std::string map_path;

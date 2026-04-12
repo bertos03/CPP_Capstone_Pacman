@@ -39,7 +39,9 @@ public:
   Renderer(size_t rows, size_t cols);
   ~Renderer();
 
+  // Haupt-Renderpfad fuer das laufende Spiel.
   void Render();
+  // Menueoberflaechen fuer den Startfluss.
   void RenderStartMenu(int selected_item, const std::string &map_name,
                        const std::string &status_message);
   void RenderConfigMenu(int selected_item, MonsterAmount monster_amount);
@@ -54,7 +56,9 @@ public:
                     bool show_exit_dialog, int exit_dialog_selected,
                     bool show_name_dialog, const std::string &name_input,
                     const std::string &name_dialog_message);
+  // Countdown vor Spielstart.
   void RenderCountdown(int seconds_left);
+  // Hilfsmethode fuer den Editor: Bildschirmkoordinate => Mapzelle.
   bool TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
                                    MapCoord &coord) const;
 

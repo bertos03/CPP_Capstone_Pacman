@@ -36,17 +36,23 @@ using std::vector;
 class Renderer;
 
 struct MapDefinition {
+  // Vollständiger Dateipfad der Karte.
   std::string file_path;
+  // Anzeigename aus der ersten Zeile der Datei.
   std::string display_name;
 };
 
 struct MapFileData {
+  // Name, der in Menüs/HUD angezeigt wird.
   std::string display_name;
+  // Reine Layoutzeilen ohne Header.
   std::vector<std::string> layout_rows;
 };
 
 struct TeleporterPair {
+  // Teleporter-ID ('1'..'5').
   char digit;
+  // Ein- und Ausgangskoordinaten dieses Portals.
   MapCoord first;
   MapCoord second;
 };
@@ -69,6 +75,7 @@ public:
   DiscoverAvailableMaps(const std::string &directory_path = MAPS_DIRECTORY_PATH);
   static bool LoadMapFile(const std::string &map_path, MapFileData &map_file);
   static bool SaveMapFile(const std::string &map_path, const MapFileData &map_file);
+  // Teleporter sind als Ziffern 1..5 definiert.
   static bool IsTeleporterChar(char);
   size_t get_map_rows();
   size_t get_map_cols();
