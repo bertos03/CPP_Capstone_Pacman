@@ -1,0 +1,14 @@
+Kleiner Knoten
+xxxxxxxxxxxxxxxxxxxxxx
+xPx.........x.......xx
+x.x.x.xxxxx.x.xxxxx.xx
+x...x.....x.x.x...x.xx
+xxx.xxxxx.x.x.x.x.x.xx
+x.x...x...x.x.x.x...xx
+x.xxxxx.xxx.x.x.xxxxxx
+x.......x...x.x.x...xx
+xxxxxxxxx.xxx.x.xxxNxx
+x...x...x.....x...MGxx
+x.x.x.x.xxxxxxxxxxxGxx
+x.x...x........OMGGGxx
+xxxxxxxxxxxxxxxxxxxxxx

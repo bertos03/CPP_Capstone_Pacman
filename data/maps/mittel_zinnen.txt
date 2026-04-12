@@ -1,0 +1,18 @@
+Mittlere Zinnen
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xP....x.............x.......xx
+x.xxx.x.xxxxxxx.xxx.x.xxxxx.xx
+x...x...x.....x...x.x.....x.xx
+xxx.xxxxx.xxx.xxx.x.xxxxx.x.xx
+x...x.....x...x.x.x.x.....x.xx
+x.xxx.x.xxxxx.x.x.x.x.xxxxx.xx
+x.x...x.x...x.x.x.x.x.x.....xx
+x.xxxxx.x.x.x.x.x.xxx.x.xxxxxx
+x.....x...x.x.x.x.x...x.....xx
+xxxxx.x.xxx.x.x.x.x.xxxxxxxOxx
+x...x.x...x.x...x...x...x.NGxx
+x.xxx.xxxxx.xxx.xxxxx.x.xOxGxx
+x.x...x.....x.x.x...x.x.xMxGxx
+x.x.xxx.xxxxx.x.x.x.xxxNxGxGxx
+x.......x.........x...xMGGxGxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

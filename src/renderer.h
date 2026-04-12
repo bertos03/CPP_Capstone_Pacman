@@ -39,8 +39,11 @@ public:
   ~Renderer();
 
   void Render();
-  void RenderStartMenu(int selected_item, const std::string &status_message);
+  void RenderStartMenu(int selected_item, const std::string &map_name,
+                       const std::string &status_message);
   void RenderConfigMenu(int selected_item, MonsterAmount monster_amount);
+  void RenderMapSelectionMenu(const std::vector<std::string> &map_names,
+                              int selected_index);
   void RenderCountdown(int seconds_left);
 
 private:
@@ -54,8 +57,11 @@ private:
   void drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
                  const SDL_Color &border_color);
   void drawStartMenuOverlay(int selected_item,
+                            const std::string &map_name,
                             const std::string &status_message);
   void drawConfigMenuOverlay(int selected_item, MonsterAmount monster_amount);
+  void drawMapSelectionOverlay(const std::vector<std::string> &map_names,
+                               int selected_index);
   void drawCountdownOverlay(int seconds_left);
   void renderSimpleText(TTF_Font *font, const std::string &text,
                         const SDL_Color &color, int center_x, int top_y);

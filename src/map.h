@@ -20,6 +20,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -27,12 +28,16 @@
 
 #include "definitions.h"
 #include "globaltypes.h"
-#include "renderer.h"
 
 using std::string;
 using std::vector;
 
 class Renderer;
+
+struct MapDefinition {
+  std::string file_path;
+  std::string display_name;
+};
 
 enum class ElementType {
   TYPE_WALL,
@@ -44,8 +49,11 @@ enum class ElementType {
 
 class Map {
 public:
-  explicit Map(MonsterAmount monster_amount = MonsterAmount::Many);
+  Map(const std::string &map_path,
+      MonsterAmount monster_amount = MonsterAmount::Many);
   ~Map();
+  static std::vector<MapDefinition>
+  DiscoverAvailableMaps(const std::string &directory_path = MAPS_DIRECTORY_PATH);
   size_t get_map_rows();
   size_t get_map_cols();
   ElementType map_entry(size_t, size_t);
@@ -56,6 +64,7 @@ public:
   MapCoord get_coord_monster(int);
   MapCoord get_coord_goodie(int);
   MapCoord get_coord_pacman();
+  std::string get_map_name() const;
   void get_options(MapCoord, std::vector<Directions>&);
 
 protected:
@@ -66,6 +75,8 @@ private:
   std::vector<MapCoord> monster_coord;
   std::vector<MapCoord> goodie_coord;
   MapCoord pacman_coord;
+  std::string map_name;
+  std::string map_path;
   MonsterAmount monster_amount;
   std::shared_ptr<vector<vector<ElementType>>> map;
   friend class Renderer;

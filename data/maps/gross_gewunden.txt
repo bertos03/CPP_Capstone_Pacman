@@ -1,0 +1,22 @@
+Grosse Gewundene
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xPx.......x...x.......x.......x...x.xx
+x.x.x.xxx.xxx.x.xxx.x.x.xxxxx.x.x.x.xx
+x...x...x.....x.x.x.x.x...x.....x...xx
+x.xxxxx.xxx.xxx.x.x.x.xxx.x.xxxxxxx.xx
+x...x...x.x.x...x.x.x.....x.x.....x.xx
+xxxxx.xxx.x.x.xxx.x.xxx.xxxxx.xxx.x.xx
+x.....x...x.x.....x.x...x.....x...x.xx
+x.xxxxxxx.x.xxxxx.x.x.xxx.xxxxx.xxx.xx
+x.......x...x.....x.x.x.x.x...x.x...xx
+x.xxxxx.x.xxx.xxxxx.x.x.x.x.x.xxxxxxxx
+x.x.x...x...x.x...x.x...x...x.......xx
+x.x.x.xxxxxxx.x.x.x.xxxxxxxxxxxxxxxOxx
+x...x.....x...x.x.x...........x...xNxx
+xxx.xxxxx.x.xxx.x.xxxxxxxxxxx.x.x.xMxx
+x.x.x...x...x...x...x...x...x...xMGGxx
+x.x.xxx.xxxxxxxxx.x.x.x.xxx.xxxxxxxxxx
+x.x.x...x.......x.x...x.x...x..MxGGGxx
+x.x.x.x.x.xxxxx.x.xxxxx.x.x.x.xMxxxGxx
+x.....x...x.......x.......x..NxGGGGGxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

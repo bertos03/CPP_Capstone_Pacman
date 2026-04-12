@@ -1,0 +1,22 @@
+Offene Mitte
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xP......x...............x.........x.xx
+xxx.xxxxx.xxx.xxxxxxxxx.x.xxxxxxx.x.xx
+x...x.....x.x...x.....x...x.....x.x.xx
+x.x.x.xxxxx.xxx.x.xxx.xxxxx.xxx.x.x.xx
+x.x.x.x.......x.x.x...x.....x...x...xx
+x.xxx.xxxxxxx.x.x.x.xxx.x.xxxxxxxxx.xx
+x.............x...x.x...x.x.........xx
+x.xxxxxxxxxxx.xxxxx.x.xxx.x.xxxxxxxxxx
+x...x.......x.....x.x...x...x.......xx
+x.xxx.xxxxx.xxxxxxx.xxx.xxxxx.xxxxxOxx
+x.x...x...x...x.....x.x...x.....x.xNxx
+x.x.xxx.xxxxx.x.xxxxx.xxx.xxxxx.x.xMxx
+x.x.x.......x.x.x...x...........xNMGxx
+xxx.xxxxx.xxx.x.x.xxx.xxxxxxxxxxxMxxxx
+x...x...x.....x.x.....x...x...OONGxGxx
+x.xxx.x.xxxxx.x.xxxxxxx.x.xxxxxxxGxGxx
+x.x...x.x...x...x...x...x.x.ONMGxGGGxx
+x.x.xxx.x.x.xxxxx.x.x.xxx.xOxxxGxxxGxx
+x.....x...x.......x.....x.ONMGxGxGGGxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

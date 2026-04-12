@@ -26,7 +26,7 @@
 #define COLOR_GOODIE 0, 50, 255
 #define COLOR_PATH 40,40,40
 
-#define MAP_PATH "../data/map.txt"
+#define MAPS_DIRECTORY_PATH "../data/maps"
 #define FONT_PATH "../data/font.ttf"
 #define LOGO_BRICK_TEXTURE_PATH "../data/brick.png"
 #define FONT_COLOR &white

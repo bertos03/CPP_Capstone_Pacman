@@ -239,11 +239,11 @@ void Renderer::Render() {
   SDL_RenderPresent(sdl_renderer);
 }
 
-void Renderer::RenderStartMenu(int selected_item,
+void Renderer::RenderStartMenu(int selected_item, const std::string &map_name,
                                const std::string &status_message) {
   renderFrame(false);
   drawDimmer(120);
-  drawStartMenuOverlay(selected_item, status_message);
+  drawStartMenuOverlay(selected_item, map_name, status_message);
   SDL_RenderPresent(sdl_renderer);
 }
 
@@ -252,6 +252,14 @@ void Renderer::RenderConfigMenu(int selected_item,
   renderFrame(false);
   drawDimmer(120);
   drawConfigMenuOverlay(selected_item, monster_amount);
+  SDL_RenderPresent(sdl_renderer);
+}
+
+void Renderer::RenderMapSelectionMenu(const std::vector<std::string> &map_names,
+                                      int selected_index) {
+  renderFrame(false);
+  drawDimmer(120);
+  drawMapSelectionOverlay(map_names, selected_index);
   SDL_RenderPresent(sdl_renderer);
 }
 
@@ -315,6 +323,7 @@ void Renderer::drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
 }
 
 void Renderer::drawStartMenuOverlay(int selected_item,
+                                    const std::string &map_name,
                                     const std::string &status_message) {
   const int logo_top = screen_res_y / 18;
   renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
@@ -331,11 +340,11 @@ void Renderer::drawStartMenuOverlay(int selected_item,
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
 
   const std::vector<std::string> menu_items{
-      "Start Spiel", "Konfiguration", "Ende"};
-  const int item_height = std::max(58, TTF_FontHeight(sdl_font_menu) + 22);
+      "Start Spiel", "Karte: " + map_name, "Konfiguration", "Ende"};
+  const int item_height = std::max(52, TTF_FontHeight(sdl_font_menu) + 18);
   const int highlight_width = panel.w - 56;
   const int item_start_y =
-      panel.y + 26 + std::max(0, (panel.h - 52 - static_cast<int>(menu_items.size()) *
+      panel.y + 22 + std::max(0, (panel.h - 44 - static_cast<int>(menu_items.size()) *
                                                item_height) /
                                        2);
 
@@ -435,6 +444,60 @@ void Renderer::drawConfigMenuOverlay(int selected_item,
   renderSimpleText(sdl_font_hud,
                    "Enter aendert den Wert oder bestaetigt, Esc geht zurueck",
                    kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
+}
+
+void Renderer::drawMapSelectionOverlay(const std::vector<std::string> &map_names,
+                                       int selected_index) {
+  const int logo_top = screen_res_y / 18;
+  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+                  kBrickOutlineColor);
+  renderSimpleText(sdl_font_menu, "Kartenauswahl", kHudTextColor,
+                   screen_res_x / 2,
+                   logo_top + TTF_FontHeight(sdl_font_logo) - 4);
+
+  const int item_height = std::max(52, TTF_FontHeight(sdl_font_menu) + 18);
+  const int panel_width = std::min(860, screen_res_x * 50 / 100);
+  const int desired_panel_height =
+      110 + static_cast<int>(map_names.size()) * item_height;
+  const int panel_height = std::min(std::max(260, desired_panel_height),
+                                    screen_res_y * 62 / 100);
+  const int panel_top =
+      std::min(screen_res_y - panel_height - 70,
+               logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
+  SDL_Rect panel{(screen_res_x - panel_width) / 2, panel_top, panel_width,
+                 panel_height};
+
+  drawPanel(panel, kPanelFillColor, kPanelBorderColor);
+
+  const int highlight_width = panel.w - 56;
+  const int item_start_y =
+      panel.y + 28 +
+      std::max(0, (panel.h - 72 - static_cast<int>(map_names.size()) * item_height) /
+                       2);
+
+  for (int i = 0; i < static_cast<int>(map_names.size()); i++) {
+    const SDL_Rect highlight_rect{panel.x + 28, item_start_y + i * item_height,
+                                  highlight_width, item_height - 8};
+    if (i == selected_index) {
+      SDL_SetRenderDrawColor(sdl_renderer, 138, 46, 29, 185);
+      SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      SDL_SetRenderDrawColor(sdl_renderer, 235, 182, 140, 255);
+      SDL_RenderDrawRect(sdl_renderer, &highlight_rect);
+    }
+
+    const SDL_Color item_color =
+        (i == selected_index) ? kSelectedMenuTextColor : kMenuTextColor;
+    const int text_top =
+        highlight_rect.y +
+        (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
+    renderSimpleText(sdl_font_menu, map_names[i], item_color, screen_res_x / 2,
+                     text_top);
+  }
+
+  renderSimpleText(
+      sdl_font_hud,
+      "Pfeiltasten waehlen, Enter bestaetigt, Esc verwirft die Vorschau",
+      kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
 }
 
 void Renderer::drawCountdownOverlay(int seconds_left) {

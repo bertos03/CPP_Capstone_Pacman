@@ -3456,9 +3456,7 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/AvailabilityInternal.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/AvailabilityInternalLegacy.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/AvailabilityMacros.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/AvailabilityVersions.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/TargetConditionals.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/___wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/__wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/__xlocale.h \
@@ -3466,7 +3464,6 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_bounds.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctermid.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctype.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_inttypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_locale.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_mb_cur_max.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_printf.h \
@@ -4087,13 +4084,11 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/errno.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/exception \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/filesystem \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/float.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/format \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/forward_list \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/fstream \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/functional \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/initializer_list \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/inttypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/iomanip \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/ios \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/iosfwd \
@@ -4137,8 +4132,6 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/errno.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/float.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/inttypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/libkern/_OSByteOrder.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/libkern/arm/_OSByteOrder.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/limits.h \
@@ -4168,7 +4161,6 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdio.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdlib.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/string.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/strings.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/__endian.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_endian.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_posix_availability.h \
@@ -4262,7 +4254,6 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/___wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_ctype.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_inttypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_stdio.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_stdlib.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_string.h \
@@ -4283,11 +4274,6 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_ptrdiff_t.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_size_t.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_wchar_t.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_bf16.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_neon.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_vector_types.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/float.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/inttypes.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/limits.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/ptrcheck.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdarg.h \
@@ -4297,60 +4283,7 @@ CMakeFiles/pacman.dir/src/goodie.cpp.o: /Users/robert/Documents/dev/CPP_Capstone
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.h \
-  /opt/homebrew/include/SDL2/SDL.h \
-  /opt/homebrew/include/SDL2/SDL_assert.h \
-  /opt/homebrew/include/SDL2/SDL_atomic.h \
-  /opt/homebrew/include/SDL2/SDL_audio.h \
-  /opt/homebrew/include/SDL2/SDL_blendmode.h \
-  /opt/homebrew/include/SDL2/SDL_clipboard.h \
-  /opt/homebrew/include/SDL2/SDL_config.h \
-  /opt/homebrew/include/SDL2/SDL_cpuinfo.h \
-  /opt/homebrew/include/SDL2/SDL_endian.h \
-  /opt/homebrew/include/SDL2/SDL_error.h \
-  /opt/homebrew/include/SDL2/SDL_events.h \
-  /opt/homebrew/include/SDL2/SDL_filesystem.h \
-  /opt/homebrew/include/SDL2/SDL_gamecontroller.h \
-  /opt/homebrew/include/SDL2/SDL_gesture.h \
-  /opt/homebrew/include/SDL2/SDL_guid.h \
-  /opt/homebrew/include/SDL2/SDL_haptic.h \
-  /opt/homebrew/include/SDL2/SDL_hidapi.h \
-  /opt/homebrew/include/SDL2/SDL_hints.h \
-  /opt/homebrew/include/SDL2/SDL_image.h \
-  /opt/homebrew/include/SDL2/SDL_joystick.h \
-  /opt/homebrew/include/SDL2/SDL_keyboard.h \
-  /opt/homebrew/include/SDL2/SDL_keycode.h \
-  /opt/homebrew/include/SDL2/SDL_loadso.h \
-  /opt/homebrew/include/SDL2/SDL_locale.h \
-  /opt/homebrew/include/SDL2/SDL_log.h \
-  /opt/homebrew/include/SDL2/SDL_main.h \
-  /opt/homebrew/include/SDL2/SDL_messagebox.h \
-  /opt/homebrew/include/SDL2/SDL_metal.h \
-  /opt/homebrew/include/SDL2/SDL_misc.h \
-  /opt/homebrew/include/SDL2/SDL_mouse.h \
-  /opt/homebrew/include/SDL2/SDL_mutex.h \
-  /opt/homebrew/include/SDL2/SDL_pixels.h \
-  /opt/homebrew/include/SDL2/SDL_platform.h \
-  /opt/homebrew/include/SDL2/SDL_power.h \
-  /opt/homebrew/include/SDL2/SDL_quit.h \
-  /opt/homebrew/include/SDL2/SDL_rect.h \
-  /opt/homebrew/include/SDL2/SDL_render.h \
-  /opt/homebrew/include/SDL2/SDL_rwops.h \
-  /opt/homebrew/include/SDL2/SDL_scancode.h \
-  /opt/homebrew/include/SDL2/SDL_sensor.h \
-  /opt/homebrew/include/SDL2/SDL_shape.h \
-  /opt/homebrew/include/SDL2/SDL_stdinc.h \
-  /opt/homebrew/include/SDL2/SDL_surface.h \
-  /opt/homebrew/include/SDL2/SDL_system.h \
-  /opt/homebrew/include/SDL2/SDL_thread.h \
-  /opt/homebrew/include/SDL2/SDL_timer.h \
-  /opt/homebrew/include/SDL2/SDL_touch.h \
-  /opt/homebrew/include/SDL2/SDL_ttf.h \
-  /opt/homebrew/include/SDL2/SDL_version.h \
-  /opt/homebrew/include/SDL2/SDL_video.h \
-  /opt/homebrew/include/SDL2/begin_code.h \
-  /opt/homebrew/include/SDL2/close_code.h
+  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.h
 
 CMakeFiles/pacman.dir/src/main.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/main.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \
@@ -5262,9 +5195,7 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/AvailabilityInternal.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/AvailabilityInternalLegacy.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/AvailabilityMacros.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/AvailabilityVersions.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/TargetConditionals.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/___wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/__wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/__xlocale.h \
@@ -5272,7 +5203,6 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_bounds.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctermid.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctype.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_inttypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_locale.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_mb_cur_max.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_printf.h \
@@ -5893,13 +5823,11 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/errno.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/exception \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/filesystem \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/float.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/format \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/forward_list \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/fstream \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/functional \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/initializer_list \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/inttypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/iomanip \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/ios \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/iosfwd \
@@ -5943,8 +5871,6 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/errno.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/float.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/inttypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/libkern/_OSByteOrder.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/libkern/arm/_OSByteOrder.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/limits.h \
@@ -5974,7 +5900,6 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdio.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdlib.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/string.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/strings.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/__endian.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_endian.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_posix_availability.h \
@@ -6068,7 +5993,6 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/___wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_ctype.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_inttypes.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_stdio.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_stdlib.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_string.h \
@@ -6089,11 +6013,6 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_ptrdiff_t.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_size_t.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_wchar_t.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_bf16.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_neon.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_vector_types.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/float.h \
-  /Library/Developer/CommandLineTools/usr/lib/clang/17/include/inttypes.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/limits.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/ptrcheck.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdarg.h \
@@ -6101,60 +6020,7 @@ CMakeFiles/pacman.dir/src/map.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pa
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdint.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/definitions.h \
   /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.h \
-  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.h \
-  /opt/homebrew/include/SDL2/SDL.h \
-  /opt/homebrew/include/SDL2/SDL_assert.h \
-  /opt/homebrew/include/SDL2/SDL_atomic.h \
-  /opt/homebrew/include/SDL2/SDL_audio.h \
-  /opt/homebrew/include/SDL2/SDL_blendmode.h \
-  /opt/homebrew/include/SDL2/SDL_clipboard.h \
-  /opt/homebrew/include/SDL2/SDL_config.h \
-  /opt/homebrew/include/SDL2/SDL_cpuinfo.h \
-  /opt/homebrew/include/SDL2/SDL_endian.h \
-  /opt/homebrew/include/SDL2/SDL_error.h \
-  /opt/homebrew/include/SDL2/SDL_events.h \
-  /opt/homebrew/include/SDL2/SDL_filesystem.h \
-  /opt/homebrew/include/SDL2/SDL_gamecontroller.h \
-  /opt/homebrew/include/SDL2/SDL_gesture.h \
-  /opt/homebrew/include/SDL2/SDL_guid.h \
-  /opt/homebrew/include/SDL2/SDL_haptic.h \
-  /opt/homebrew/include/SDL2/SDL_hidapi.h \
-  /opt/homebrew/include/SDL2/SDL_hints.h \
-  /opt/homebrew/include/SDL2/SDL_image.h \
-  /opt/homebrew/include/SDL2/SDL_joystick.h \
-  /opt/homebrew/include/SDL2/SDL_keyboard.h \
-  /opt/homebrew/include/SDL2/SDL_keycode.h \
-  /opt/homebrew/include/SDL2/SDL_loadso.h \
-  /opt/homebrew/include/SDL2/SDL_locale.h \
-  /opt/homebrew/include/SDL2/SDL_log.h \
-  /opt/homebrew/include/SDL2/SDL_main.h \
-  /opt/homebrew/include/SDL2/SDL_messagebox.h \
-  /opt/homebrew/include/SDL2/SDL_metal.h \
-  /opt/homebrew/include/SDL2/SDL_misc.h \
-  /opt/homebrew/include/SDL2/SDL_mouse.h \
-  /opt/homebrew/include/SDL2/SDL_mutex.h \
-  /opt/homebrew/include/SDL2/SDL_pixels.h \
-  /opt/homebrew/include/SDL2/SDL_platform.h \
-  /opt/homebrew/include/SDL2/SDL_power.h \
-  /opt/homebrew/include/SDL2/SDL_quit.h \
-  /opt/homebrew/include/SDL2/SDL_rect.h \
-  /opt/homebrew/include/SDL2/SDL_render.h \
-  /opt/homebrew/include/SDL2/SDL_rwops.h \
-  /opt/homebrew/include/SDL2/SDL_scancode.h \
-  /opt/homebrew/include/SDL2/SDL_sensor.h \
-  /opt/homebrew/include/SDL2/SDL_shape.h \
-  /opt/homebrew/include/SDL2/SDL_stdinc.h \
-  /opt/homebrew/include/SDL2/SDL_surface.h \
-  /opt/homebrew/include/SDL2/SDL_system.h \
-  /opt/homebrew/include/SDL2/SDL_thread.h \
-  /opt/homebrew/include/SDL2/SDL_timer.h \
-  /opt/homebrew/include/SDL2/SDL_touch.h \
-  /opt/homebrew/include/SDL2/SDL_ttf.h \
-  /opt/homebrew/include/SDL2/SDL_version.h \
-  /opt/homebrew/include/SDL2/SDL_video.h \
-  /opt/homebrew/include/SDL2/begin_code.h \
-  /opt/homebrew/include/SDL2/close_code.h
+  /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.h
 
 CMakeFiles/pacman.dir/src/mapelement.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \

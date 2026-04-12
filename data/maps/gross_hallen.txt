@@ -1,0 +1,22 @@
+Grosse Hallen
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xP............x.........x...x.....x.xx
+x.xxx.x.xxxxx.x.xxxxxxx.x.x.x.xxx.x.xx
+x.x...x.x...x.x...x...x...x.x.x.x.x.xx
+xxx.xxx.xxx.xxxxx.x.x.xxxxx.x.x.x.x.xx
+x...x.x...x.......x.x...x...x.x...x.xx
+x.xxx.xxx.xxxxxxxxx.xxx.x.xxx.xxx.x.xx
+x.x.x.......x...x...x.x.x...x...x.x.xx
+x.x.x.xxxxx.x.x.x.xxx.x.xxx.x.x.x.x.xx
+x.x.x.x...x...x.x.....x...x.x.x.x.x.xx
+x.x.x.x.x.xxxxxxxxx.xxxxx.x.xxx.x.x.xx
+x.x...x.x...........x.....x...x.x...xx
+x.xxxxx.xxxxxxxxxxxxx.xxxxxxx.x.xxxOxx
+x.x.....x.....x.....x.........x...xOxx
+x.x.xxxxx.xxx.xxx.x.xxxxxxxxxxxxxOxGxx
+x...x.....x.x...x.x.x.......x....NxGxx
+x.xxx.xxxxx.xxx.x.x.x.xxxxx.x.xxxxxGxx
+x...x.x.......x.x.x.x...x.x.x.xOGGGGxx
+xxx.x.x.xxxxx.x.x.x.xxx.x.x.x.xMxxxxxx
+x.....x.....x.....x.....x....NxGGGGGxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
