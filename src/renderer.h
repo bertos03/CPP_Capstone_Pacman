@@ -1,18 +1,17 @@
 /*
- * PROJEKTKOMMENTAR (renderer.h)
+ * PROJECT COMMENT (renderer.h)
  * ---------------------------------------------------------------------------
- * Diese Datei ist Teil von "BobMan", einem Pacman-inspirierten SDL2-Spiel.
- * Der Code in dieser Einheit kapselt einen klaren Verantwortungsbereich, damit
- * Einsteiger die Architektur schnell verstehen: Datenmodell (Map, Elemente),
- * Laufzeitlogik (Game, Events), Darstellung (Renderer) und optionale Audio-
- * Ausgabe.
+ * This file is part of "BobMan", an SDL2 game inspired by Pac-Man.
+ * The code in this unit has a clear responsibility so newcomers can quickly
+ * understand the architecture: data model (map, elements), runtime logic
+ * (game, events), rendering (renderer), and optional audio output.
  *
- * Wichtige Hinweise fuer Newbies:
- * - Header-Dateien deklarieren Klassen, Methoden und Datentypen.
- * - CPP-Dateien enthalten die konkrete Implementierung der Logik.
- * - Mehrere Threads bewegen Spielfiguren parallel; gemeinsame Daten werden
- *   deshalb kontrolliert gelesen/geschrieben.
- * - Makros in definitions.h steuern Ressourcenpfade, Farben und Features.
+ * Important notes for newcomers:
+ * - Header files declare classes, methods, and data types.
+ * - CPP files contain the concrete implementation of the logic.
+ * - Multiple threads move game entities in parallel, so shared data is read
+ *   and written in a controlled way.
+ * - Macros in definitions.h control resource paths, colors, and features.
  */
 
 #ifndef RENDERER_H
@@ -39,9 +38,9 @@ public:
   Renderer(size_t rows, size_t cols);
   ~Renderer();
 
-  // Haupt-Renderpfad fuer das laufende Spiel.
+  // Main render path for the running game.
   void Render();
-  // Menueoberflaechen fuer den Startfluss.
+  // Menu screens for the startup flow.
   void RenderStartMenu(int selected_item, const std::string &map_name,
                        const std::string &status_message);
   void RenderConfigMenu(int selected_item, MonsterAmount monster_amount);
@@ -56,9 +55,9 @@ public:
                     bool show_exit_dialog, int exit_dialog_selected,
                     bool show_name_dialog, const std::string &name_input,
                     const std::string &name_dialog_message);
-  // Countdown vor Spielstart.
+  // Countdown before the game starts.
   void RenderCountdown(int seconds_left);
-  // Hilfsmethode fuer den Editor: Bildschirmkoordinate => Mapzelle.
+  // Helper for the editor: screen coordinate => map cell.
   bool TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
                                    MapCoord &coord) const;
 

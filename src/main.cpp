@@ -1,18 +1,17 @@
 /*
- * PROJEKTKOMMENTAR (main.cpp)
+ * PROJECT COMMENT (main.cpp)
  * ---------------------------------------------------------------------------
- * Diese Datei ist Teil von "BobMan", einem Pacman-inspirierten SDL2-Spiel.
- * Der Code in dieser Einheit kapselt einen klaren Verantwortungsbereich, damit
- * Einsteiger die Architektur schnell verstehen: Datenmodell (Map, Elemente),
- * Laufzeitlogik (Game, Events), Darstellung (Renderer) und optionale Audio-
- * Ausgabe.
+ * This file is part of "BobMan", an SDL2 game inspired by Pac-Man.
+ * The code in this unit has a clear responsibility so newcomers can quickly
+ * understand the architecture: data model (map, elements), runtime logic
+ * (game, events), rendering (renderer), and optional audio output.
  *
- * Wichtige Hinweise fuer Newbies:
- * - Header-Dateien deklarieren Klassen, Methoden und Datentypen.
- * - CPP-Dateien enthalten die konkrete Implementierung der Logik.
- * - Mehrere Threads bewegen Spielfiguren parallel; gemeinsame Daten werden
- *   deshalb kontrolliert gelesen/geschrieben.
- * - Makros in definitions.h steuern Ressourcenpfade, Farben und Features.
+ * Important notes for newcomers:
+ * - Header files declare classes, methods, and data types.
+ * - CPP files contain the concrete implementation of the logic.
+ * - Multiple threads move game entities in parallel, so shared data is read
+ *   and written in a controlled way.
+ * - Macros in definitions.h control resource paths, colors, and features.
  */
 
 #include <SDL.h>
@@ -36,7 +35,7 @@
 
 namespace {
 
-// Auswahl im Startmenue.
+// Selection in the start menu.
 enum MenuSelection {
   MENU_START = 0,
   MENU_MAP = 1,
@@ -45,7 +44,7 @@ enum MenuSelection {
   MENU_END = 4,
 };
 
-// Auswahl im Konfigurationsmenue.
+// Selection in the configuration menu.
 enum ConfigSelection {
   CONFIG_MONSTER_AMOUNT = 0,
   CONFIG_BACK = 1,
@@ -59,10 +58,10 @@ enum class MenuScreen {
   EditorSizeSelection
 };
 
-// Vordefinierte Groessen fuer neue Karten im Editor.
+// Predefined sizes for new maps in the editor.
 enum class NewMapSize { Small = 0, Medium = 1, Large = 2 };
 
-// Parameter, mit denen der Editor gestartet wird.
+// Parameters used to launch the editor.
 struct EditorRequest {
   bool is_new_map{false};
   std::string map_path;
@@ -71,20 +70,20 @@ struct EditorRequest {
   int cols{0};
 };
 
-// Rueckgabe nach dem Verlassen des Editors.
+// Return value after leaving the editor.
 struct EditorResult {
   bool quit_requested{false};
   bool should_reload_maps{false};
   std::string preferred_map_path;
 };
 
-// Ergebnis der Layout-Validierung.
+// Result of the layout validation.
 struct MapValidationResult {
   bool is_valid{false};
   std::string message;
 };
 
-// Gesamter Laufzeitzustand des Editors.
+// Complete runtime state of the editor.
 struct EditorState {
   MapFileData map_file;
   std::string map_path;

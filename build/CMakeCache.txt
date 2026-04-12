@@ -407,7 +407,7 @@ FIND_PACKAGE_MESSAGE_DETAILS_SDL2TTF:INTERNAL=[/opt/homebrew/lib/libSDL2_ttf.dyl
 FIND_PACKAGE_MESSAGE_DETAILS_SDL2_image:INTERNAL=[/opt/homebrew/lib/libSDL2_image.dylib][/opt/homebrew/include/SDL2][v()]
 //Details about finding SDL2_mixer
 FIND_PACKAGE_MESSAGE_DETAILS_SDL2_mixer:INTERNAL=[/opt/homebrew/lib/libSDL2_mixer.dylib][/opt/homebrew/include/SDL2][v2.8.1()]
-SDL2TTF_LIBRARY_TEMP:INTERNAL=/opt/homebrew/lib/libSDL2_ttf.dylib;/opt/homebrew/lib/libSDL2_ttf.dylib;-framework Cocoa
+SDL2TTF_LIBRARY_TEMP:INTERNAL=/opt/homebrew/lib/libSDL2_ttf.dylib;/opt/homebrew/lib/libSDL2_ttf.dylib;/opt/homebrew/lib/libSDL2_ttf.dylib;-framework Cocoa;-framework Cocoa
 //ADVANCED property for variable: SDL2_IMAGE_INCLUDE_DIR
 SDL2_IMAGE_INCLUDE_DIR-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: SDL2_IMAGE_LIBRARY

@@ -1,8 +1,8 @@
-# PROJEKTKOMMENTAR (Build-System)
+# PROJECT COMMENT (build system)
 # -----------------------------------------------------------------------------
-# Diese CMake-Datei beschreibt, wie BobMan gebaut und gegen SDL2-Komponenten
-# gelinkt wird. Der Ablauf ist: Quellen sammeln -> Ziel erstellen -> Bibliotheken
-# anbinden. So bleibt der Build reproduzierbar und fuer Einsteiger nachvollziehbar.
+# This CMake file describes how BobMan is built and linked against SDL2
+# components. The flow is: collect sources -> create target -> attach
+# libraries. This keeps the build reproducible and easy for newcomers to follow.
 
 cmake_minimum_required(VERSION 3.11.3)
 

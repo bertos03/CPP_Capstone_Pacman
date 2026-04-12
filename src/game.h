@@ -1,18 +1,17 @@
 /*
- * PROJEKTKOMMENTAR (game.h)
+ * PROJECT COMMENT (game.h)
  * ---------------------------------------------------------------------------
- * Diese Datei ist Teil von "BobMan", einem Pacman-inspirierten SDL2-Spiel.
- * Der Code in dieser Einheit kapselt einen klaren Verantwortungsbereich, damit
- * Einsteiger die Architektur schnell verstehen: Datenmodell (Map, Elemente),
- * Laufzeitlogik (Game, Events), Darstellung (Renderer) und optionale Audio-
- * Ausgabe.
+ * This file is part of "BobMan", an SDL2 game inspired by Pac-Man.
+ * The code in this unit has a clear responsibility so newcomers can quickly
+ * understand the architecture: data model (map, elements), runtime logic
+ * (game, events), rendering (renderer), and optional audio output.
  *
- * Wichtige Hinweise fuer Newbies:
- * - Header-Dateien deklarieren Klassen, Methoden und Datentypen.
- * - CPP-Dateien enthalten die konkrete Implementierung der Logik.
- * - Mehrere Threads bewegen Spielfiguren parallel; gemeinsame Daten werden
- *   deshalb kontrolliert gelesen/geschrieben.
- * - Makros in definitions.h steuern Ressourcenpfade, Farben und Features.
+ * Important notes for newcomers:
+ * - Header files declare classes, methods, and data types.
+ * - CPP files contain the concrete implementation of the logic.
+ * - Multiple threads move game entities in parallel, so shared data is read
+ *   and written in a controlled way.
+ * - Macros in definitions.h control resource paths, colors, and features.
  */
 
 #ifndef GAME_H
@@ -42,11 +41,11 @@ class Goodie;
 class Renderer;
 
 struct Fireball {
-  // Aktuelle Segmentposition des Projektils.
+  // Current segment position of the projectile.
   MapCoord current_coord;
   Directions direction;
   Uint32 segment_started_ticks;
-  // Monster-ID, damit Eigenbeschuss ignoriert wird.
+  // Monster ID so self-hits can be ignored.
   int owner_id;
 };
 
@@ -56,7 +55,7 @@ struct GasCloud {
   Uint32 fade_started_ticks;
   int animation_seed;
   bool is_fading;
-  // Wird gesetzt, sobald Pacman in die Wolke gelaufen ist.
+  // Set once Pacman has walked into the cloud.
   bool triggered_by_pacman;
 };
 
