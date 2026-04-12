@@ -23,11 +23,13 @@
  * 
  * @param _coord : the map coordinates for placing the monster
  * @param _id: A unique "monster ID" (currently not used)
+ * @param _monster_char original monster tier marker from the map
  */
-Monster::Monster(MapCoord _coord, int _id) {
+Monster::Monster(MapCoord _coord, int _id, char _monster_char) {
   id = _id;
   // std::cout << "Creating monster #" << id << "\n";
   map_coord = _coord;
+  monster_char = _monster_char;
   px_delta.x = 0;
   px_delta.y = 0;
 }

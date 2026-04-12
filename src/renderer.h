@@ -67,6 +67,8 @@ private:
   void drawStaticMonsters();
   void drawStaticGoodies();
   void drawLayoutEntities(const std::vector<std::string> &layout);
+  void drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
+                       int shimmer_seed);
   void drawhud();
   void drawDimmer(Uint8 alpha);
   void drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,

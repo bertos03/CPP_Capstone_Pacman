@@ -34,13 +34,14 @@ class Map;
 
 class Monster : public MapElement {
 public:
-  Monster(MapCoord, int);
+  Monster(MapCoord, int, char);
   ~Monster();
   void simulate(Events *, Map *);
 
 protected:
 private:
 std::vector<Directions> options;
+char monster_char;
 
 friend class Renderer;
 friend class Game;

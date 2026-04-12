@@ -69,6 +69,7 @@ public:
   int get_number_monsters();
   int get_number_goodies();
   MapCoord get_coord_monster(int);
+  char get_char_monster(int);
   MapCoord get_coord_goodie(int);
   MapCoord get_coord_pacman();
   std::string get_map_name() const;
@@ -80,6 +81,7 @@ private:
   bool IsMonsterChar(char);
   bool IsMonsterEnabled(char);
   std::vector<MapCoord> monster_coord;
+  std::vector<char> monster_chars;
   std::vector<MapCoord> goodie_coord;
   MapCoord pacman_coord;
   std::string map_name;

@@ -198,6 +198,7 @@ void Map::LoadMap(const std::string mappath) {
 
   map = std::make_shared<vector<vector<ElementType>>>();
   monster_coord.clear();
+  monster_chars.clear();
   goodie_coord.clear();
   pacman_coord = {0, 0};
   map_name = map_file.display_name;
@@ -261,6 +262,7 @@ void Map::LoadMap(const std::string mappath) {
         temp_coord.u = i;
         temp_coord.v = j;
         monster_coord.push_back(temp_coord);
+        monster_chars.push_back(map_char);
       }
       if (entry == ElementType::TYPE_GOODIE) {
         temp_coord.u = i;
@@ -291,6 +293,7 @@ ElementType Map::map_entry(size_t row, size_t col) {
 };
 
 MapCoord Map::get_coord_monster(int i) { return this->monster_coord[i]; }
+char Map::get_char_monster(int i) { return this->monster_chars[i]; }
 MapCoord Map::get_coord_goodie(int i) { return this->goodie_coord[i]; }
 MapCoord Map::get_coord_pacman() { return this->pacman_coord; }
 

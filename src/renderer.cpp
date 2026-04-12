@@ -35,6 +35,9 @@ const SDL_Color kWarningTextColor{255, 110, 110, 255};
 const SDL_Color kPanelFillColor{10, 6, 18, 205};
 const SDL_Color kPanelBorderColor{196, 130, 92, 255};
 const SDL_Color kBrickOutlineColor{78, 20, 14, 255};
+const SDL_Color kFewMonsterGlowColor{120, 210, 255, 255};
+const SDL_Color kMediumMonsterGlowColor{255, 170, 72, 255};
+const SDL_Color kManyMonsterGlowColor{255, 82, 82, 255};
 
 const char *MonsterAmountLabel(MonsterAmount monster_amount) {
   switch (monster_amount) {
@@ -46,6 +49,18 @@ const char *MonsterAmountLabel(MonsterAmount monster_amount) {
     return "viel";
   default:
     return "mittel";
+  }
+}
+
+SDL_Color MonsterGlowColor(char monster_char) {
+  switch (monster_char) {
+  case MONSTER_FEW:
+    return kFewMonsterGlowColor;
+  case MONSTER_MEDIUM:
+    return kMediumMonsterGlowColor;
+  case MONSTER_MANY:
+  default:
+    return kManyMonsterGlowColor;
   }
 }
 
@@ -392,8 +407,13 @@ void Renderer::drawStartMenuOverlay(int selected_item,
   renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
 
-  const int panel_width = std::min(720, screen_res_x * 42 / 100);
-  const int panel_height = std::max(320, screen_res_y * 36 / 100);
+  const std::vector<std::string> menu_items{
+      "Start Spiel", "Karte: " + map_name, "Map Editor", "Konfiguration",
+      "Ende"};
+  const int item_height = std::max(52, TTF_FontHeight(sdl_font_menu) + 18);
+  const int panel_width = std::min(780, screen_res_x * 46 / 100);
+  const int panel_height =
+      std::max(360, 88 + static_cast<int>(menu_items.size()) * item_height);
   const int panel_top =
       std::min(screen_res_y - panel_height - 70,
                logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 20);
@@ -402,10 +422,6 @@ void Renderer::drawStartMenuOverlay(int selected_item,
 
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
 
-  const std::vector<std::string> menu_items{
-      "Start Spiel", "Karte: " + map_name, "Map Editor", "Konfiguration",
-      "Ende"};
-  const int item_height = std::max(52, TTF_FontHeight(sdl_font_menu) + 18);
   const int highlight_width = panel.w - 56;
   const int item_start_y =
       panel.y + 22 + std::max(0, (panel.h - 44 - static_cast<int>(menu_items.size()) *
@@ -436,11 +452,6 @@ void Renderer::drawStartMenuOverlay(int selected_item,
                      text_top);
   }
 
-  const std::string controls_hint =
-      "Pfeiltasten hoch/runter, Enter bestaetigt";
-  renderSimpleText(sdl_font_hud, controls_hint, kHudTextColor, screen_res_x / 2,
-                   panel.y + panel.h + 18);
-
   if (!status_message.empty()) {
     renderSimpleText(sdl_font_hud, status_message, kStatusTextColor,
                      screen_res_x / 2,
@@ -457,8 +468,8 @@ void Renderer::drawConfigMenuOverlay(int selected_item,
                    screen_res_x / 2,
                    logo_top + TTF_FontHeight(sdl_font_logo) - 4);
 
-  const int panel_width = std::min(820, screen_res_x * 48 / 100);
-  const int panel_height = std::max(290, screen_res_y * 32 / 100);
+  const int panel_width = std::min(860, screen_res_x * 52 / 100);
+  const int panel_height = std::max(330, screen_res_y * 38 / 100);
   const int panel_top =
       std::min(screen_res_y - panel_height - 70,
                logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
@@ -504,10 +515,6 @@ void Renderer::drawConfigMenuOverlay(int selected_item,
                        text_top);
     }
   }
-
-  renderSimpleText(sdl_font_hud,
-                   "Enter aendert den Wert oder bestaetigt, Esc geht zurueck",
-                   kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
 }
 
 void Renderer::drawMapSelectionOverlay(const std::vector<std::string> &map_names,
@@ -522,9 +529,9 @@ void Renderer::drawMapSelectionOverlay(const std::vector<std::string> &map_names
   const int item_height = std::max(52, TTF_FontHeight(sdl_font_menu) + 18);
   const int panel_width = std::min(860, screen_res_x * 50 / 100);
   const int desired_panel_height =
-      110 + static_cast<int>(map_names.size()) * item_height;
-  const int panel_height = std::min(std::max(260, desired_panel_height),
-                                    screen_res_y * 62 / 100);
+      136 + static_cast<int>(map_names.size()) * item_height;
+  const int panel_height = std::min(std::max(320, desired_panel_height),
+                                    screen_res_y * 72 / 100);
   const int panel_top =
       std::min(screen_res_y - panel_height - 70,
                logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
@@ -566,12 +573,6 @@ void Renderer::drawMapSelectionOverlay(const std::vector<std::string> &map_names
     renderSimpleText(sdl_font_menu, map_names[i], item_color, screen_res_x / 2,
                      text_top);
   }
-
-  renderSimpleText(
-      sdl_font_hud,
-      "Pfeiltasten waehlen, Enter bestaetigt, Esc verwirft die Vorschau",
-      kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
-
   if (first_visible > 0) {
     renderSimpleText(sdl_font_hud, "...", kHudTextColor, screen_res_x / 2,
                      panel.y + 6);
@@ -592,9 +593,10 @@ void Renderer::drawEditorSelectionOverlay(const std::vector<std::string> &items,
 
   const int item_height = std::max(50, TTF_FontHeight(sdl_font_menu) + 16);
   const int panel_width = std::min(900, screen_res_x * 56 / 100);
-  const int desired_panel_height = 112 + static_cast<int>(items.size()) * item_height;
-  const int panel_height = std::min(std::max(280, desired_panel_height),
-                                    screen_res_y * 66 / 100);
+  const int desired_panel_height =
+      138 + static_cast<int>(items.size()) * item_height;
+  const int panel_height = std::min(std::max(340, desired_panel_height),
+                                    screen_res_y * 74 / 100);
   const int panel_top =
       std::min(screen_res_y - panel_height - 70,
                logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
@@ -636,11 +638,6 @@ void Renderer::drawEditorSelectionOverlay(const std::vector<std::string> &items,
     renderSimpleText(sdl_font_menu, items[i], item_color, screen_res_x / 2,
                      text_top);
   }
-
-  renderSimpleText(sdl_font_hud,
-                   "Enter oeffnet die Karte, Esc geht zurueck",
-                   kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
-
   if (first_visible > 0) {
     renderSimpleText(sdl_font_hud, "...", kHudTextColor, screen_res_x / 2,
                      panel.y + 6);
@@ -661,8 +658,8 @@ void Renderer::drawEditorSizeSelectionOverlay(int selected_index) {
 
   const std::vector<std::string> items{"Klein", "Mittel", "Gross"};
   const int item_height = std::max(56, TTF_FontHeight(sdl_font_menu) + 18);
-  const int panel_width = std::min(680, screen_res_x * 42 / 100);
-  const int panel_height = std::max(300, screen_res_y * 34 / 100);
+  const int panel_width = std::min(740, screen_res_x * 46 / 100);
+  const int panel_height = std::max(340, screen_res_y * 40 / 100);
   const int panel_top =
       std::min(screen_res_y - panel_height - 70,
                logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
@@ -695,9 +692,6 @@ void Renderer::drawEditorSizeSelectionOverlay(int selected_index) {
     renderSimpleText(sdl_font_menu, items[i], item_color, screen_res_x / 2,
                      text_top);
   }
-
-  renderSimpleText(sdl_font_hud, "Groesse waehlen, Enter startet den Editor",
-                   kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
 }
 
 void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
@@ -1054,6 +1048,7 @@ void Renderer::drawmonsters() {
         SDL_Rect{monster->px_coord.x + int(element_size * 0.05),
                  monster->px_coord.y + int(element_size * 0.05),
                  int(element_size * 0.9), int(element_size * 0.9)};
+    drawMonsterGlow(sdl_monster_rect, monster->monster_char, monster->id);
     SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
                    &sdl_monster_rect);
   }
@@ -1141,6 +1136,7 @@ void Renderer::drawStaticMonsters() {
         SDL_Rect{monster_px.x + int(element_size * 0.05),
                  monster_px.y + int(element_size * 0.05),
                  int(element_size * 0.9), int(element_size * 0.9)};
+    drawMonsterGlow(sdl_monster_rect, map->get_char_monster(i), i);
     SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
                    &sdl_monster_rect);
   }
@@ -1188,11 +1184,40 @@ void Renderer::drawLayoutEntities(const std::vector<std::string> &layout) {
                                     y + int(element_size * 0.05),
                                     int(element_size * 0.9),
                                     int(element_size * 0.9)};
+        drawMonsterGlow(sdl_monster_rect, entry,
+                        static_cast<int>(row * layout[row].size() + col));
         SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
                        &sdl_monster_rect);
       }
     }
   }
+}
+
+void Renderer::drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
+                               int shimmer_seed) {
+  const SDL_Color glow_color = MonsterGlowColor(monster_char);
+  const int cycle = 1800;
+  int pulse = static_cast<int>((SDL_GetTicks() + shimmer_seed * 137) % cycle);
+  if (pulse > cycle / 2) {
+    pulse = cycle - pulse;
+  }
+
+  const int alpha_base = 26 + (pulse * 28) / std::max(1, cycle / 2);
+  const int center_x = monster_rect.x + monster_rect.w / 2;
+  const int center_y = monster_rect.y + monster_rect.h / 2;
+  const int outer_radius = std::max(6, static_cast<int>(element_size * 0.82f));
+  const int middle_radius = std::max(4, static_cast<int>(element_size * 0.66f));
+  const int inner_radius = std::max(3, static_cast<int>(element_size * 0.5f));
+
+  SDL_SetRenderDrawColor(sdl_renderer, glow_color.r, glow_color.g, glow_color.b,
+                         std::min(255, alpha_base / 2));
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, glow_color.r, glow_color.g, glow_color.b,
+                         std::min(255, alpha_base));
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, middle_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, glow_color.r, glow_color.g, glow_color.b,
+                         std::min(255, alpha_base + 18));
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, inner_radius);
 }
 
 int Renderer::SDL_RenderDrawCircle(SDL_Renderer *renderer, int x, int y,

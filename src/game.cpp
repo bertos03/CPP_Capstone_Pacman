@@ -35,7 +35,8 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
-    monsters.emplace_back(new Monster(map->get_coord_monster(i), i));
+    monsters.emplace_back(
+        new Monster(map->get_coord_monster(i), i, map->get_char_monster(i)));
   }
 
   // create Goodie objects
