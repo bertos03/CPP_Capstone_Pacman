@@ -42,9 +42,11 @@ class Goodie;
 class Renderer;
 
 struct Fireball {
+  // Aktuelle Segmentposition des Projektils.
   MapCoord current_coord;
   Directions direction;
   Uint32 segment_started_ticks;
+  // Monster-ID, damit Eigenbeschuss ignoriert wird.
   int owner_id;
 };
 
@@ -54,6 +56,7 @@ struct GasCloud {
   Uint32 fade_started_ticks;
   int animation_seed;
   bool is_fading;
+  // Wird gesetzt, sobald Pacman in die Wolke gelaufen ist.
   bool triggered_by_pacman;
 };
 
