@@ -21,14 +21,25 @@
 
 namespace {
 
-std::string ReadFirstLineOrFallback(const std::string &map_path) {
+bool ReadMapFileContents(const std::string &map_path, MapFileData &map_file) {
   std::ifstream stream(map_path);
-  std::string first_line;
-  if (stream && std::getline(stream, first_line) && !first_line.empty()) {
-    return first_line;
+  if (!stream) {
+    return false;
   }
 
-  return std::filesystem::path(map_path).stem().string();
+  map_file = {};
+  if (!std::getline(stream, map_file.display_name) || map_file.display_name.empty()) {
+    map_file.display_name = std::filesystem::path(map_path).stem().string();
+  }
+
+  std::string line;
+  while (std::getline(stream, line)) {
+    if (!line.empty()) {
+      map_file.layout_rows.push_back(line);
+    }
+  }
+
+  return !map_file.layout_rows.empty();
 }
 
 } // namespace
@@ -53,8 +64,12 @@ Map::DiscoverAvailableMaps(const std::string &directory_path) {
       continue;
     }
 
-    maps.push_back(
-        {entry.path().string(), ReadFirstLineOrFallback(entry.path().string())});
+    MapFileData map_file;
+    const std::string display_name =
+        ReadMapFileContents(entry.path().string(), map_file)
+            ? map_file.display_name
+            : entry.path().stem().string();
+    maps.push_back({entry.path().string(), display_name});
   }
 
   std::sort(maps.begin(), maps.end(),
@@ -66,6 +81,24 @@ Map::DiscoverAvailableMaps(const std::string &directory_path) {
             });
 
   return maps;
+}
+
+bool Map::LoadMapFile(const std::string &map_path, MapFileData &map_file) {
+  return ReadMapFileContents(map_path, map_file);
+}
+
+bool Map::SaveMapFile(const std::string &map_path, const MapFileData &map_file) {
+  std::ofstream stream(map_path);
+  if (!stream) {
+    return false;
+  }
+
+  stream << map_file.display_name << "\n";
+  for (const auto &row : map_file.layout_rows) {
+    stream << row << "\n";
+  }
+
+  return stream.good();
 }
 
 bool Map::IsMonsterChar(char inp) {
@@ -157,8 +190,8 @@ Map::~Map() {}
  * grid.
  */
 void Map::LoadMap(const std::string mappath) {
-  std::ifstream stream(mappath);
-  if (!stream) {
+  MapFileData map_file;
+  if (!LoadMapFile(mappath, map_file)) {
     std::cerr << "File not found: " << mappath << "\n";
     exit(1);
   }
@@ -167,18 +200,8 @@ void Map::LoadMap(const std::string mappath) {
   monster_coord.clear();
   goodie_coord.clear();
   pacman_coord = {0, 0};
-
-  if (!std::getline(stream, map_name) || map_name.empty()) {
-    map_name = std::filesystem::path(mappath).stem().string();
-  }
-
-  std::vector<std::string> map_lines;
-  std::string line;
-  while (std::getline(stream, line)) {
-    if (!line.empty()) {
-      map_lines.push_back(line);
-    }
-  }
+  map_name = map_file.display_name;
+  const std::vector<std::string> &map_lines = map_file.layout_rows;
 
   if (map_lines.empty()) {
     std::cerr << "Map file contains no layout rows: " << mappath << "\n";

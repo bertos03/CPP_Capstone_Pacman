@@ -39,6 +39,11 @@ struct MapDefinition {
   std::string display_name;
 };
 
+struct MapFileData {
+  std::string display_name;
+  std::vector<std::string> layout_rows;
+};
+
 enum class ElementType {
   TYPE_WALL,
   TYPE_PATH,
@@ -54,6 +59,8 @@ public:
   ~Map();
   static std::vector<MapDefinition>
   DiscoverAvailableMaps(const std::string &directory_path = MAPS_DIRECTORY_PATH);
+  static bool LoadMapFile(const std::string &map_path, MapFileData &map_file);
+  static bool SaveMapFile(const std::string &map_path, const MapFileData &map_file);
   size_t get_map_rows();
   size_t get_map_cols();
   ElementType map_entry(size_t, size_t);

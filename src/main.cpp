@@ -18,8 +18,11 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <iostream>
 #include <memory>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -35,14 +38,65 @@ namespace {
 enum MenuSelection {
   MENU_START = 0,
   MENU_MAP = 1,
-  MENU_CONFIG = 2,
-  MENU_END = 3,
+  MENU_EDITOR = 2,
+  MENU_CONFIG = 3,
+  MENU_END = 4,
 };
+
 enum ConfigSelection {
   CONFIG_MONSTER_AMOUNT = 0,
   CONFIG_BACK = 1,
 };
-enum class MenuScreen { Main, Config, MapSelection };
+
+enum class MenuScreen {
+  Main,
+  Config,
+  MapSelection,
+  EditorSelection,
+  EditorSizeSelection
+};
+
+enum class NewMapSize { Small = 0, Medium = 1, Large = 2 };
+
+struct EditorRequest {
+  bool is_new_map{false};
+  std::string map_path;
+  std::string display_name;
+  int rows{0};
+  int cols{0};
+};
+
+struct EditorResult {
+  bool quit_requested{false};
+  bool should_reload_maps{false};
+  std::string preferred_map_path;
+};
+
+struct MapValidationResult {
+  bool is_valid{false};
+  std::string message;
+};
+
+struct EditorState {
+  MapFileData map_file;
+  std::string map_path;
+  MapCoord cursor{1, 1};
+  bool show_exit_dialog{false};
+  int exit_dialog_selected{0};
+  MapValidationResult validation;
+  std::string transient_error;
+};
+
+constexpr int kEditorExitSave = 0;
+constexpr int kEditorExitCancel = 1;
+constexpr int kEditorExitDiscard = 2;
+
+constexpr int kSmallMapRows = 13;
+constexpr int kSmallMapCols = 22;
+constexpr int kMediumMapRows = 17;
+constexpr int kMediumMapCols = 30;
+constexpr int kLargeMapRows = 21;
+constexpr int kLargeMapCols = 38;
 
 MonsterAmount NextMonsterAmount(MonsterAmount monster_amount) {
   switch (monster_amount) {
@@ -67,6 +121,409 @@ GetMapDisplayNames(const std::vector<MapDefinition> &available_maps) {
   return names;
 }
 
+int FindMapIndexByPath(const std::vector<MapDefinition> &available_maps,
+                       const std::string &map_path) {
+  for (int i = 0; i < static_cast<int>(available_maps.size()); i++) {
+    if (available_maps[i].file_path == map_path) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void RefreshSelectedMap(const std::vector<MapDefinition> &available_maps,
+                        const std::string &preferred_map_path,
+                        int &selected_map_index, int &active_map_index) {
+  if (available_maps.empty()) {
+    selected_map_index = 0;
+    active_map_index = 0;
+    return;
+  }
+
+  int resolved_index = -1;
+  if (!preferred_map_path.empty()) {
+    resolved_index = FindMapIndexByPath(available_maps, preferred_map_path);
+  }
+
+  if (resolved_index < 0) {
+    resolved_index = std::clamp(selected_map_index, 0,
+                                static_cast<int>(available_maps.size()) - 1);
+  }
+
+  selected_map_index = resolved_index;
+  active_map_index = resolved_index;
+}
+
+std::pair<int, int> GetDimensionsForSize(NewMapSize size) {
+  switch (size) {
+  case NewMapSize::Small:
+    return {kSmallMapRows, kSmallMapCols};
+  case NewMapSize::Medium:
+    return {kMediumMapRows, kMediumMapCols};
+  case NewMapSize::Large:
+  default:
+    return {kLargeMapRows, kLargeMapCols};
+  }
+}
+
+std::string GetSizeLabel(NewMapSize size) {
+  switch (size) {
+  case NewMapSize::Small:
+    return "Klein";
+  case NewMapSize::Medium:
+    return "Mittel";
+  case NewMapSize::Large:
+  default:
+    return "Gross";
+  }
+}
+
+std::string Slugify(const std::string &text) {
+  std::string slug;
+  bool last_was_separator = false;
+
+  for (unsigned char character : text) {
+    if (std::isalnum(character) != 0) {
+      slug.push_back(static_cast<char>(std::tolower(character)));
+      last_was_separator = false;
+    } else if (!last_was_separator) {
+      slug.push_back('_');
+      last_was_separator = true;
+    }
+  }
+
+  while (!slug.empty() && slug.front() == '_') {
+    slug.erase(slug.begin());
+  }
+  while (!slug.empty() && slug.back() == '_') {
+    slug.pop_back();
+  }
+
+  return slug.empty() ? "eigene_karte" : slug;
+}
+
+EditorRequest CreateNewMapRequest(NewMapSize size) {
+  namespace fs = std::filesystem;
+
+  const auto [rows, cols] = GetDimensionsForSize(size);
+  const std::string size_label = GetSizeLabel(size);
+  int suffix = 1;
+
+  while (true) {
+    const std::string display_name =
+        "Eigene Karte " + size_label + " " + std::to_string(suffix);
+    const fs::path file_path =
+        fs::path(MAPS_DIRECTORY_PATH) / (Slugify(display_name) + ".txt");
+
+    if (!fs::exists(file_path)) {
+      EditorRequest request;
+      request.is_new_map = true;
+      request.map_path = file_path.string();
+      request.display_name = display_name;
+      request.rows = rows;
+      request.cols = cols;
+      return request;
+    }
+
+    suffix++;
+  }
+}
+
+MapFileData CreateEmptyMapFile(const std::string &display_name, int rows,
+                               int cols) {
+  MapFileData map_file;
+  map_file.display_name = display_name;
+  map_file.layout_rows.assign(rows, std::string(cols, PATH));
+
+  for (int row = 0; row < rows; row++) {
+    map_file.layout_rows[row][0] = BRICK;
+    map_file.layout_rows[row][cols - 1] = BRICK;
+  }
+  for (int col = 0; col < cols; col++) {
+    map_file.layout_rows[0][col] = BRICK;
+    map_file.layout_rows[rows - 1][col] = BRICK;
+  }
+
+  map_file.layout_rows[1][1] = PACMAN;
+  map_file.layout_rows[rows - 2][cols - 2] = GOODIE;
+  return map_file;
+}
+
+MapValidationResult ValidateEditorMap(const MapFileData &map_file) {
+  const std::vector<std::string> &layout = map_file.layout_rows;
+  if (layout.empty()) {
+    return {false, "Warnung: Karte enthaelt kein Layout"};
+  }
+
+  const int rows = static_cast<int>(layout.size());
+  const int cols = static_cast<int>(layout.front().size());
+  if (rows < 3 || cols < 3) {
+    return {false, "Warnung: Karte ist zu klein"};
+  }
+
+  for (const auto &row : layout) {
+    if (static_cast<int>(row.size()) != cols) {
+      return {false, "Warnung: Zeilenlaengen sind uneinheitlich"};
+    }
+  }
+
+  if (std::count(layout.front().begin(), layout.front().end(), BRICK) != cols ||
+      std::count(layout.back().begin(), layout.back().end(), BRICK) != cols) {
+    return {false, "Warnung: Die Aussenmauer muss geschlossen sein"};
+  }
+
+  for (const auto &row : layout) {
+    if (row.front() != BRICK || row.back() != BRICK) {
+      return {false, "Warnung: Die Aussenmauer muss geschlossen sein"};
+    }
+  }
+
+  int pacman_count = 0;
+  int goodie_count = 0;
+  MapCoord pacman_coord{0, 0};
+
+  for (int row = 0; row < rows; row++) {
+    for (int col = 0; col < cols; col++) {
+      if (layout[row][col] == PACMAN) {
+        pacman_count++;
+        pacman_coord = {row, col};
+      } else if (layout[row][col] == GOODIE) {
+        goodie_count++;
+      }
+    }
+  }
+
+  if (pacman_count != 1) {
+    return {false, "Warnung: Genau eine Spielfigur ist erforderlich"};
+  }
+  if (goodie_count == 0) {
+    return {false, "Warnung: Mindestens ein Goodie ist erforderlich"};
+  }
+
+  std::queue<MapCoord> open_cells;
+  std::vector<std::vector<bool>> visited(
+      rows, std::vector<bool>(cols, false));
+  open_cells.push(pacman_coord);
+  visited[pacman_coord.u][pacman_coord.v] = true;
+
+  while (!open_cells.empty()) {
+    const MapCoord current = open_cells.front();
+    open_cells.pop();
+
+    const std::vector<MapCoord> neighbours{
+        {current.u - 1, current.v}, {current.u + 1, current.v},
+        {current.u, current.v - 1}, {current.u, current.v + 1}};
+
+    for (const auto &neighbour : neighbours) {
+      if (neighbour.u < 0 || neighbour.u >= rows || neighbour.v < 0 ||
+          neighbour.v >= cols) {
+        continue;
+      }
+      if (visited[neighbour.u][neighbour.v] ||
+          layout[neighbour.u][neighbour.v] == BRICK) {
+        continue;
+      }
+      visited[neighbour.u][neighbour.v] = true;
+      open_cells.push(neighbour);
+    }
+  }
+
+  for (int row = 0; row < rows; row++) {
+    for (int col = 0; col < cols; col++) {
+      if (layout[row][col] != BRICK && !visited[row][col]) {
+        return {false,
+                "Warnung: Nicht alle Felder und Goodies sind erreichbar"};
+      }
+    }
+  }
+
+  return {true, ""};
+}
+
+void RevalidateEditor(EditorState &editor_state) {
+  editor_state.validation = ValidateEditorMap(editor_state.map_file);
+}
+
+void MoveEditorCursor(EditorState &editor_state, int row_delta, int col_delta) {
+  const int max_row =
+      static_cast<int>(editor_state.map_file.layout_rows.size()) - 2;
+  const int max_col =
+      static_cast<int>(editor_state.map_file.layout_rows.front().size()) - 2;
+  editor_state.cursor.u =
+      std::clamp(editor_state.cursor.u + row_delta, 1, max_row);
+  editor_state.cursor.v =
+      std::clamp(editor_state.cursor.v + col_delta, 1, max_col);
+}
+
+void PlaceEditorTile(EditorState &editor_state, char tile) {
+  if (tile == PACMAN) {
+    for (auto &row : editor_state.map_file.layout_rows) {
+      std::replace(row.begin(), row.end(), PACMAN, PATH);
+    }
+  }
+
+  editor_state.map_file.layout_rows[editor_state.cursor.u][editor_state.cursor.v] =
+      tile;
+  editor_state.transient_error.clear();
+  RevalidateEditor(editor_state);
+}
+
+std::string GetEditorWarningMessage(const EditorState &editor_state) {
+  if (!editor_state.transient_error.empty()) {
+    return editor_state.transient_error;
+  }
+  if (!editor_state.validation.is_valid) {
+    return editor_state.validation.message;
+  }
+  return "";
+}
+
+EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio) {
+  namespace fs = std::filesystem;
+
+  EditorState editor_state;
+  editor_state.map_path = editor_request.map_path;
+
+  if (editor_request.is_new_map) {
+    editor_state.map_file = CreateEmptyMapFile(editor_request.display_name,
+                                               editor_request.rows,
+                                               editor_request.cols);
+  } else if (!Map::LoadMapFile(editor_request.map_path, editor_state.map_file)) {
+    std::cerr << "Could not load map for editor: " << editor_request.map_path
+              << "\n";
+    return {};
+  }
+
+  RevalidateEditor(editor_state);
+  Renderer renderer(editor_state.map_file.layout_rows.size(),
+                    editor_state.map_file.layout_rows.front().size());
+
+  bool quit_requested = false;
+  bool finished = false;
+  bool should_reload_maps = false;
+  std::string preferred_map_path;
+
+  while (!quit_requested && !finished) {
+    SDL_Event event;
+
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_QUIT) {
+        quit_requested = true;
+        break;
+      }
+
+      if (event.type != SDL_KEYDOWN) {
+        continue;
+      }
+
+      if (editor_state.show_exit_dialog) {
+        switch (event.key.keysym.sym) {
+        case SDLK_UP:
+          editor_state.exit_dialog_selected =
+              (editor_state.exit_dialog_selected + 2) % 3;
+          audio->PlayMenuMove();
+          break;
+        case SDLK_DOWN:
+          editor_state.exit_dialog_selected =
+              (editor_state.exit_dialog_selected + 1) % 3;
+          audio->PlayMenuMove();
+          break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+          audio->PlayMenuSelect();
+          if (editor_state.exit_dialog_selected == kEditorExitSave) {
+            fs::create_directories(fs::path(editor_state.map_path).parent_path());
+            if (Map::SaveMapFile(editor_state.map_path, editor_state.map_file)) {
+              finished = true;
+              should_reload_maps = true;
+              preferred_map_path = editor_state.map_path;
+            } else {
+              editor_state.transient_error = "Warnung: Speichern fehlgeschlagen";
+              editor_state.show_exit_dialog = false;
+            }
+          } else if (editor_state.exit_dialog_selected == kEditorExitCancel) {
+            editor_state.show_exit_dialog = false;
+          } else {
+            finished = true;
+            should_reload_maps = true;
+          }
+          break;
+        case SDLK_ESCAPE:
+          editor_state.show_exit_dialog = false;
+          break;
+        default:
+          break;
+        }
+        continue;
+      }
+
+      const MapCoord previous_cursor = editor_state.cursor;
+      switch (event.key.keysym.sym) {
+      case SDLK_UP:
+        MoveEditorCursor(editor_state, -1, 0);
+        break;
+      case SDLK_DOWN:
+        MoveEditorCursor(editor_state, 1, 0);
+        break;
+      case SDLK_LEFT:
+        MoveEditorCursor(editor_state, 0, -1);
+        break;
+      case SDLK_RIGHT:
+        MoveEditorCursor(editor_state, 0, 1);
+        break;
+      case SDLK_x:
+      case SDLK_w:
+        PlaceEditorTile(editor_state, BRICK);
+        break;
+      case SDLK_SPACE:
+      case SDLK_BACKSPACE:
+      case SDLK_DELETE:
+      case SDLK_PERIOD:
+        PlaceEditorTile(editor_state, PATH);
+        break;
+      case SDLK_g:
+        PlaceEditorTile(editor_state, GOODIE);
+        break;
+      case SDLK_p:
+        PlaceEditorTile(editor_state, PACMAN);
+        break;
+      case SDLK_m:
+        PlaceEditorTile(editor_state, MONSTER_FEW);
+        break;
+      case SDLK_n:
+        PlaceEditorTile(editor_state, MONSTER_MEDIUM);
+        break;
+      case SDLK_o:
+        PlaceEditorTile(editor_state, MONSTER_MANY);
+        break;
+      case SDLK_ESCAPE:
+        if (editor_state.validation.is_valid) {
+          editor_state.show_exit_dialog = true;
+          editor_state.exit_dialog_selected = kEditorExitSave;
+          audio->PlayMenuSelect();
+        }
+        break;
+      default:
+        break;
+      }
+
+      if (previous_cursor.u != editor_state.cursor.u ||
+          previous_cursor.v != editor_state.cursor.v) {
+        audio->PlayMenuMove();
+      }
+    }
+
+    renderer.RenderEditor(editor_state.map_file.layout_rows,
+                          editor_state.map_file.display_name, editor_state.cursor,
+                          GetEditorWarningMessage(editor_state),
+                          editor_state.show_exit_dialog,
+                          editor_state.exit_dialog_selected);
+    sleep(40);
+  }
+
+  return {quit_requested, should_reload_maps, preferred_map_path};
+}
+
 void processMainMenuEvents(int &selected_item, MenuScreen &menu_screen,
                            bool &start_requested, bool &quit_requested,
                            Audio *audio) {
@@ -84,11 +541,11 @@ void processMainMenuEvents(int &selected_item, MenuScreen &menu_screen,
 
     switch (event.key.keysym.sym) {
     case SDLK_UP:
-      selected_item = (selected_item + 3) % 4;
+      selected_item = (selected_item + 4) % 5;
       audio->PlayMenuMove();
       break;
     case SDLK_DOWN:
-      selected_item = (selected_item + 1) % 4;
+      selected_item = (selected_item + 1) % 5;
       audio->PlayMenuMove();
       break;
     case SDLK_RETURN:
@@ -98,6 +555,8 @@ void processMainMenuEvents(int &selected_item, MenuScreen &menu_screen,
         start_requested = true;
       } else if (selected_item == MENU_MAP) {
         menu_screen = MenuScreen::MapSelection;
+      } else if (selected_item == MENU_EDITOR) {
+        menu_screen = MenuScreen::EditorSelection;
       } else if (selected_item == MENU_CONFIG) {
         menu_screen = MenuScreen::Config;
       } else if (selected_item == MENU_END) {
@@ -214,6 +673,92 @@ void processMapSelectionEvents(
   }
 }
 
+void processEditorSelectionEvents(
+    int &selected_item, MenuScreen &menu_screen, bool &quit_requested,
+    bool &launch_editor, EditorRequest &editor_request, Audio *audio,
+    const std::vector<MapDefinition> &available_maps) {
+  const int item_count = static_cast<int>(available_maps.size()) + 1;
+  SDL_Event event;
+
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+      quit_requested = true;
+      continue;
+    }
+
+    if (event.type != SDL_KEYDOWN) {
+      continue;
+    }
+
+    switch (event.key.keysym.sym) {
+    case SDLK_UP:
+      selected_item = (selected_item + item_count - 1) % item_count;
+      audio->PlayMenuMove();
+      break;
+    case SDLK_DOWN:
+      selected_item = (selected_item + 1) % item_count;
+      audio->PlayMenuMove();
+      break;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+      audio->PlayMenuSelect();
+      if (selected_item < static_cast<int>(available_maps.size())) {
+        editor_request = {false, available_maps[selected_item].file_path,
+                          available_maps[selected_item].display_name, 0, 0};
+        launch_editor = true;
+      } else {
+        menu_screen = MenuScreen::EditorSizeSelection;
+      }
+      break;
+    case SDLK_ESCAPE:
+      menu_screen = MenuScreen::Main;
+      break;
+    default:
+      break;
+    }
+  }
+}
+
+void processEditorSizeSelectionEvents(
+    int &selected_item, MenuScreen &menu_screen, bool &quit_requested,
+    bool &launch_editor, EditorRequest &editor_request, Audio *audio) {
+  SDL_Event event;
+
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+      quit_requested = true;
+      continue;
+    }
+
+    if (event.type != SDL_KEYDOWN) {
+      continue;
+    }
+
+    switch (event.key.keysym.sym) {
+    case SDLK_UP:
+      selected_item = (selected_item + 2) % 3;
+      audio->PlayMenuMove();
+      break;
+    case SDLK_DOWN:
+      selected_item = (selected_item + 1) % 3;
+      audio->PlayMenuMove();
+      break;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+      audio->PlayMenuSelect();
+      editor_request = CreateNewMapRequest(
+          static_cast<NewMapSize>(selected_item));
+      launch_editor = true;
+      break;
+    case SDLK_ESCAPE:
+      menu_screen = MenuScreen::EditorSelection;
+      break;
+    default:
+      break;
+    }
+  }
+}
+
 void processOverlayEvents(bool &quit_requested) {
   SDL_Event event;
 
@@ -253,24 +798,40 @@ int main() {
   std::cout << "Bobman starting up ...\n";
 
   const int countdown_seconds = std::clamp(GAME_START_COUNTDOWN, 3, 9);
-  const std::vector<MapDefinition> available_maps = Map::DiscoverAvailableMaps();
+  std::vector<MapDefinition> available_maps = Map::DiscoverAvailableMaps();
   if (available_maps.empty()) {
     std::cerr << "No maps found in " << MAPS_DIRECTORY_PATH << "\n";
     return 1;
   }
-  const std::vector<std::string> map_display_names =
-      GetMapDisplayNames(available_maps);
 
   bool quit_application = false;
+  bool maps_need_reload = false;
   MonsterAmount monster_amount = MonsterAmount::Many;
+  std::string preferred_selected_map_path = available_maps.front().file_path;
   int selected_map_index = 0;
   int active_map_index = selected_map_index;
   int main_selected_item = MENU_START;
   int config_selected_item = CONFIG_MONSTER_AMOUNT;
+  int editor_selected_item = 0;
+  int editor_size_selected_item = 0;
   MenuScreen next_menu_screen_after_rebuild = MenuScreen::Main;
   std::shared_ptr<Audio> audio(new Audio());
 
   while (!quit_application) {
+    if (maps_need_reload) {
+      available_maps = Map::DiscoverAvailableMaps();
+      if (available_maps.empty()) {
+        std::cerr << "No maps found in " << MAPS_DIRECTORY_PATH << "\n";
+        return 1;
+      }
+      RefreshSelectedMap(available_maps, preferred_selected_map_path,
+                         selected_map_index, active_map_index);
+      editor_selected_item =
+          std::clamp(editor_selected_item, 0,
+                     static_cast<int>(available_maps.size()));
+      maps_need_reload = false;
+    }
+
     std::shared_ptr<Map> map(new Map(available_maps[active_map_index].file_path,
                                      monster_amount));
     std::shared_ptr<Events> events(new Events());
@@ -279,10 +840,21 @@ int main() {
 
     bool rebuild_menu_session = false;
     bool start_requested = false;
+    bool launch_editor = false;
     MenuScreen menu_screen = next_menu_screen_after_rebuild;
     next_menu_screen_after_rebuild = MenuScreen::Main;
+    EditorRequest editor_request;
 
-    while (!quit_application && !start_requested && !rebuild_menu_session) {
+    while (!quit_application && !start_requested && !rebuild_menu_session &&
+           !launch_editor) {
+      const std::vector<std::string> map_display_names =
+          GetMapDisplayNames(available_maps);
+      std::vector<std::string> editor_items = map_display_names;
+      editor_items.push_back("+ neue Karte");
+      editor_selected_item =
+          std::clamp(editor_selected_item, 0,
+                     static_cast<int>(editor_items.size()) - 1);
+
       if (menu_screen == MenuScreen::Main) {
         processMainMenuEvents(main_selected_item, menu_screen, start_requested,
                               quit_application, audio.get());
@@ -295,14 +867,26 @@ int main() {
                                 rebuild_menu_session,
                                 next_menu_screen_after_rebuild, audio.get());
         renderer.RenderConfigMenu(config_selected_item, monster_amount);
-      } else {
+      } else if (menu_screen == MenuScreen::MapSelection) {
         processMapSelectionEvents(active_map_index, selected_map_index,
                                   menu_screen, quit_application,
                                   rebuild_menu_session,
                                   next_menu_screen_after_rebuild, audio.get(),
                                   static_cast<int>(available_maps.size()));
         renderer.RenderMapSelectionMenu(map_display_names, active_map_index);
+      } else if (menu_screen == MenuScreen::EditorSelection) {
+        processEditorSelectionEvents(editor_selected_item, menu_screen,
+                                     quit_application, launch_editor,
+                                     editor_request, audio.get(),
+                                     available_maps);
+        renderer.RenderEditorSelectionMenu(editor_items, editor_selected_item);
+      } else {
+        processEditorSizeSelectionEvents(
+            editor_size_selected_item, menu_screen, quit_application,
+            launch_editor, editor_request, audio.get());
+        renderer.RenderEditorSizeSelectionMenu(editor_size_selected_item);
       }
+
       sleep(40);
     }
 
@@ -310,9 +894,27 @@ int main() {
       break;
     }
 
+    if (launch_editor) {
+      const EditorResult editor_result =
+          RunEditorSession(editor_request, audio.get());
+      if (editor_result.quit_requested) {
+        quit_application = true;
+        break;
+      }
+
+      maps_need_reload = true;
+      if (!editor_result.preferred_map_path.empty()) {
+        preferred_selected_map_path = editor_result.preferred_map_path;
+      }
+      next_menu_screen_after_rebuild = MenuScreen::Main;
+      continue;
+    }
+
     if (rebuild_menu_session) {
       continue;
     }
+
+    preferred_selected_map_path = available_maps[selected_map_index].file_path;
 
     for (int remaining = countdown_seconds; remaining > 0 && !quit_application;
          remaining--) {

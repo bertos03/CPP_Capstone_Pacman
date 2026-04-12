@@ -31,6 +31,7 @@ const SDL_Color kHudTextColor{243, 236, 222, 255};
 const SDL_Color kMenuTextColor{225, 223, 218, 255};
 const SDL_Color kSelectedMenuTextColor{255, 248, 238, 255};
 const SDL_Color kStatusTextColor{255, 189, 163, 255};
+const SDL_Color kWarningTextColor{255, 110, 110, 255};
 const SDL_Color kPanelFillColor{10, 6, 18, 205};
 const SDL_Color kPanelBorderColor{196, 130, 92, 255};
 const SDL_Color kBrickOutlineColor{78, 20, 14, 255};
@@ -61,6 +62,25 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
+  initializeRenderer(map->get_map_rows(), map->get_map_cols());
+}
+
+Renderer::Renderer(size_t row_count, size_t col_count)
+    : screen_res_x(0), screen_res_y(0), element_size(0), offset_x(0),
+      offset_y(0), rows(0), cols(0), map(nullptr), game(nullptr),
+      sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
+      sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
+      sdl_goodie_texture(nullptr), sdl_monster_surface(nullptr),
+      sdl_monster_texture(nullptr), sdl_pacman_surface(nullptr),
+      sdl_pacman_texture(nullptr), sdl_logo_brick_surface(nullptr),
+      sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
+      sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
+      sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
+  initializeRenderer(row_count, col_count);
+}
+
+void Renderer::initializeRenderer(size_t row_count_value,
+                                  size_t col_count_value) {
   if ((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0 &&
       SDL_InitSubSystem(SDL_INIT_VIDEO) < 0) {
     std::cerr << "SDL video could not initialize.\n";
@@ -84,8 +104,8 @@ Renderer::Renderer(Map *_map, Game *_game)
   SDL_GetCurrentDisplayMode(0, &display_mode);
   screen_res_x = display_mode.w;
   screen_res_y = display_mode.h;
-  rows = map->get_map_rows();
-  cols = map->get_map_cols();
+  rows = row_count_value;
+  cols = col_count_value;
   const int row_count = static_cast<int>(rows);
   const int col_count = static_cast<int>(cols);
 
@@ -263,6 +283,32 @@ void Renderer::RenderMapSelectionMenu(const std::vector<std::string> &map_names,
   SDL_RenderPresent(sdl_renderer);
 }
 
+void Renderer::RenderEditorSelectionMenu(const std::vector<std::string> &items,
+                                         int selected_index) {
+  renderFrame(false);
+  drawDimmer(120);
+  drawEditorSelectionOverlay(items, selected_index);
+  SDL_RenderPresent(sdl_renderer);
+}
+
+void Renderer::RenderEditorSizeSelectionMenu(int selected_index) {
+  renderFrame(false);
+  drawDimmer(120);
+  drawEditorSizeSelectionOverlay(selected_index);
+  SDL_RenderPresent(sdl_renderer);
+}
+
+void Renderer::RenderEditor(const std::vector<std::string> &layout,
+                            const std::string &map_name, MapCoord cursor,
+                            const std::string &warning_message,
+                            bool show_exit_dialog, int exit_dialog_selected) {
+  renderLayoutFrame(layout);
+  drawDimmer(72);
+  drawEditorOverlay(map_name, cursor, warning_message, show_exit_dialog,
+                    exit_dialog_selected);
+  SDL_RenderPresent(sdl_renderer);
+}
+
 void Renderer::RenderCountdown(int seconds_left) {
   renderFrame(false);
   drawDimmer(145);
@@ -274,15 +320,32 @@ void Renderer::renderFrame(bool show_hud) {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
   drawmap();
-  drawgoodies();
-  drawpacman();
-  drawmonsters();
+  if (game != nullptr) {
+    drawgoodies();
+    drawpacman();
+    drawmonsters();
+  } else {
+    drawStaticGoodies();
+    drawStaticPacman();
+    drawStaticMonsters();
+  }
   if (show_hud) {
     drawhud();
   }
 }
 
+void Renderer::renderLayoutFrame(const std::vector<std::string> &layout) {
+  SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
+  SDL_RenderClear(sdl_renderer);
+  drawLayout(layout);
+  drawLayoutEntities(layout);
+}
+
 void Renderer::drawhud() {
+  if (game == nullptr) {
+    return;
+  }
+
   const std::string title_text =
       "BOBMAN        Score: " + std::to_string(game->score);
   renderSimpleText(sdl_font_hud, title_text, sdl_font_color, screen_res_x / 2,
@@ -330,7 +393,7 @@ void Renderer::drawStartMenuOverlay(int selected_item,
                   kBrickOutlineColor);
 
   const int panel_width = std::min(720, screen_res_x * 42 / 100);
-  const int panel_height = std::max(260, screen_res_y * 28 / 100);
+  const int panel_height = std::max(320, screen_res_y * 36 / 100);
   const int panel_top =
       std::min(screen_res_y - panel_height - 70,
                logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 20);
@@ -340,7 +403,8 @@ void Renderer::drawStartMenuOverlay(int selected_item,
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
 
   const std::vector<std::string> menu_items{
-      "Start Spiel", "Karte: " + map_name, "Konfiguration", "Ende"};
+      "Start Spiel", "Karte: " + map_name, "Map Editor", "Konfiguration",
+      "Ende"};
   const int item_height = std::max(52, TTF_FontHeight(sdl_font_menu) + 18);
   const int highlight_width = panel.w - 56;
   const int item_start_y =
@@ -470,13 +534,22 @@ void Renderer::drawMapSelectionOverlay(const std::vector<std::string> &map_names
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
 
   const int highlight_width = panel.w - 56;
+  const int max_visible_items =
+      std::max(1, (panel.h - 72) / std::max(1, item_height));
+  const int first_visible =
+      std::clamp(selected_index - max_visible_items / 2, 0,
+                 std::max(0, static_cast<int>(map_names.size()) - max_visible_items));
+  const int visible_items =
+      std::min(max_visible_items,
+               static_cast<int>(map_names.size()) - first_visible);
   const int item_start_y =
       panel.y + 28 +
-      std::max(0, (panel.h - 72 - static_cast<int>(map_names.size()) * item_height) /
-                       2);
+      std::max(0, (panel.h - 72 - visible_items * item_height) / 2);
 
-  for (int i = 0; i < static_cast<int>(map_names.size()); i++) {
-    const SDL_Rect highlight_rect{panel.x + 28, item_start_y + i * item_height,
+  for (int visible_index = 0; visible_index < visible_items; visible_index++) {
+    const int i = first_visible + visible_index;
+    const SDL_Rect highlight_rect{panel.x + 28,
+                                  item_start_y + visible_index * item_height,
                                   highlight_width, item_height - 8};
     if (i == selected_index) {
       SDL_SetRenderDrawColor(sdl_renderer, 138, 46, 29, 185);
@@ -498,6 +571,214 @@ void Renderer::drawMapSelectionOverlay(const std::vector<std::string> &map_names
       sdl_font_hud,
       "Pfeiltasten waehlen, Enter bestaetigt, Esc verwirft die Vorschau",
       kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
+
+  if (first_visible > 0) {
+    renderSimpleText(sdl_font_hud, "...", kHudTextColor, screen_res_x / 2,
+                     panel.y + 6);
+  }
+  if (first_visible + visible_items < static_cast<int>(map_names.size())) {
+    renderSimpleText(sdl_font_hud, "...", kHudTextColor, screen_res_x / 2,
+                     panel.y + panel.h - TTF_FontHeight(sdl_font_hud) - 8);
+  }
+}
+
+void Renderer::drawEditorSelectionOverlay(const std::vector<std::string> &items,
+                                          int selected_index) {
+  const int logo_top = screen_res_y / 18;
+  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+                  kBrickOutlineColor);
+  renderSimpleText(sdl_font_menu, "Map Editor", kHudTextColor, screen_res_x / 2,
+                   logo_top + TTF_FontHeight(sdl_font_logo) - 4);
+
+  const int item_height = std::max(50, TTF_FontHeight(sdl_font_menu) + 16);
+  const int panel_width = std::min(900, screen_res_x * 56 / 100);
+  const int desired_panel_height = 112 + static_cast<int>(items.size()) * item_height;
+  const int panel_height = std::min(std::max(280, desired_panel_height),
+                                    screen_res_y * 66 / 100);
+  const int panel_top =
+      std::min(screen_res_y - panel_height - 70,
+               logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
+  SDL_Rect panel{(screen_res_x - panel_width) / 2, panel_top, panel_width,
+                 panel_height};
+
+  drawPanel(panel, kPanelFillColor, kPanelBorderColor);
+
+  const int highlight_width = panel.w - 56;
+  const int max_visible_items =
+      std::max(1, (panel.h - 78) / std::max(1, item_height));
+  const int first_visible =
+      std::clamp(selected_index - max_visible_items / 2, 0,
+                 std::max(0, static_cast<int>(items.size()) - max_visible_items));
+  const int visible_items =
+      std::min(max_visible_items,
+               static_cast<int>(items.size()) - first_visible);
+  const int item_start_y =
+      panel.y + 30 +
+      std::max(0, (panel.h - 78 - visible_items * item_height) / 2);
+
+  for (int visible_index = 0; visible_index < visible_items; visible_index++) {
+    const int i = first_visible + visible_index;
+    const SDL_Rect highlight_rect{panel.x + 28,
+                                  item_start_y + visible_index * item_height,
+                                  highlight_width, item_height - 8};
+    if (i == selected_index) {
+      SDL_SetRenderDrawColor(sdl_renderer, 138, 46, 29, 185);
+      SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      SDL_SetRenderDrawColor(sdl_renderer, 235, 182, 140, 255);
+      SDL_RenderDrawRect(sdl_renderer, &highlight_rect);
+    }
+
+    const SDL_Color item_color =
+        (i == selected_index) ? kSelectedMenuTextColor : kMenuTextColor;
+    const int text_top =
+        highlight_rect.y +
+        (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
+    renderSimpleText(sdl_font_menu, items[i], item_color, screen_res_x / 2,
+                     text_top);
+  }
+
+  renderSimpleText(sdl_font_hud,
+                   "Enter oeffnet die Karte, Esc geht zurueck",
+                   kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
+
+  if (first_visible > 0) {
+    renderSimpleText(sdl_font_hud, "...", kHudTextColor, screen_res_x / 2,
+                     panel.y + 6);
+  }
+  if (first_visible + visible_items < static_cast<int>(items.size())) {
+    renderSimpleText(sdl_font_hud, "...", kHudTextColor, screen_res_x / 2,
+                     panel.y + panel.h - TTF_FontHeight(sdl_font_hud) - 8);
+  }
+}
+
+void Renderer::drawEditorSizeSelectionOverlay(int selected_index) {
+  const int logo_top = screen_res_y / 18;
+  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+                  kBrickOutlineColor);
+  renderSimpleText(sdl_font_menu, "Neue Karte", kHudTextColor,
+                   screen_res_x / 2,
+                   logo_top + TTF_FontHeight(sdl_font_logo) - 4);
+
+  const std::vector<std::string> items{"Klein", "Mittel", "Gross"};
+  const int item_height = std::max(56, TTF_FontHeight(sdl_font_menu) + 18);
+  const int panel_width = std::min(680, screen_res_x * 42 / 100);
+  const int panel_height = std::max(300, screen_res_y * 34 / 100);
+  const int panel_top =
+      std::min(screen_res_y - panel_height - 70,
+               logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
+  SDL_Rect panel{(screen_res_x - panel_width) / 2, panel_top, panel_width,
+                 panel_height};
+
+  drawPanel(panel, kPanelFillColor, kPanelBorderColor);
+
+  const int highlight_width = panel.w - 56;
+  const int item_start_y =
+      panel.y + 38 +
+      std::max(0, (panel.h - 94 - static_cast<int>(items.size()) * item_height) /
+                       2);
+
+  for (int i = 0; i < static_cast<int>(items.size()); i++) {
+    const SDL_Rect highlight_rect{panel.x + 28, item_start_y + i * item_height,
+                                  highlight_width, item_height - 8};
+    if (i == selected_index) {
+      SDL_SetRenderDrawColor(sdl_renderer, 138, 46, 29, 185);
+      SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      SDL_SetRenderDrawColor(sdl_renderer, 235, 182, 140, 255);
+      SDL_RenderDrawRect(sdl_renderer, &highlight_rect);
+    }
+
+    const SDL_Color item_color =
+        (i == selected_index) ? kSelectedMenuTextColor : kMenuTextColor;
+    const int text_top =
+        highlight_rect.y +
+        (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
+    renderSimpleText(sdl_font_menu, items[i], item_color, screen_res_x / 2,
+                     text_top);
+  }
+
+  renderSimpleText(sdl_font_hud, "Groesse waehlen, Enter startet den Editor",
+                   kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
+}
+
+void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
+                                 const std::string &warning_message,
+                                 bool show_exit_dialog,
+                                 int exit_dialog_selected) {
+  const int header_top = 16;
+  renderBrickText(sdl_font_logo, "Map Editor", screen_res_x / 2, header_top,
+                  kBrickOutlineColor);
+  renderSimpleText(sdl_font_hud, map_name, kHudTextColor, screen_res_x / 2,
+                   header_top + TTF_FontHeight(sdl_font_logo) - 6);
+
+  const int x = offset_x + 1 + cursor.v * (element_size + 1);
+  const int y = offset_y + 1 + cursor.u * (element_size + 1);
+  const bool blink_on = ((SDL_GetTicks() / 420) % 2) == 0;
+  const Uint8 alpha = blink_on ? 255 : 120;
+  SDL_Rect cursor_rect{x - 2, y - 2, element_size + 4, element_size + 4};
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, alpha);
+  SDL_RenderDrawRect(sdl_renderer, &cursor_rect);
+  SDL_Rect inner_cursor{x - 1, y - 1, element_size + 2, element_size + 2};
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, alpha / 2);
+  SDL_RenderDrawRect(sdl_renderer, &inner_cursor);
+
+  const int info_width = std::min(760, screen_res_x - 80);
+  const int info_height = std::max(116, screen_res_y / 6);
+  SDL_Rect info_panel{(screen_res_x - info_width) / 2, screen_res_y - info_height - 28,
+                      info_width, info_height};
+  drawPanel(info_panel, kPanelFillColor, kPanelBorderColor);
+
+  const std::string line_one =
+      "Pfeile bewegen | X/W=Mauer | Leer/Entf=Weg | G=Goodie";
+  const std::string line_two =
+      "P=Spielfigur | M/N/O=Monster | Esc oeffnet den Dialog";
+  renderSimpleText(sdl_font_hud, line_one, kHudTextColor, screen_res_x / 2,
+                   info_panel.y + 18);
+  renderSimpleText(sdl_font_hud, line_two, kHudTextColor, screen_res_x / 2,
+                   info_panel.y + 18 + TTF_FontHeight(sdl_font_hud) + 8);
+
+  const SDL_Color status_color =
+      warning_message.empty() ? kStatusTextColor : kWarningTextColor;
+  const std::string status_text =
+      warning_message.empty() ? "Karte ist gueltig" : warning_message;
+  renderSimpleText(sdl_font_hud, status_text, status_color, screen_res_x / 2,
+                   info_panel.y + info_panel.h - TTF_FontHeight(sdl_font_hud) - 16);
+
+  if (!show_exit_dialog) {
+    return;
+  }
+
+  drawDimmer(160);
+  const int dialog_width = std::min(720, screen_res_x * 42 / 100);
+  const int dialog_height = std::max(260, screen_res_y * 28 / 100);
+  SDL_Rect dialog{(screen_res_x - dialog_width) / 2,
+                  (screen_res_y - dialog_height) / 2, dialog_width,
+                  dialog_height};
+  drawPanel(dialog, kPanelFillColor, kPanelBorderColor);
+  renderSimpleText(sdl_font_menu, "Editor verlassen?", kHudTextColor,
+                   screen_res_x / 2, dialog.y + 24);
+
+  const std::vector<std::string> items{"Speichern", "Abbruch",
+                                       "Nicht speichern"};
+  const int item_height = std::max(52, TTF_FontHeight(sdl_font_menu) + 16);
+  const int start_y = dialog.y + 82;
+  for (int i = 0; i < static_cast<int>(items.size()); i++) {
+    SDL_Rect highlight_rect{dialog.x + 28, start_y + i * item_height,
+                            dialog.w - 56, item_height - 8};
+    if (i == exit_dialog_selected) {
+      SDL_SetRenderDrawColor(sdl_renderer, 138, 46, 29, 185);
+      SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      SDL_SetRenderDrawColor(sdl_renderer, 235, 182, 140, 255);
+      SDL_RenderDrawRect(sdl_renderer, &highlight_rect);
+    }
+
+    const SDL_Color item_color =
+        (i == exit_dialog_selected) ? kSelectedMenuTextColor : kMenuTextColor;
+    const int text_top =
+        highlight_rect.y +
+        (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
+    renderSimpleText(sdl_font_menu, items[i], item_color, screen_res_x / 2,
+                     text_top);
+  }
 }
 
 void Renderer::drawCountdownOverlay(int seconds_left) {
@@ -728,6 +1009,10 @@ void Renderer::writePixel(SDL_Surface *surface, int x, int y, Uint32 pixel) {
 }
 
 void Renderer::drawpacman() {
+  if (game == nullptr || game->pacman == nullptr) {
+    return;
+  }
+
   game->pacman->px_coord = getPixelCoord(
       game->pacman->map_coord, element_size * game->pacman->px_delta.x / 100.0,
       element_size * game->pacman->px_delta.y / 100.0);
@@ -739,6 +1024,10 @@ void Renderer::drawpacman() {
 }
 
 void Renderer::drawgoodies() {
+  if (game == nullptr) {
+    return;
+  }
+
   for (auto goodie : game->goodies) {
     if (goodie->is_active) {
       goodie->px_coord = getPixelCoord(goodie->map_coord, 0, 0);
@@ -753,6 +1042,10 @@ void Renderer::drawgoodies() {
 }
 
 void Renderer::drawmonsters() {
+  if (game == nullptr) {
+    return;
+  }
+
   for (auto monster : game->monsters) {
     monster->px_coord = getPixelCoord(
         monster->map_coord, element_size * monster->px_delta.x / 100.0,
@@ -767,6 +1060,10 @@ void Renderer::drawmonsters() {
 }
 
 void Renderer::drawmap() {
+  if (map == nullptr) {
+    return;
+  }
+
   SDL_Rect block;
   block.w = element_size;
   block.h = element_size;
@@ -793,6 +1090,106 @@ void Renderer::drawmap() {
         block.y = y;
         SDL_RenderFillRect(sdl_renderer, &block);
         break;
+      }
+    }
+  }
+}
+
+void Renderer::drawLayout(const std::vector<std::string> &layout) {
+  SDL_Rect block;
+  block.w = element_size;
+  block.h = element_size;
+
+  for (size_t row = 0; row < layout.size(); row++) {
+    for (size_t col = 0; col < layout[row].size(); col++) {
+      const int x = offset_x + 1 + static_cast<int>(col) * (element_size + 1);
+      const int y = offset_y + 1 + static_cast<int>(row) * (element_size + 1);
+      if (layout[row][col] == BRICK) {
+        sdl_wall_rect = SDL_Rect{x, y, element_size + 1, element_size + 1};
+        SDL_RenderCopy(sdl_renderer, sdl_wall_texture, nullptr, &sdl_wall_rect);
+      } else {
+        SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
+        block.x = x;
+        block.y = y;
+        SDL_RenderFillRect(sdl_renderer, &block);
+      }
+    }
+  }
+}
+
+void Renderer::drawStaticPacman() {
+  if (map == nullptr) {
+    return;
+  }
+
+  const MapCoord pacman_coord = map->get_coord_pacman();
+  const PixelCoord pacman_px = getPixelCoord(pacman_coord, 0, 0);
+  sdl_pacman_rect = SDL_Rect{pacman_px.x + int(element_size * 0.05),
+                             pacman_px.y + int(element_size * 0.05),
+                             int(element_size * 0.9), int(element_size * 0.9)};
+  SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, nullptr, &sdl_pacman_rect);
+}
+
+void Renderer::drawStaticMonsters() {
+  if (map == nullptr) {
+    return;
+  }
+
+  for (int i = 0; i < map->get_number_monsters(); i++) {
+    const PixelCoord monster_px = getPixelCoord(map->get_coord_monster(i), 0, 0);
+    sdl_monster_rect =
+        SDL_Rect{monster_px.x + int(element_size * 0.05),
+                 monster_px.y + int(element_size * 0.05),
+                 int(element_size * 0.9), int(element_size * 0.9)};
+    SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
+                   &sdl_monster_rect);
+  }
+}
+
+void Renderer::drawStaticGoodies() {
+  if (map == nullptr) {
+    return;
+  }
+
+  for (int i = 0; i < map->get_number_goodies(); i++) {
+    const PixelCoord goodie_px = getPixelCoord(map->get_coord_goodie(i), 0, 0);
+    sdl_goodie_rect =
+        SDL_Rect{goodie_px.x + int(element_size * 0.15),
+                 goodie_px.y + int(element_size * 0.15),
+                 int(element_size * 0.7), int(element_size * 0.7)};
+    SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr, &sdl_goodie_rect);
+  }
+}
+
+void Renderer::drawLayoutEntities(const std::vector<std::string> &layout) {
+  for (size_t row = 0; row < layout.size(); row++) {
+    for (size_t col = 0; col < layout[row].size(); col++) {
+      const char entry = layout[row][col];
+      const int x = offset_x + 1 + static_cast<int>(col) * (element_size + 1);
+      const int y = offset_y + 1 + static_cast<int>(row) * (element_size + 1);
+
+      if (entry == GOODIE) {
+        sdl_goodie_rect = SDL_Rect{x + int(element_size * 0.15),
+                                   y + int(element_size * 0.15),
+                                   int(element_size * 0.7),
+                                   int(element_size * 0.7)};
+        SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr,
+                       &sdl_goodie_rect);
+      } else if (entry == PACMAN) {
+        sdl_pacman_rect = SDL_Rect{x + int(element_size * 0.05),
+                                   y + int(element_size * 0.05),
+                                   int(element_size * 0.9),
+                                   int(element_size * 0.9)};
+        SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, nullptr,
+                       &sdl_pacman_rect);
+      } else if (entry == MONSTER_FEW || entry == MONSTER_MEDIUM ||
+                 entry == MONSTER_MANY) {
+        sdl_monster_rect = SDL_Rect{x + int(element_size * 0.05),
+                                    y + int(element_size * 0.05),
+                                    int(element_size * 0.9),
+                                    int(element_size * 0.9)};
+        SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
+                       &sdl_monster_rect);
       }
     }
   }

@@ -36,6 +36,7 @@ class Game;
 class Renderer {
 public:
   Renderer(Map *map, Game *game);
+  Renderer(size_t rows, size_t cols);
   ~Renderer();
 
   void Render();
@@ -44,14 +45,28 @@ public:
   void RenderConfigMenu(int selected_item, MonsterAmount monster_amount);
   void RenderMapSelectionMenu(const std::vector<std::string> &map_names,
                               int selected_index);
+  void RenderEditorSelectionMenu(const std::vector<std::string> &items,
+                                 int selected_index);
+  void RenderEditorSizeSelectionMenu(int selected_index);
+  void RenderEditor(const std::vector<std::string> &layout,
+                    const std::string &map_name, MapCoord cursor,
+                    const std::string &warning_message,
+                    bool show_exit_dialog, int exit_dialog_selected);
   void RenderCountdown(int seconds_left);
 
 private:
+  void initializeRenderer(size_t row_count, size_t col_count);
   void renderFrame(bool show_hud);
+  void renderLayoutFrame(const std::vector<std::string> &layout);
   void drawmap();
+  void drawLayout(const std::vector<std::string> &layout);
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
+  void drawStaticPacman();
+  void drawStaticMonsters();
+  void drawStaticGoodies();
+  void drawLayoutEntities(const std::vector<std::string> &layout);
   void drawhud();
   void drawDimmer(Uint8 alpha);
   void drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
@@ -62,6 +77,12 @@ private:
   void drawConfigMenuOverlay(int selected_item, MonsterAmount monster_amount);
   void drawMapSelectionOverlay(const std::vector<std::string> &map_names,
                                int selected_index);
+  void drawEditorSelectionOverlay(const std::vector<std::string> &items,
+                                  int selected_index);
+  void drawEditorSizeSelectionOverlay(int selected_index);
+  void drawEditorOverlay(const std::string &map_name, MapCoord cursor,
+                         const std::string &warning_message,
+                         bool show_exit_dialog, int exit_dialog_selected);
   void drawCountdownOverlay(int seconds_left);
   void renderSimpleText(TTF_Font *font, const std::string &text,
                         const SDL_Color &color, int center_x, int top_y);
