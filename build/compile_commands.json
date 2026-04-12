@@ -1,0 +1,68 @@
+[
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/audio.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/audio.cpp",
+  "output": "CMakeFiles/pacman.dir/src/audio.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/events.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/events.cpp",
+  "output": "CMakeFiles/pacman.dir/src/events.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/game.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/game.cpp",
+  "output": "CMakeFiles/pacman.dir/src/game.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/globaltypes.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/globaltypes.cpp",
+  "output": "CMakeFiles/pacman.dir/src/globaltypes.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/goodie.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/goodie.cpp",
+  "output": "CMakeFiles/pacman.dir/src/goodie.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/main.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/main.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/main.cpp",
+  "output": "CMakeFiles/pacman.dir/src/main.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/map.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/map.cpp",
+  "output": "CMakeFiles/pacman.dir/src/map.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/mapelement.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/mapelement.cpp",
+  "output": "CMakeFiles/pacman.dir/src/mapelement.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/monster.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/monster.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/monster.cpp",
+  "output": "CMakeFiles/pacman.dir/src/monster.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/pacman.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/pacman.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/pacman.cpp",
+  "output": "CMakeFiles/pacman.dir/src/pacman.cpp.o"
+},
+{
+  "directory": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/build",
+  "command": "/usr/bin/clang++  -I/opt/homebrew/Cellar/sdl2/2.32.10/include -I/opt/homebrew/include/SDL2 -I/Users/robert/Documents/dev/CPP_Capstone_Pacman/src -isystem /opt/homebrew/Cellar/sdl2/2.32.10/include/SDL2  -std=c++17 -pthread -g -std=gnu++17 -arch arm64   -std=c++17 -o CMakeFiles/pacman.dir/src/renderer.cpp.o -c /Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.cpp",
+  "file": "/Users/robert/Documents/dev/CPP_Capstone_Pacman/src/renderer.cpp",
+  "output": "CMakeFiles/pacman.dir/src/renderer.cpp.o"
+}
+]
