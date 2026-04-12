@@ -399,6 +399,34 @@ void Renderer::RenderCountdown(int seconds_left) {
   SDL_RenderPresent(sdl_renderer);
 }
 
+bool Renderer::TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
+                                           MapCoord &coord) const {
+  const int grid_origin_x = offset_x + 1;
+  const int grid_origin_y = offset_y + 1;
+  const int cell_stride = element_size + 1;
+  const int relative_x = screen_x - grid_origin_x;
+  const int relative_y = screen_y - grid_origin_y;
+
+  if (relative_x < 0 || relative_y < 0) {
+    return false;
+  }
+
+  const int col = relative_x / cell_stride;
+  const int row = relative_y / cell_stride;
+  if (row < 0 || col < 0 || row >= static_cast<int>(rows) ||
+      col >= static_cast<int>(cols)) {
+    return false;
+  }
+
+  if (relative_x % cell_stride >= element_size ||
+      relative_y % cell_stride >= element_size) {
+    return false;
+  }
+
+  coord = {row, col};
+  return true;
+}
+
 void Renderer::renderFrame(bool show_hud) {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
@@ -776,11 +804,11 @@ void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
                                  bool show_name_dialog,
                                  const std::string &name_input,
                                  const std::string &name_dialog_message) {
-  const int header_top = 16;
-  renderBrickText(sdl_font_logo, "Map Editor", screen_res_x / 2, header_top,
+  const int header_top = 12;
+  renderBrickText(sdl_font_menu, "Map Editor", screen_res_x / 2, header_top,
                   kBrickOutlineColor);
   renderSimpleText(sdl_font_hud, map_name, kHudTextColor, screen_res_x / 2,
-                   header_top + TTF_FontHeight(sdl_font_logo) - 6);
+                   header_top + TTF_FontHeight(sdl_font_menu) + 4);
 
   const int x = offset_x + 1 + cursor.v * (element_size + 1);
   const int y = offset_y + 1 + cursor.u * (element_size + 1);
@@ -794,7 +822,7 @@ void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
   SDL_RenderDrawRect(sdl_renderer, &inner_cursor);
 
   const int info_width = std::min(760, screen_res_x - 80);
-  const int info_height = std::max(116, screen_res_y / 6);
+  const int info_height = std::max(170, screen_res_y / 4);
   SDL_Rect info_panel{(screen_res_x - info_width) / 2, screen_res_y - info_height - 28,
                       info_width, info_height};
   SDL_SetRenderDrawColor(sdl_renderer, 10, 6, 18, 92);
@@ -807,20 +835,28 @@ void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
   SDL_RenderDrawRect(sdl_renderer, &info_inner_panel);
 
   const std::string line_one =
-      "Pfeile bewegen | X/W=Mauer | Leer/Entf=Weg | G=Goodie";
+      "Pfeile oder Linksklick | Klick schaltet Mauer an/aus";
   const std::string line_two =
-      "P=Spielfigur | M/N/O=Monster | 1-5=Teleport | Esc oeffnet Dialog";
+      "X/W=Mauer | Leer/Entf=Weg | G=Goodie | P=Spielfigur";
+  const std::string line_three =
+      "M/N/O=Monster | 1-5=Teleportpaare";
+  const std::string line_four =
+      "Belegte Felder blockieren den Klick | Esc oeffnet Dialog";
   renderSimpleText(sdl_font_hud, line_one, kHudTextColor, screen_res_x / 2,
-                   info_panel.y + 18);
+                   info_panel.y + 16);
   renderSimpleText(sdl_font_hud, line_two, kHudTextColor, screen_res_x / 2,
-                   info_panel.y + 18 + TTF_FontHeight(sdl_font_hud) + 8);
+                   info_panel.y + 16 + TTF_FontHeight(sdl_font_hud) + 6);
+  renderSimpleText(sdl_font_hud, line_three, kHudTextColor, screen_res_x / 2,
+                   info_panel.y + 16 + 2 * (TTF_FontHeight(sdl_font_hud) + 6));
+  renderSimpleText(sdl_font_hud, line_four, kHudTextColor, screen_res_x / 2,
+                   info_panel.y + 16 + 3 * (TTF_FontHeight(sdl_font_hud) + 6));
 
   const SDL_Color status_color =
       warning_message.empty() ? kStatusTextColor : kWarningTextColor;
   const std::string status_text =
       warning_message.empty() ? "Karte ist gueltig" : warning_message;
   renderSimpleText(sdl_font_hud, status_text, status_color, screen_res_x / 2,
-                   info_panel.y + info_panel.h - TTF_FontHeight(sdl_font_hud) - 16);
+                   info_panel.y + info_panel.h - TTF_FontHeight(sdl_font_hud) - 14);
 
   if (!show_exit_dialog && !show_name_dialog) {
     return;

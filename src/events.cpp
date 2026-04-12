@@ -52,9 +52,6 @@ void Events::update() {
     quit = true;
   }
 
-  if (sdl_events->type == SDL_MOUSEBUTTONDOWN) {
-   quit = true;
-  }
   if (sdl_events->type == SDL_KEYDOWN) {
     switch (sdl_events->key.keysym.sym) {
     case SDLK_UP:

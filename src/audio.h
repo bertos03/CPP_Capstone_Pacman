@@ -46,6 +46,7 @@ public:
   void PlayPacmanGag();
   void PlayTeleporterZap();
   void PlayTeleporterArc();
+  void PlayEditorBlocked();
 
 protected:
 private:
@@ -59,6 +60,7 @@ private:
   Mix_Chunk *CreatePacmanGagChunk();
   Mix_Chunk *CreateTeleporterZapChunk();
   Mix_Chunk *CreateTeleporterArcChunk();
+  Mix_Chunk *CreateEditorBlockedChunk();
   void PlayChunk(Mix_Chunk *);
 
   Mix_Chunk *SFX_coin;
@@ -75,6 +77,7 @@ private:
   Mix_Chunk *SFX_pacman_gag;
   Mix_Chunk *SFX_teleporter_zap;
   Mix_Chunk *SFX_teleporter_arc;
+  Mix_Chunk *SFX_editor_blocked;
   bool audio_ready;
 #endif
 };

@@ -92,6 +92,7 @@ Audio::Audio() {
   SFX_pacman_gag = nullptr;
   SFX_teleporter_zap = nullptr;
   SFX_teleporter_arc = nullptr;
+  SFX_editor_blocked = nullptr;
 
   if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0 &&
       SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
@@ -120,6 +121,7 @@ Audio::Audio() {
   SFX_pacman_gag = CreatePacmanGagChunk();
   SFX_teleporter_zap = CreateTeleporterZapChunk();
   SFX_teleporter_arc = CreateTeleporterArcChunk();
+  SFX_editor_blocked = CreateEditorBlockedChunk();
 
   if (SFX_coin == nullptr || SFX_win == nullptr || SFX_gameover == nullptr ||
       SFX_menu_move == nullptr || SFX_menu_select == nullptr ||
@@ -127,7 +129,7 @@ Audio::Audio() {
       SFX_monster_shot == nullptr || SFX_fireball_wall_hit == nullptr ||
       SFX_monster_explosion == nullptr || SFX_monster_fart == nullptr ||
       SFX_pacman_gag == nullptr || SFX_teleporter_zap == nullptr ||
-      SFX_teleporter_arc == nullptr) {
+      SFX_teleporter_arc == nullptr || SFX_editor_blocked == nullptr) {
     std::cerr << "Failed to load SFX: " << Mix_GetError() << "\n";
     return;
   }
@@ -187,6 +189,9 @@ Audio::~Audio() {
   }
   if (SFX_teleporter_arc != nullptr) {
     Mix_FreeChunk(SFX_teleporter_arc);
+  }
+  if (SFX_editor_blocked != nullptr) {
+    Mix_FreeChunk(SFX_editor_blocked);
   }
 
   if (Mix_QuerySpec(nullptr, nullptr, nullptr) != 0) {
@@ -590,6 +595,42 @@ Mix_Chunk *Audio::CreateTeleporterArcChunk() {
   return Mix_LoadWAV_RW(wav_stream, 1);
 }
 
+Mix_Chunk *Audio::CreateEditorBlockedChunk() {
+  const int duration_ms = 170;
+  const int sample_count = std::max(1, duration_ms * kSampleRate / 1000);
+  std::vector<Sint16> pcm_samples;
+  pcm_samples.reserve(sample_count * kChannels);
+
+  for (int i = 0; i < sample_count; i++) {
+    const double time = static_cast<double>(i) / kSampleRate;
+    const double progress = static_cast<double>(i) / sample_count;
+    const double envelope =
+        std::pow(std::clamp(1.0 - progress, 0.0, 1.0), 0.80);
+    const double metallic =
+        std::sin(2.0 * kPi * 310.0 * time) +
+        0.72 * std::sin(2.0 * kPi * 517.0 * time + 0.18) +
+        0.38 * std::sin(2.0 * kPi * 836.0 * time + 0.74);
+    const double clink =
+        0.22 * std::sin(2.0 * kPi * 1510.0 * time + 1.4) +
+        0.12 * std::sin(2.0 * kPi * 2140.0 * time + 0.2);
+    double sample_value = (metallic + clink) * envelope * 0.17;
+
+    sample_value = std::clamp(sample_value, -1.0, 1.0);
+    const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+    pcm_samples.push_back(pcm);
+    pcm_samples.push_back(pcm);
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
 void Audio::PlayChunk(Mix_Chunk *chunk) {
   if (!audio_ready || chunk == nullptr) {
     return;
@@ -636,5 +677,7 @@ void Audio::PlayPacmanGag() { PlayChunk(SFX_pacman_gag); };
 void Audio::PlayTeleporterZap() { PlayChunk(SFX_teleporter_zap); };
 
 void Audio::PlayTeleporterArc() { PlayChunk(SFX_teleporter_arc); };
+
+void Audio::PlayEditorBlocked() { PlayChunk(SFX_editor_blocked); };
 
 #endif

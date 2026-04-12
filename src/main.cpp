@@ -395,6 +395,15 @@ void RevalidateEditor(EditorState &editor_state) {
   editor_state.validation = ValidateEditorMap(editor_state.map_file);
 }
 
+bool IsEditorInteriorCoord(const EditorState &editor_state, MapCoord coord) {
+  const int row_count =
+      static_cast<int>(editor_state.map_file.layout_rows.size());
+  const int col_count =
+      static_cast<int>(editor_state.map_file.layout_rows.front().size());
+  return coord.u >= 1 && coord.v >= 1 && coord.u < row_count - 1 &&
+         coord.v < col_count - 1;
+}
+
 void MoveEditorCursor(EditorState &editor_state, int row_delta, int col_delta) {
   const int max_row =
       static_cast<int>(editor_state.map_file.layout_rows.size()) - 2;
@@ -417,6 +426,30 @@ void PlaceEditorTile(EditorState &editor_state, char tile) {
       tile;
   editor_state.transient_error.clear();
   RevalidateEditor(editor_state);
+}
+
+void HandleEditorMouseToggle(EditorState &editor_state, MapCoord clicked_coord,
+                             Audio *audio) {
+  editor_state.cursor = clicked_coord;
+  if (!IsEditorInteriorCoord(editor_state, clicked_coord)) {
+    audio->PlayEditorBlocked();
+    return;
+  }
+
+  char &tile =
+      editor_state.map_file.layout_rows[clicked_coord.u][clicked_coord.v];
+  if (tile == PATH) {
+    PlaceEditorTile(editor_state, BRICK);
+    audio->PlayCountdownTick();
+    return;
+  }
+  if (tile == BRICK) {
+    PlaceEditorTile(editor_state, PATH);
+    audio->PlayCountdownTick();
+    return;
+  }
+
+  audio->PlayEditorBlocked();
 }
 
 std::string GetEditorWarningMessage(const EditorState &editor_state) {
@@ -474,6 +507,17 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
       if (event.type == SDL_QUIT) {
         quit_requested = true;
         break;
+      }
+
+      if (!editor_state.show_name_dialog && !editor_state.show_exit_dialog &&
+          event.type == SDL_MOUSEBUTTONDOWN &&
+          event.button.button == SDL_BUTTON_LEFT) {
+        MapCoord clicked_coord{0, 0};
+        if (renderer.TryGetLayoutCoordFromScreen(event.button.x, event.button.y,
+                                                 clicked_coord)) {
+          HandleEditorMouseToggle(editor_state, clicked_coord, audio);
+        }
+        continue;
       }
 
       if (editor_state.show_name_dialog) {
@@ -668,7 +712,7 @@ void processMainMenuEvents(int &selected_item, MenuScreen &menu_screen,
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+    if (event.type == SDL_QUIT) {
       quit_requested = true;
       continue;
     }
@@ -718,7 +762,7 @@ void processConfigMenuEvents(int &selected_item, MonsterAmount &monster_amount,
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+    if (event.type == SDL_QUIT) {
       quit_requested = true;
       continue;
     }
@@ -764,7 +808,7 @@ void processMapSelectionEvents(
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+    if (event.type == SDL_QUIT) {
       quit_requested = true;
       continue;
     }
@@ -819,7 +863,7 @@ void processEditorSelectionEvents(
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+    if (event.type == SDL_QUIT) {
       quit_requested = true;
       continue;
     }
@@ -864,7 +908,7 @@ void processEditorSizeSelectionEvents(
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+    if (event.type == SDL_QUIT) {
       quit_requested = true;
       continue;
     }
@@ -902,7 +946,7 @@ void processOverlayEvents(bool &quit_requested) {
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+    if (event.type == SDL_QUIT) {
       quit_requested = true;
     }
 

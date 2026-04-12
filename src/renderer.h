@@ -55,6 +55,8 @@ public:
                     bool show_name_dialog, const std::string &name_input,
                     const std::string &name_dialog_message);
   void RenderCountdown(int seconds_left);
+  bool TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
+                                   MapCoord &coord) const;
 
 private:
   void initializeRenderer(size_t row_count, size_t col_count);
