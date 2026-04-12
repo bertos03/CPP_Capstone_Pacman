@@ -153,8 +153,8 @@ void processOverlayEvents(bool &quit_requested) {
   }
 }
 
-void processGameOverEvents(Events *events, bool &return_to_menu,
-                           bool &quit_requested) {
+void processEndScreenEvents(Events *events, bool &return_to_menu,
+                            bool &quit_requested) {
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
@@ -245,13 +245,8 @@ int main() {
         if (!events->is_quit()) {
           game->Update();
         }
-      } else if (game->is_lost()) {
-        processGameOverEvents(events.get(), return_to_menu, quit_application);
       } else {
-        events->update();
-        if (events->is_quit()) {
-          quit_application = true;
-        }
+        processEndScreenEvents(events.get(), return_to_menu, quit_application);
       }
 
       renderer.Render();
