@@ -702,12 +702,13 @@ void processEditorSelectionEvents(
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
       audio->PlayMenuSelect();
-      if (selected_item < static_cast<int>(available_maps.size())) {
-        editor_request = {false, available_maps[selected_item].file_path,
-                          available_maps[selected_item].display_name, 0, 0};
-        launch_editor = true;
-      } else {
+      if (selected_item == 0) {
         menu_screen = MenuScreen::EditorSizeSelection;
+      } else {
+        const int map_index = selected_item - 1;
+        editor_request = {false, available_maps[map_index].file_path,
+                          available_maps[map_index].display_name, 0, 0};
+        launch_editor = true;
       }
       break;
     case SDLK_ESCAPE:
@@ -849,8 +850,11 @@ int main() {
            !launch_editor) {
       const std::vector<std::string> map_display_names =
           GetMapDisplayNames(available_maps);
-      std::vector<std::string> editor_items = map_display_names;
+      std::vector<std::string> editor_items;
+      editor_items.reserve(map_display_names.size() + 1);
       editor_items.push_back("+ neue Karte");
+      editor_items.insert(editor_items.end(), map_display_names.begin(),
+                          map_display_names.end());
       editor_selected_item =
           std::clamp(editor_selected_item, 0,
                      static_cast<int>(editor_items.size()) - 1);
