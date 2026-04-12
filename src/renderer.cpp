@@ -35,6 +35,19 @@ const SDL_Color kPanelFillColor{10, 6, 18, 205};
 const SDL_Color kPanelBorderColor{196, 130, 92, 255};
 const SDL_Color kBrickOutlineColor{78, 20, 14, 255};
 
+const char *MonsterAmountLabel(MonsterAmount monster_amount) {
+  switch (monster_amount) {
+  case MonsterAmount::Few:
+    return "wenig";
+  case MonsterAmount::Medium:
+    return "mittel";
+  case MonsterAmount::Many:
+    return "viel";
+  default:
+    return "mittel";
+  }
+}
+
 } // namespace
 
 Renderer::Renderer(Map *_map, Game *_game)
@@ -234,6 +247,14 @@ void Renderer::RenderStartMenu(int selected_item,
   SDL_RenderPresent(sdl_renderer);
 }
 
+void Renderer::RenderConfigMenu(int selected_item,
+                                MonsterAmount monster_amount) {
+  renderFrame(false);
+  drawDimmer(120);
+  drawConfigMenuOverlay(selected_item, monster_amount);
+  SDL_RenderPresent(sdl_renderer);
+}
+
 void Renderer::RenderCountdown(int seconds_left) {
   renderFrame(false);
   drawDimmer(145);
@@ -352,6 +373,68 @@ void Renderer::drawStartMenuOverlay(int selected_item,
                      screen_res_x / 2,
                      panel.y + panel.h - TTF_FontHeight(sdl_font_hud) - 22);
   }
+}
+
+void Renderer::drawConfigMenuOverlay(int selected_item,
+                                     MonsterAmount monster_amount) {
+  const int logo_top = screen_res_y / 18;
+  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+                  kBrickOutlineColor);
+  renderSimpleText(sdl_font_menu, "Konfiguration", kHudTextColor,
+                   screen_res_x / 2,
+                   logo_top + TTF_FontHeight(sdl_font_logo) - 4);
+
+  const int panel_width = std::min(820, screen_res_x * 48 / 100);
+  const int panel_height = std::max(290, screen_res_y * 32 / 100);
+  const int panel_top =
+      std::min(screen_res_y - panel_height - 70,
+               logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
+  SDL_Rect panel{(screen_res_x - panel_width) / 2, panel_top, panel_width,
+                 panel_height};
+
+  drawPanel(panel, kPanelFillColor, kPanelBorderColor);
+
+  const std::vector<std::string> menu_items{
+      "Monsteranzahl", "Zurueck"};
+  const std::vector<std::string> value_items{
+      MonsterAmountLabel(monster_amount), ""};
+  const int item_height = std::max(62, TTF_FontHeight(sdl_font_menu) + 24);
+  const int highlight_width = panel.w - 56;
+  const int item_start_y =
+      panel.y + 32 +
+      std::max(0, (panel.h - 86 - static_cast<int>(menu_items.size()) * item_height) /
+                       2);
+
+  for (int i = 0; i < static_cast<int>(menu_items.size()); i++) {
+    const SDL_Rect highlight_rect{panel.x + 28, item_start_y + i * item_height,
+                                  highlight_width, item_height - 8};
+    if (i == selected_item) {
+      SDL_SetRenderDrawColor(sdl_renderer, 138, 46, 29, 185);
+      SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      SDL_SetRenderDrawColor(sdl_renderer, 235, 182, 140, 255);
+      SDL_RenderDrawRect(sdl_renderer, &highlight_rect);
+    }
+
+    const SDL_Color item_color =
+        (i == selected_item) ? kSelectedMenuTextColor : kMenuTextColor;
+    const int text_top =
+        highlight_rect.y +
+        (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
+
+    if (i == 0) {
+      renderSimpleText(sdl_font_menu, menu_items[i], item_color,
+                       panel.x + panel.w / 3, text_top);
+      renderSimpleText(sdl_font_menu, value_items[i], item_color,
+                       panel.x + panel.w * 3 / 4, text_top);
+    } else {
+      renderSimpleText(sdl_font_menu, menu_items[i], item_color, screen_res_x / 2,
+                       text_top);
+    }
+  }
+
+  renderSimpleText(sdl_font_hud,
+                   "Enter aendert den Wert oder bestaetigt, Esc geht zurueck",
+                   kHudTextColor, screen_res_x / 2, panel.y + panel.h + 18);
 }
 
 void Renderer::drawCountdownOverlay(int seconds_left) {

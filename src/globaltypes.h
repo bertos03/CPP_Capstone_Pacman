@@ -33,6 +33,7 @@ struct MapCoord {
 };
 
 enum class Directions { None, Up, Down, Left, Right };
+enum class MonsterAmount { Few, Medium, Many };
 
 
 // struct DirOptions{

@@ -44,7 +44,7 @@ enum class ElementType {
 
 class Map {
 public:
-  Map();
+  explicit Map(MonsterAmount monster_amount = MonsterAmount::Many);
   ~Map();
   size_t get_map_rows();
   size_t get_map_cols();
@@ -61,9 +61,12 @@ public:
 protected:
 private:
   void LoadMap(const std::string);
+  bool IsMonsterChar(char);
+  bool IsMonsterEnabled(char);
   std::vector<MapCoord> monster_coord;
   std::vector<MapCoord> goodie_coord;
   MapCoord pacman_coord;
+  MonsterAmount monster_amount;
   std::shared_ptr<vector<vector<ElementType>>> map;
   friend class Renderer;
 };

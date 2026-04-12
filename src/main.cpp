@@ -20,7 +20,6 @@
 #include <algorithm>
 #include <iostream>
 #include <memory>
-#include <string>
 
 #include "audio.h"
 #include "events.h"
@@ -32,10 +31,28 @@
 namespace {
 
 enum MenuSelection { MENU_START = 0, MENU_CONFIG = 1, MENU_END = 2 };
+enum ConfigSelection {
+  CONFIG_MONSTER_AMOUNT = 0,
+  CONFIG_BACK = 1,
+};
+enum class MenuScreen { Main, Config };
 
-void processMenuEvents(int &selected_item, bool &start_requested,
-                       bool &quit_requested, std::string &status_message,
-                       Uint32 &status_message_until, Audio *audio) {
+MonsterAmount NextMonsterAmount(MonsterAmount monster_amount) {
+  switch (monster_amount) {
+  case MonsterAmount::Few:
+    return MonsterAmount::Medium;
+  case MonsterAmount::Medium:
+    return MonsterAmount::Many;
+  case MonsterAmount::Many:
+    return MonsterAmount::Few;
+  default:
+    return MonsterAmount::Many;
+  }
+}
+
+void processMainMenuEvents(int &selected_item, MenuScreen &menu_screen,
+                           bool &start_requested, bool &quit_requested,
+                           Audio *audio) {
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
@@ -63,14 +80,58 @@ void processMenuEvents(int &selected_item, bool &start_requested,
       if (selected_item == MENU_START) {
         start_requested = true;
       } else if (selected_item == MENU_CONFIG) {
-        status_message = "Konfiguration ist noch ohne Funktion.";
-        status_message_until = SDL_GetTicks() + 1800;
+        menu_screen = MenuScreen::Config;
       } else if (selected_item == MENU_END) {
         quit_requested = true;
       }
       break;
     case SDLK_ESCAPE:
       quit_requested = true;
+      break;
+    default:
+      break;
+    }
+  }
+}
+
+void processConfigMenuEvents(int &selected_item, MonsterAmount &monster_amount,
+                             MenuScreen &menu_screen, bool &quit_requested,
+                             bool &rebuild_menu_session,
+                             bool &open_config_after_rebuild, Audio *audio) {
+  SDL_Event event;
+
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+      quit_requested = true;
+      continue;
+    }
+
+    if (event.type != SDL_KEYDOWN) {
+      continue;
+    }
+
+    switch (event.key.keysym.sym) {
+    case SDLK_UP:
+      selected_item = (selected_item + 1) % 2;
+      audio->PlayMenuMove();
+      break;
+    case SDLK_DOWN:
+      selected_item = (selected_item + 1) % 2;
+      audio->PlayMenuMove();
+      break;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+      audio->PlayMenuSelect();
+      if (selected_item == CONFIG_MONSTER_AMOUNT) {
+        monster_amount = NextMonsterAmount(monster_amount);
+        rebuild_menu_session = true;
+        open_config_after_rebuild = true;
+      } else if (selected_item == CONFIG_BACK) {
+        menu_screen = MenuScreen::Main;
+      }
+      break;
+    case SDLK_ESCAPE:
+      menu_screen = MenuScreen::Main;
       break;
     default:
       break;
@@ -118,31 +179,45 @@ int main() {
 
   const int countdown_seconds = std::clamp(GAME_START_COUNTDOWN, 3, 9);
   bool quit_application = false;
+  bool open_config_after_rebuild = false;
+  MonsterAmount monster_amount = MonsterAmount::Many;
   std::shared_ptr<Audio> audio(new Audio());
 
   while (!quit_application) {
-    std::shared_ptr<Map> map(new Map());
+    std::shared_ptr<Map> map(new Map(monster_amount));
     std::shared_ptr<Events> events(new Events());
     std::shared_ptr<Game> game(new Game(map.get(), events.get(), audio.get()));
     Renderer renderer(map.get(), game.get());
 
-    int selected_item = MENU_START;
+    bool rebuild_menu_session = false;
     bool start_requested = false;
-    std::string status_message;
-    Uint32 status_message_until = 0;
+    int main_selected_item = MENU_START;
+    int config_selected_item = CONFIG_MONSTER_AMOUNT;
+    MenuScreen menu_screen =
+        open_config_after_rebuild ? MenuScreen::Config : MenuScreen::Main;
+    open_config_after_rebuild = false;
 
-    while (!quit_application && !start_requested) {
-      processMenuEvents(selected_item, start_requested, quit_application,
-                        status_message, status_message_until, audio.get());
-
-      const std::string visible_status =
-          (SDL_GetTicks() < status_message_until) ? status_message : "";
-      renderer.RenderStartMenu(selected_item, visible_status);
+    while (!quit_application && !start_requested && !rebuild_menu_session) {
+      if (menu_screen == MenuScreen::Main) {
+        processMainMenuEvents(main_selected_item, menu_screen, start_requested,
+                              quit_application, audio.get());
+        renderer.RenderStartMenu(main_selected_item, "");
+      } else {
+        processConfigMenuEvents(config_selected_item, monster_amount,
+                                menu_screen, quit_application,
+                                rebuild_menu_session, open_config_after_rebuild,
+                                audio.get());
+        renderer.RenderConfigMenu(config_selected_item, monster_amount);
+      }
       sleep(40);
     }
 
     if (quit_application) {
       break;
+    }
+
+    if (rebuild_menu_session) {
+      continue;
     }
 
     for (int remaining = countdown_seconds; remaining > 0 && !quit_application;

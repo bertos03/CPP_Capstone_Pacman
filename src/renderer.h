@@ -40,6 +40,7 @@ public:
 
   void Render();
   void RenderStartMenu(int selected_item, const std::string &status_message);
+  void RenderConfigMenu(int selected_item, MonsterAmount monster_amount);
   void RenderCountdown(int seconds_left);
 
 private:
@@ -54,6 +55,7 @@ private:
                  const SDL_Color &border_color);
   void drawStartMenuOverlay(int selected_item,
                             const std::string &status_message);
+  void drawConfigMenuOverlay(int selected_item, MonsterAmount monster_amount);
   void drawCountdownOverlay(int seconds_left);
   void renderSimpleText(TTF_Font *font, const std::string &text,
                         const SDL_Color &color, int center_x, int top_y);

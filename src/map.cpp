@@ -17,6 +17,27 @@
 
 #include "map.h"
 
+bool Map::IsMonsterChar(char inp) {
+  return inp == MONSTER_FEW || inp == MONSTER_MEDIUM || inp == MONSTER_MANY;
+}
+
+bool Map::IsMonsterEnabled(char inp) {
+  if (!IsMonsterChar(inp)) {
+    return false;
+  }
+
+  switch (monster_amount) {
+  case MonsterAmount::Few:
+    return inp == MONSTER_FEW;
+  case MonsterAmount::Medium:
+    return inp == MONSTER_FEW || inp == MONSTER_MEDIUM;
+  case MonsterAmount::Many:
+    return true;
+  default:
+    return false;
+  }
+}
+
 /**
  * @brief convert char entry from ascii file to struct type
  *
@@ -37,8 +58,11 @@ ElementType Map::Char2Type(char inp) {
   case PACMAN:
     return ElementType::TYPE_PACMAN;
     break;
-  case MONSTER:
-    return ElementType::TYPE_MONSTER;
+  case MONSTER_FEW:
+  case MONSTER_MEDIUM:
+  case MONSTER_MANY:
+    return IsMonsterEnabled(inp) ? ElementType::TYPE_MONSTER
+                                 : ElementType::TYPE_PATH;
     break;
   default:
     return ElementType::TYPE_WALL;
@@ -60,7 +84,7 @@ char Map::Type2Char(ElementType inp) {
   case ElementType::TYPE_GOODIE:
     return GOODIE;
   case ElementType::TYPE_MONSTER:
-    return MONSTER;
+    return MONSTER_FEW;
   case ElementType::TYPE_PACMAN:
     return PACMAN;
   default:
@@ -74,7 +98,9 @@ char Map::Type2Char(ElementType inp) {
  * @param mappath: accepts a (valid) path with the ascii file containing the map
  * data
  */
-Map::Map() { LoadMap(MAP_PATH); }
+Map::Map(MonsterAmount _monster_amount) : monster_amount(_monster_amount) {
+  LoadMap(MAP_PATH);
+}
 
 Map::~Map() {}
 
@@ -84,13 +110,15 @@ Map::~Map() {}
  */
 void Map::LoadMap(const std::string mappath) {
   string line;
-  char *c_in;
   int max_length(0);
   bool border_necessary(false);
   bool border_necessary_bottom;
   int rows(0);
   MapCoord temp_coord;
   map = std::make_shared<vector<vector<ElementType>>>();
+  monster_coord.clear();
+  goodie_coord.clear();
+  pacman_coord = {0, 0};
   // TODO: Copy constructor!
 
   // check if file exists
@@ -143,19 +171,22 @@ void Map::LoadMap(const std::string mappath) {
     }
 
     for (int j = 0; j < max_length; j++) {
-      (*map)[i].push_back((j > line.length()) ? ElementType::TYPE_WALL
-                                              : Char2Type(line[j]));
-      if (Char2Type(line[j]) == ElementType::TYPE_MONSTER) {
+      const char map_char =
+          (j < static_cast<int>(line.length())) ? line[j] : BRICK;
+      const ElementType entry = Char2Type(map_char);
+      (*map)[i].push_back(entry);
+
+      if (entry == ElementType::TYPE_MONSTER) {
         temp_coord.u = i;
         temp_coord.v = j;
         monster_coord.push_back(temp_coord);
       }
-      if (Char2Type(line[j]) == ElementType::TYPE_GOODIE) {
+      if (entry == ElementType::TYPE_GOODIE) {
         temp_coord.u = i;
         temp_coord.v = j;
         goodie_coord.push_back(temp_coord);
       }
-      if (Char2Type(line[j]) == ElementType::TYPE_PACMAN) {
+      if (entry == ElementType::TYPE_PACMAN) {
         temp_coord.u = i;
         temp_coord.v = j;
         pacman_coord = temp_coord;

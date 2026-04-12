@@ -47,7 +47,9 @@
 #define PATH '.'
 #define GOODIE 'G'
 #define PACMAN 'P'
-#define MONSTER 'M'
+#define MONSTER_FEW 'M'
+#define MONSTER_MEDIUM 'N'
+#define MONSTER_MANY 'O'
 
 #define SPEED_PACMAN 8 // 1..10
 #define SPEED_MONSTER 6 // 1..10
