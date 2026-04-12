@@ -17,6 +17,7 @@
 
 #include "map.h"
 
+#include <array>
 #include <filesystem>
 
 namespace {
@@ -105,6 +106,10 @@ bool Map::IsMonsterChar(char inp) {
   return inp == MONSTER_FEW || inp == MONSTER_MEDIUM || inp == MONSTER_MANY;
 }
 
+bool Map::IsTeleporterChar(char inp) {
+  return inp >= '1' && inp <= '5';
+}
+
 bool Map::IsMonsterEnabled(char inp) {
   if (!IsMonsterChar(inp)) {
     return false;
@@ -134,6 +139,12 @@ ElementType Map::Char2Type(char inp) {
     return ElementType::TYPE_WALL;
   case PATH:
     return ElementType::TYPE_PATH;
+  case '1':
+  case '2':
+  case '3':
+  case '4':
+  case '5':
+    return ElementType::TYPE_TELEPORTER;
   case GOODIE:
     return ElementType::TYPE_GOODIE;
   case PACMAN:
@@ -160,6 +171,8 @@ char Map::Type2Char(ElementType inp) {
     return BRICK;
   case ElementType::TYPE_PATH:
     return PATH;
+  case ElementType::TYPE_TELEPORTER:
+    return '1';
   case ElementType::TYPE_GOODIE:
     return GOODIE;
   case ElementType::TYPE_MONSTER:
@@ -200,9 +213,11 @@ void Map::LoadMap(const std::string mappath) {
   monster_coord.clear();
   monster_chars.clear();
   goodie_coord.clear();
+  teleporter_pairs.clear();
   pacman_coord = {0, 0};
   map_name = map_file.display_name;
   const std::vector<std::string> &map_lines = map_file.layout_rows;
+  std::array<std::vector<MapCoord>, 5> teleporter_slots;
 
   if (map_lines.empty()) {
     std::cerr << "Map file contains no layout rows: " << mappath << "\n";
@@ -274,12 +289,33 @@ void Map::LoadMap(const std::string mappath) {
         temp_coord.v = j;
         pacman_coord = temp_coord;
       }
+      if (IsTeleporterChar(map_char)) {
+        temp_coord.u = i;
+        temp_coord.v = j;
+        teleporter_slots[map_char - '1'].push_back(temp_coord);
+      }
     }
 
     if (border_necessary) {
       (*map)[i].push_back(ElementType::TYPE_WALL);
     }
     i++;
+  }
+
+  for (size_t teleporter_index = 0; teleporter_index < teleporter_slots.size();
+       teleporter_index++) {
+    const char digit = static_cast<char>('1' + teleporter_index);
+    const size_t slot_count = teleporter_slots[teleporter_index].size();
+    if (slot_count != 0 && slot_count != 2) {
+      std::cerr << "Invalid teleporter definition in " << mappath
+                << ": digit " << digit
+                << " must appear exactly 0 or 2 times.\n";
+      exit(1);
+    }
+    if (slot_count == 2) {
+      teleporter_pairs.push_back({digit, teleporter_slots[teleporter_index][0],
+                                  teleporter_slots[teleporter_index][1]});
+    }
   }
 }
 
@@ -298,6 +334,30 @@ MapCoord Map::get_coord_goodie(int i) { return this->goodie_coord[i]; }
 MapCoord Map::get_coord_pacman() { return this->pacman_coord; }
 
 std::string Map::get_map_name() const { return map_name; }
+
+const std::vector<TeleporterPair> &Map::get_teleporter_pairs() const {
+  return teleporter_pairs;
+}
+
+bool Map::TryGetTeleporterDestination(MapCoord origin, MapCoord &destination,
+                                      char &digit) const {
+  for (const auto &teleporter_pair : teleporter_pairs) {
+    if (teleporter_pair.first.u == origin.u &&
+        teleporter_pair.first.v == origin.v) {
+      destination = teleporter_pair.second;
+      digit = teleporter_pair.digit;
+      return true;
+    }
+    if (teleporter_pair.second.u == origin.u &&
+        teleporter_pair.second.v == origin.v) {
+      destination = teleporter_pair.first;
+      digit = teleporter_pair.digit;
+      return true;
+    }
+  }
+  digit = '\0';
+  return false;
+}
 
 void Map::get_options(MapCoord in_coord, std::vector<Directions> &options) {
   options.clear();

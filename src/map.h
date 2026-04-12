@@ -19,6 +19,7 @@
 #define MAP_H
 
 #include <fstream>
+#include <array>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -44,9 +45,16 @@ struct MapFileData {
   std::vector<std::string> layout_rows;
 };
 
+struct TeleporterPair {
+  char digit;
+  MapCoord first;
+  MapCoord second;
+};
+
 enum class ElementType {
   TYPE_WALL,
   TYPE_PATH,
+  TYPE_TELEPORTER,
   TYPE_GOODIE,
   TYPE_PACMAN,
   TYPE_MONSTER
@@ -61,6 +69,7 @@ public:
   DiscoverAvailableMaps(const std::string &directory_path = MAPS_DIRECTORY_PATH);
   static bool LoadMapFile(const std::string &map_path, MapFileData &map_file);
   static bool SaveMapFile(const std::string &map_path, const MapFileData &map_file);
+  static bool IsTeleporterChar(char);
   size_t get_map_rows();
   size_t get_map_cols();
   ElementType map_entry(size_t, size_t);
@@ -74,6 +83,8 @@ public:
   MapCoord get_coord_pacman();
   std::string get_map_name() const;
   void get_options(MapCoord, std::vector<Directions>&);
+  const std::vector<TeleporterPair> &get_teleporter_pairs() const;
+  bool TryGetTeleporterDestination(MapCoord, MapCoord &, char &) const;
 
 protected:
 private:
@@ -83,6 +94,7 @@ private:
   std::vector<MapCoord> monster_coord;
   std::vector<char> monster_chars;
   std::vector<MapCoord> goodie_coord;
+  std::vector<TeleporterPair> teleporter_pairs;
   MapCoord pacman_coord;
   std::string map_name;
   std::string map_path;

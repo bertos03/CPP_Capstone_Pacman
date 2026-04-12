@@ -27,6 +27,14 @@ Pacman::Pacman(MapCoord _coord) {
   // std::cout << "Creating Pacman\n";
   lck.unlock();
   map_coord = _coord;
+  px_delta.x = 0;
+  px_delta.y = 0;
+  paralyzed_until_ticks = 0;
+  teleport_animation_active = false;
+  teleport_animation_started_ticks = 0;
+  teleport_animation_from_coord = _coord;
+  teleport_animation_to_coord = _coord;
+  teleport_arrival_sound_played = false;
 };
 
 /**
@@ -55,6 +63,14 @@ void Pacman::simulate(Events *events, Map *map) {
   lck.unlock();
 
   while (!events->is_quit()) {
+    if (SDL_GetTicks() < paralyzed_until_ticks) {
+      px_delta.x = 0;
+      px_delta.y = 0;
+      events->Keyreset();
+      sleep(15);
+      continue;
+    }
+
     next_move = events->get_next_move();
     map->get_options(map_coord, options);
     events->Keyreset();
@@ -63,33 +79,53 @@ void Pacman::simulate(Events *events, Map *map) {
       if (i == next_move) {
         switch (next_move) {
         case Directions::Up:
-          for (int i = 0; i > -100; i--) {
+          for (int i = 0; i > -100 && SDL_GetTicks() >= paralyzed_until_ticks;
+               i--) {
             px_delta.y = i;
             sleep(10 - SPEED_PACMAN);
+          }
+          if (SDL_GetTicks() < paralyzed_until_ticks) {
+            px_delta.y = 0;
+            break;
           }
           px_delta.y = 0;
           map_coord.u--;
           break;
         case Directions::Down:
-          for (int i = 0; i < 100; i++) {
+          for (int i = 0; i < 100 && SDL_GetTicks() >= paralyzed_until_ticks;
+               i++) {
             px_delta.y = i;
             sleep(10 - SPEED_PACMAN);
+          }
+          if (SDL_GetTicks() < paralyzed_until_ticks) {
+            px_delta.y = 0;
+            break;
           }
           px_delta.y = 0;
           map_coord.u++;
           break;
         case Directions::Left:
-          for (int i = 0; i > -100; i--) {
+          for (int i = 0; i > -100 && SDL_GetTicks() >= paralyzed_until_ticks;
+               i--) {
             px_delta.x = i;
             sleep(10 - SPEED_PACMAN);
+          }
+          if (SDL_GetTicks() < paralyzed_until_ticks) {
+            px_delta.x = 0;
+            break;
           }
           px_delta.x = 0;
           map_coord.v--;
           break;
         case Directions::Right:
-          for (int i = 0; i < 100; i++) {
+          for (int i = 0; i < 100 && SDL_GetTicks() >= paralyzed_until_ticks;
+               i++) {
             px_delta.x = i;
             sleep(10 - SPEED_PACMAN);
+          }
+          if (SDL_GetTicks() < paralyzed_until_ticks) {
+            px_delta.x = 0;
+            break;
           }
           px_delta.x = 0;
           map_coord.v++;

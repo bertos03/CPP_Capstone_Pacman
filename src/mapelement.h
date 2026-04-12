@@ -38,10 +38,12 @@ protected:
 
   bool is_active = true;
   bool locked = false;
+  char active_teleporter_digit = '\0';
   static std::mutex mtx;
   int id;
 
 private:
+  friend class Game;
 };
 
 #endif

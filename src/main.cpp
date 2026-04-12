@@ -18,6 +18,7 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <filesystem>
 #include <iostream>
@@ -304,6 +305,7 @@ MapValidationResult ValidateEditorMap(const MapFileData &map_file) {
   int pacman_count = 0;
   int goodie_count = 0;
   MapCoord pacman_coord{0, 0};
+  std::array<std::vector<MapCoord>, 5> teleporter_slots;
 
   for (int row = 0; row < rows; row++) {
     for (int col = 0; col < cols; col++) {
@@ -312,6 +314,8 @@ MapValidationResult ValidateEditorMap(const MapFileData &map_file) {
         pacman_coord = {row, col};
       } else if (layout[row][col] == GOODIE) {
         goodie_count++;
+      } else if (Map::IsTeleporterChar(layout[row][col])) {
+        teleporter_slots[layout[row][col] - '1'].push_back({row, col});
       }
     }
   }
@@ -321,6 +325,14 @@ MapValidationResult ValidateEditorMap(const MapFileData &map_file) {
   }
   if (goodie_count == 0) {
     return {false, "Warnung: Mindestens ein Goodie ist erforderlich"};
+  }
+  for (size_t teleporter_index = 0; teleporter_index < teleporter_slots.size();
+       teleporter_index++) {
+    const size_t count = teleporter_slots[teleporter_index].size();
+    if (count != 0 && count != 2) {
+      return {false,
+              "Warnung: Jede Teleporter-Ziffer 1-5 muss genau 2 Mal vorkommen"};
+    }
   }
 
   std::queue<MapCoord> open_cells;
@@ -348,6 +360,22 @@ MapValidationResult ValidateEditorMap(const MapFileData &map_file) {
       }
       visited[neighbour.u][neighbour.v] = true;
       open_cells.push(neighbour);
+    }
+
+    const char current_tile = layout[current.u][current.v];
+    if (Map::IsTeleporterChar(current_tile)) {
+      const auto &teleporter_positions = teleporter_slots[current_tile - '1'];
+      if (teleporter_positions.size() == 2) {
+        const MapCoord target =
+            (teleporter_positions[0].u == current.u &&
+             teleporter_positions[0].v == current.v)
+                ? teleporter_positions[1]
+                : teleporter_positions[0];
+        if (!visited[target.u][target.v]) {
+          visited[target.u][target.v] = true;
+          open_cells.push(target);
+        }
+      }
     }
   }
 
@@ -593,6 +621,14 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
         break;
       case SDLK_o:
         PlaceEditorTile(editor_state, MONSTER_MANY);
+        break;
+      case SDLK_1:
+      case SDLK_2:
+      case SDLK_3:
+      case SDLK_4:
+      case SDLK_5:
+        PlaceEditorTile(editor_state,
+                        static_cast<char>(event.key.keysym.sym));
         break;
       case SDLK_ESCAPE:
         if (editor_state.validation.is_valid) {

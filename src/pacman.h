@@ -18,6 +18,8 @@
 #ifndef PACMAN_H
 #define PACMAN_H
 
+#include <SDL.h>
+
 #include <iostream>
 #include <mutex>
 #include <vector>
@@ -48,6 +50,12 @@ protected:
 private:
   bool is_locked;
   Map *map;
+  Uint32 paralyzed_until_ticks;
+  bool teleport_animation_active;
+  Uint32 teleport_animation_started_ticks;
+  MapCoord teleport_animation_from_coord;
+  MapCoord teleport_animation_to_coord;
+  bool teleport_arrival_sound_played;
   friend class Renderer;
   friend class Game;
 };

@@ -29,7 +29,12 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char) {
   id = _id;
   // std::cout << "Creating monster #" << id << "\n";
   map_coord = _coord;
+  death_coord = _coord;
   monster_char = _monster_char;
+  is_alive = true;
+  last_fireball_ticks = 0;
+  next_gas_cloud_ticks = 0;
+  death_started_ticks = 0;
   px_delta.x = 0;
   px_delta.y = 0;
 }
@@ -51,44 +56,62 @@ void Monster::simulate(Events *events, Map *map) {
   map->get_options(map_coord, options);
   next_move = options[rand() % options.size()];
 
-  while (!events->is_quit()) {
+  while (!events->is_quit() && is_alive) {
     // carry out next monster move ... do it with a little dirty hack to enable
     // smooth moving
     switch (next_move) {
     case Directions::Up:
-      for (int i = 0; i > -100; i--) {
+      for (int i = 0; i > -100 && is_alive; i--) {
         px_delta.y = i;
         sleep(10-SPEED_MONSTER);
+      }
+      if (!is_alive) {
+        break;
       }
       px_delta.y = 0;
       map_coord.u--;
       break;
     case Directions::Down:
-      for (int i = 0; i < 100; i++) {
+      for (int i = 0; i < 100 && is_alive; i++) {
         px_delta.y = i;
         sleep(10-SPEED_MONSTER);
+      }
+      if (!is_alive) {
+        break;
       }
       px_delta.y = 0;
       map_coord.u++;
       break;
     case Directions::Left:
-      for (int i = 0; i > -100; i--) {
+      for (int i = 0; i > -100 && is_alive; i--) {
         px_delta.x = i;
         sleep(10-SPEED_MONSTER);
+      }
+      if (!is_alive) {
+        break;
       }
       px_delta.x = 0;
       map_coord.v--;
       break;
     case Directions::Right:
-      for (int i = 0; i < 100; i++) {
+      for (int i = 0; i < 100 && is_alive; i++) {
         px_delta.x = i;
         sleep(10-SPEED_MONSTER);
+      }
+      if (!is_alive) {
+        break;
       }
       px_delta.x = 0;
       map_coord.v++;
     default:
       break;
     };
+
+    if (!is_alive) {
+      px_delta.x = 0;
+      px_delta.y = 0;
+      break;
+    }
 
     
     map->get_options(map_coord, options);

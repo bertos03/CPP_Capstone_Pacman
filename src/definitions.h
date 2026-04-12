@@ -32,7 +32,7 @@
 #define FONT_COLOR &white
 #define WINDOW_TITLE "Bobman"
 
-#define GAME_START_COUNTDOWN 5 // allowed values: 3..9 seconds
+#define GAME_START_COUNTDOWN 3 // allowed values: 3..9 seconds
 
 #define COIN_SOUND_PATH "../data/coin.wav"
 #define WIN_SOUND_PATH "../data/win.wav"
@@ -42,6 +42,18 @@
 #define PACMAN_PATH "../data/pacman.bmp"
 #define GOODIE_PATH "../data/goodie.bmp"
 #define MONSTER_PATH "../data/monster.bmp"
+#define MONSTER_FRAME_1_PATH "../data/monster_1.bmp"
+#define MONSTER_FRAME_2_PATH "../data/monster_2.bmp"
+#define MONSTER_FRAME_3_PATH "../data/monster_3.bmp"
+
+#define MONSTER_ANIMATION_FRAME_MS 180
+#define FIREBALL_STEP_DURATION_MS 160 // higher values make fireballs slower
+#define MONSTER_GAS_MIN_INTERVAL_MS 30000
+#define MONSTER_GAS_MAX_INTERVAL_MS 60000
+#define GAS_CLOUD_ACTIVE_MS 5000
+#define GAS_CLOUD_FADE_MS 1000
+#define PACMAN_PARALYSIS_MS 2000
+#define TELEPORT_ANIMATION_PHASE_MS 1000
 
 #define BRICK 'x'
 #define PATH '.'

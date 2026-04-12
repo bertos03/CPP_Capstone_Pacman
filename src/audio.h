@@ -39,6 +39,13 @@ public:
   void PlayMenuSelect();
   void PlayCountdownTick();
   void PlayStartTrumpet();
+  void PlayMonsterShot();
+  void PlayFireballWallHit();
+  void PlayMonsterExplosion();
+  void PlayMonsterFart();
+  void PlayPacmanGag();
+  void PlayTeleporterZap();
+  void PlayTeleporterArc();
 
 protected:
 private:
@@ -47,6 +54,11 @@ private:
                               double release_ms);
   Mix_Chunk *CreateTrumpetChunk();
   Mix_Chunk *CreateViolinLamentChunk();
+  Mix_Chunk *CreateMonsterExplosionChunk();
+  Mix_Chunk *CreateMonsterFartChunk();
+  Mix_Chunk *CreatePacmanGagChunk();
+  Mix_Chunk *CreateTeleporterZapChunk();
+  Mix_Chunk *CreateTeleporterArcChunk();
   void PlayChunk(Mix_Chunk *);
 
   Mix_Chunk *SFX_coin;
@@ -56,6 +68,13 @@ private:
   Mix_Chunk *SFX_menu_select;
   Mix_Chunk *SFX_countdown_tick;
   Mix_Chunk *SFX_start_trumpet;
+  Mix_Chunk *SFX_monster_shot;
+  Mix_Chunk *SFX_fireball_wall_hit;
+  Mix_Chunk *SFX_monster_explosion;
+  Mix_Chunk *SFX_monster_fart;
+  Mix_Chunk *SFX_pacman_gag;
+  Mix_Chunk *SFX_teleporter_zap;
+  Mix_Chunk *SFX_teleporter_arc;
   bool audio_ready;
 #endif
 };

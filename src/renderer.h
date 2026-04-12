@@ -62,6 +62,10 @@ private:
   void renderLayoutFrame(const std::vector<std::string> &layout);
   void drawmap();
   void drawLayout(const std::vector<std::string> &layout);
+  void drawteleporters();
+  void drawLayoutTeleporters(const std::vector<std::string> &layout);
+  void drawTeleporterGlyph(const SDL_Rect &teleporter_rect, char teleporter_digit,
+                           int animation_seed);
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
@@ -69,6 +73,9 @@ private:
   void drawStaticMonsters();
   void drawStaticGoodies();
   void drawLayoutEntities(const std::vector<std::string> &layout);
+  void drawgasclouds();
+  void drawfireballs();
+  void draweffects();
   void drawDefeatEffect();
   void drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
                        int shimmer_seed);
@@ -95,6 +102,8 @@ private:
                         const SDL_Color &color, int center_x, int top_y);
   void renderBrickText(TTF_Font *font, const std::string &text, int center_x,
                        int top_y, const SDL_Color &outline_color);
+  SDL_Texture *getMonsterTexture(int animation_seed);
+  int getMonsterAnimationFrame(int animation_seed) const;
   SDL_Surface *createBrickTextSurface(TTF_Font *font, const std::string &text,
                                       const SDL_Color &outline_color);
   Uint32 readPixel(SDL_Surface *surface, int x, int y);
@@ -124,8 +133,8 @@ private:
   SDL_Texture *sdl_goodie_texture;
   SDL_Rect sdl_goodie_rect;
 
-  SDL_Surface *sdl_monster_surface;
-  SDL_Texture *sdl_monster_texture;
+  std::vector<SDL_Surface *> sdl_monster_surfaces;
+  std::vector<SDL_Texture *> sdl_monster_textures;
   SDL_Rect sdl_monster_rect;
 
   SDL_Surface *sdl_pacman_surface;

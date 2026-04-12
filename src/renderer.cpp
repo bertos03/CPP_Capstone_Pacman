@@ -39,6 +39,11 @@ const SDL_Color kBrickOutlineColor{78, 20, 14, 255};
 const SDL_Color kFewMonsterGlowColor{120, 210, 255, 255};
 const SDL_Color kMediumMonsterGlowColor{255, 170, 72, 255};
 const SDL_Color kManyMonsterGlowColor{255, 82, 82, 255};
+const SDL_Color kTeleporterBlue{78, 160, 255, 255};
+const SDL_Color kTeleporterRed{255, 104, 104, 255};
+const SDL_Color kTeleporterGreen{110, 205, 118, 255};
+const SDL_Color kTeleporterGrey{172, 176, 186, 255};
+const SDL_Color kTeleporterYellow{244, 214, 88, 255};
 
 const char *MonsterAmountLabel(MonsterAmount monster_amount) {
   switch (monster_amount) {
@@ -65,6 +70,42 @@ SDL_Color MonsterGlowColor(char monster_char) {
   }
 }
 
+SDL_Color TeleporterColor(char teleporter_digit) {
+  switch (teleporter_digit) {
+  case '1':
+    return kTeleporterBlue;
+  case '2':
+    return kTeleporterRed;
+  case '3':
+    return kTeleporterGreen;
+  case '4':
+    return kTeleporterGrey;
+  case '5':
+  default:
+    return kTeleporterYellow;
+  }
+}
+
+MapCoord StepRenderCoord(MapCoord coord, Directions direction) {
+  switch (direction) {
+  case Directions::Up:
+    coord.u--;
+    break;
+  case Directions::Down:
+    coord.u++;
+    break;
+  case Directions::Left:
+    coord.v--;
+    break;
+  case Directions::Right:
+    coord.v++;
+    break;
+  default:
+    break;
+  }
+  return coord;
+}
+
 } // namespace
 
 Renderer::Renderer(Map *_map, Game *_game)
@@ -72,8 +113,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       offset_y(0), rows(0), cols(0), map(_map), game(_game),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
-      sdl_goodie_texture(nullptr), sdl_monster_surface(nullptr),
-      sdl_monster_texture(nullptr), sdl_pacman_surface(nullptr),
+      sdl_goodie_texture(nullptr), sdl_pacman_surface(nullptr),
       sdl_pacman_texture(nullptr), sdl_logo_brick_surface(nullptr),
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
@@ -86,8 +126,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       offset_y(0), rows(0), cols(0), map(nullptr), game(nullptr),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
-      sdl_goodie_texture(nullptr), sdl_monster_surface(nullptr),
-      sdl_monster_texture(nullptr), sdl_pacman_surface(nullptr),
+      sdl_goodie_texture(nullptr), sdl_pacman_surface(nullptr),
       sdl_pacman_texture(nullptr), sdl_logo_brick_surface(nullptr),
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
@@ -179,11 +218,23 @@ void Renderer::initializeRenderer(size_t row_count_value,
 
   sdl_wall_surface = SDL_LoadBMP(WALL_PATH);
   sdl_goodie_surface = SDL_LoadBMP(GOODIE_PATH);
-  sdl_monster_surface = SDL_LoadBMP(MONSTER_PATH);
   sdl_pacman_surface = SDL_LoadBMP(PACMAN_PATH);
 
+  const std::vector<const char *> monster_frame_paths{
+      MONSTER_PATH, MONSTER_FRAME_1_PATH, MONSTER_FRAME_2_PATH,
+      MONSTER_FRAME_3_PATH};
+  for (const char *monster_frame_path : monster_frame_paths) {
+    SDL_Surface *monster_surface = SDL_LoadBMP(monster_frame_path);
+    if (monster_surface == nullptr) {
+      std::cerr << "Could not open monster sprite asset "
+                << monster_frame_path << ": " << SDL_GetError() << "\n";
+      exit(1);
+    }
+    sdl_monster_surfaces.push_back(monster_surface);
+  }
+
   if (sdl_goodie_surface == nullptr || sdl_wall_surface == nullptr ||
-      sdl_monster_surface == nullptr || sdl_pacman_surface == nullptr) {
+      sdl_pacman_surface == nullptr) {
     std::cerr << "Could not open sprite assets: " << SDL_GetError() << "\n";
     exit(1);
   }
@@ -192,10 +243,18 @@ void Renderer::initializeRenderer(size_t row_count_value,
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_wall_surface);
   sdl_goodie_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_goodie_surface);
-  sdl_monster_texture =
-      SDL_CreateTextureFromSurface(sdl_renderer, sdl_monster_surface);
   sdl_pacman_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_pacman_surface);
+  for (SDL_Surface *monster_surface : sdl_monster_surfaces) {
+    SDL_Texture *monster_texture =
+        SDL_CreateTextureFromSurface(sdl_renderer, monster_surface);
+    if (monster_texture == nullptr) {
+      std::cerr << "Could not create monster texture: " << SDL_GetError()
+                << "\n";
+      exit(1);
+    }
+    sdl_monster_textures.push_back(monster_texture);
+  }
 
   SDL_Surface *brick_surface = IMG_Load(LOGO_BRICK_TEXTURE_PATH);
   if (brick_surface == nullptr) {
@@ -223,8 +282,10 @@ Renderer::~Renderer() {
   if (sdl_goodie_texture != nullptr) {
     SDL_DestroyTexture(sdl_goodie_texture);
   }
-  if (sdl_monster_texture != nullptr) {
-    SDL_DestroyTexture(sdl_monster_texture);
+  for (SDL_Texture *monster_texture : sdl_monster_textures) {
+    if (monster_texture != nullptr) {
+      SDL_DestroyTexture(monster_texture);
+    }
   }
   if (sdl_pacman_texture != nullptr) {
     SDL_DestroyTexture(sdl_pacman_texture);
@@ -242,8 +303,10 @@ Renderer::~Renderer() {
   if (sdl_goodie_surface != nullptr) {
     SDL_FreeSurface(sdl_goodie_surface);
   }
-  if (sdl_monster_surface != nullptr) {
-    SDL_FreeSurface(sdl_monster_surface);
+  for (SDL_Surface *monster_surface : sdl_monster_surfaces) {
+    if (monster_surface != nullptr) {
+      SDL_FreeSurface(monster_surface);
+    }
   }
   if (sdl_pacman_surface != nullptr) {
     SDL_FreeSurface(sdl_pacman_surface);
@@ -340,10 +403,14 @@ void Renderer::renderFrame(bool show_hud) {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
   drawmap();
+  drawteleporters();
   if (game != nullptr) {
     drawgoodies();
     drawpacman();
     drawmonsters();
+    drawgasclouds();
+    drawfireballs();
+    draweffects();
   } else {
     drawStaticGoodies();
     drawStaticPacman();
@@ -358,6 +425,7 @@ void Renderer::renderLayoutFrame(const std::vector<std::string> &layout) {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
   drawLayout(layout);
+  drawLayoutTeleporters(layout);
   drawLayoutEntities(layout);
 }
 
@@ -741,7 +809,7 @@ void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
   const std::string line_one =
       "Pfeile bewegen | X/W=Mauer | Leer/Entf=Weg | G=Goodie";
   const std::string line_two =
-      "P=Spielfigur | M/N/O=Monster | Esc oeffnet den Dialog";
+      "P=Spielfigur | M/N/O=Monster | 1-5=Teleport | Esc oeffnet Dialog";
   renderSimpleText(sdl_font_hud, line_one, kHudTextColor, screen_res_x / 2,
                    info_panel.y + 18);
   renderSimpleText(sdl_font_hud, line_two, kHudTextColor, screen_res_x / 2,
@@ -843,6 +911,27 @@ void Renderer::drawCountdownOverlay(int seconds_left) {
       sdl_font_display, std::to_string(seconds_left), screen_res_x / 2,
       panel.y + (panel.h - TTF_FontHeight(sdl_font_display)) / 2,
       kBrickOutlineColor);
+}
+
+int Renderer::getMonsterAnimationFrame(int animation_seed) const {
+  if (sdl_monster_textures.empty()) {
+    return 0;
+  }
+
+  const Uint32 total_offset =
+      static_cast<Uint32>((animation_seed * 137) %
+                          (MONSTER_ANIMATION_FRAME_MS *
+                           static_cast<int>(sdl_monster_textures.size())));
+  const Uint32 frame_clock = SDL_GetTicks() + total_offset;
+  return static_cast<int>(
+      (frame_clock / MONSTER_ANIMATION_FRAME_MS) % sdl_monster_textures.size());
+}
+
+SDL_Texture *Renderer::getMonsterTexture(int animation_seed) {
+  if (sdl_monster_textures.empty()) {
+    return nullptr;
+  }
+  return sdl_monster_textures[getMonsterAnimationFrame(animation_seed)];
 }
 
 void Renderer::renderSimpleText(TTF_Font *font, const std::string &text,
@@ -1067,6 +1156,62 @@ void Renderer::drawpacman() {
     return;
   }
 
+  if (game->pacman->teleport_animation_active) {
+    const Uint32 elapsed =
+        SDL_GetTicks() - game->pacman->teleport_animation_started_ticks;
+    const bool in_departure_phase = elapsed < TELEPORT_ANIMATION_PHASE_MS;
+    const double phase_progress =
+        std::clamp(static_cast<double>(
+                       in_departure_phase ? elapsed
+                                          : (elapsed - TELEPORT_ANIMATION_PHASE_MS)) /
+                       static_cast<double>(TELEPORT_ANIMATION_PHASE_MS),
+                   0.0, 1.0);
+    const MapCoord render_coord =
+        in_departure_phase ? game->pacman->teleport_animation_from_coord
+                           : game->pacman->teleport_animation_to_coord;
+    const double scale = in_departure_phase ? (1.0 - phase_progress)
+                                            : phase_progress;
+    const double rotation =
+        (in_departure_phase ? phase_progress : (1.0 + phase_progress)) * 1080.0;
+    const PixelCoord base_px = getPixelCoord(render_coord, 0, 0);
+    const int size =
+        std::max(1, static_cast<int>(element_size * 0.9 * std::max(0.0, scale)));
+    const SDL_Rect animated_rect{
+        base_px.x + element_size / 2 - size / 2,
+        base_px.y + element_size / 2 - size / 2, size, size};
+    const SDL_Point rotation_center{size / 2, size / 2};
+
+    const Uint8 spark_alpha = static_cast<Uint8>(
+        std::clamp((in_departure_phase ? (1.0 - phase_progress)
+                                       : (0.35 + 0.65 * phase_progress)) *
+                       170.0,
+                   0.0, 200.0));
+    SDL_SetRenderDrawColor(sdl_renderer, 130, 214, 255, spark_alpha / 2);
+    SDL_RenderFillCircle(sdl_renderer, base_px.x + element_size / 2,
+                         base_px.y + element_size / 2,
+                         std::max(3, static_cast<int>(element_size * 0.42 * scale)));
+    SDL_SetRenderDrawColor(sdl_renderer, 220, 245, 255, spark_alpha);
+    for (int spark = 0; spark < 5; spark++) {
+      const double angle =
+          (rotation / 180.0) * 3.1415926535 + spark * (2.0 * 3.1415926535 / 5.0);
+      const int spark_length =
+          std::max(4, static_cast<int>(element_size * (0.10 + 0.14 * scale)));
+      SDL_RenderDrawLine(
+          sdl_renderer, base_px.x + element_size / 2,
+          base_px.y + element_size / 2,
+          base_px.x + element_size / 2 +
+              static_cast<int>(std::cos(angle) * spark_length),
+          base_px.y + element_size / 2 +
+              static_cast<int>(std::sin(angle) * spark_length));
+    }
+
+    if (size > 1) {
+      SDL_RenderCopyEx(sdl_renderer, sdl_pacman_texture, nullptr, &animated_rect,
+                       rotation, &rotation_center, SDL_FLIP_NONE);
+    }
+    return;
+  }
+
   game->pacman->px_coord = getPixelCoord(
       game->pacman->map_coord, element_size * game->pacman->px_delta.x / 100.0,
       element_size * game->pacman->px_delta.y / 100.0);
@@ -1197,6 +1342,15 @@ void Renderer::drawmonsters() {
   }
 
   for (auto monster : game->monsters) {
+    if (!monster->is_alive) {
+      continue;
+    }
+
+    SDL_Texture *monster_texture = getMonsterTexture(monster->id);
+    if (monster_texture == nullptr) {
+      continue;
+    }
+
     monster->px_coord = getPixelCoord(
         monster->map_coord, element_size * monster->px_delta.x / 100.0,
         element_size * monster->px_delta.y / 100.0);
@@ -1205,8 +1359,156 @@ void Renderer::drawmonsters() {
                  monster->px_coord.y + int(element_size * 0.05),
                  int(element_size * 0.9), int(element_size * 0.9)};
     drawMonsterGlow(sdl_monster_rect, monster->monster_char, monster->id);
-    SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
-                   &sdl_monster_rect);
+    SDL_RenderCopy(sdl_renderer, monster_texture, nullptr, &sdl_monster_rect);
+  }
+}
+
+void Renderer::drawfireballs() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  for (const auto &fireball : game->fireballs) {
+    const MapCoord next_coord = StepRenderCoord(fireball.current_coord,
+                                                fireball.direction);
+    const PixelCoord start_px = getPixelCoord(fireball.current_coord, 0, 0);
+    const PixelCoord end_px = getPixelCoord(next_coord, 0, 0);
+    const double progress = std::clamp(
+        static_cast<double>(SDL_GetTicks() - fireball.segment_started_ticks) /
+            static_cast<double>(FIREBALL_STEP_DURATION_MS),
+        0.0, 1.0);
+
+    const int start_center_x = start_px.x + element_size / 2;
+    const int start_center_y = start_px.y + element_size / 2;
+    const int end_center_x = end_px.x + element_size / 2;
+    const int end_center_y = end_px.y + element_size / 2;
+    const int center_x =
+        start_center_x + static_cast<int>((end_center_x - start_center_x) * progress);
+    const int center_y =
+        start_center_y + static_cast<int>((end_center_y - start_center_y) * progress);
+    const int trail_x =
+        center_x - static_cast<int>((end_center_x - start_center_x) * 0.28);
+    const int trail_y =
+        center_y - static_cast<int>((end_center_y - start_center_y) * 0.28);
+
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 110, 24, 120);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                         std::max(4, element_size / 4));
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 190, 70, 175);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                         std::max(3, element_size / 6));
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 230, 140, 220);
+    SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, center_x, center_y);
+  }
+}
+
+void Renderer::drawgasclouds() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  for (const auto &cloud : game->gas_clouds) {
+    double alpha_factor = 1.0;
+    if (cloud.is_fading) {
+      alpha_factor =
+          1.0 - std::clamp(static_cast<double>(now - cloud.fade_started_ticks) /
+                               static_cast<double>(GAS_CLOUD_FADE_MS),
+                           0.0, 1.0);
+    }
+
+    if (alpha_factor <= 0.0) {
+      continue;
+    }
+
+    const PixelCoord cloud_px = getPixelCoord(cloud.coord, 0, 0);
+    const int center_x = cloud_px.x + element_size / 2;
+    const int center_y = cloud_px.y + element_size / 2;
+    const double wobble_clock =
+        (static_cast<double>(now + cloud.animation_seed * 67) / 210.0);
+    const int base_radius = std::max(5, static_cast<int>(element_size * 0.23));
+    const Uint8 base_alpha =
+        static_cast<Uint8>(std::clamp(145.0 * alpha_factor, 0.0, 190.0));
+
+    for (int puff = 0; puff < 5; puff++) {
+      const double puff_phase = wobble_clock + puff * 1.17;
+      const int offset_x =
+          static_cast<int>(std::cos(puff_phase) * element_size * 0.14);
+      const int offset_y =
+          static_cast<int>(std::sin(puff_phase * 1.23) * element_size * 0.11);
+      const int puff_radius =
+          base_radius + static_cast<int>((1.0 + std::sin(puff_phase * 1.4)) *
+                                         element_size * 0.08);
+
+      SDL_SetRenderDrawColor(sdl_renderer, 118, 168, 82, base_alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x + offset_x,
+                           center_y + offset_y, puff_radius);
+      SDL_SetRenderDrawColor(sdl_renderer, 170, 190, 104,
+                             std::min(255, base_alpha / 2 + 30));
+      SDL_RenderFillCircle(sdl_renderer,
+                           center_x + offset_x / 2 + puff_radius / 3,
+                           center_y + offset_y / 2 - puff_radius / 4,
+                           std::max(3, puff_radius / 2));
+    }
+
+    SDL_SetRenderDrawColor(
+        sdl_renderer, 150, 214, 128,
+        static_cast<Uint8>(std::clamp(80.0 * alpha_factor, 0.0, 100.0)));
+    SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                         std::max(7, static_cast<int>(element_size * 0.34)));
+  }
+}
+
+void Renderer::draweffects() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  for (const auto &effect : game->effects) {
+    const PixelCoord effect_px = getPixelCoord(effect.coord, 0, 0);
+    const int center_x = effect_px.x + element_size / 2;
+    const int center_y = effect_px.y + element_size / 2;
+    const Uint32 elapsed = SDL_GetTicks() - effect.started_ticks;
+
+    if (effect.type == EffectType::MonsterExplosion) {
+      const double progress =
+          std::clamp(static_cast<double>(elapsed) / 520.0, 0.0, 1.0);
+      const int outer_radius =
+          std::max(5, static_cast<int>(element_size * (0.18 + 0.42 * progress)));
+      const int inner_radius =
+          std::max(3, static_cast<int>(element_size * (0.10 + 0.22 * progress)));
+      const Uint8 alpha =
+          static_cast<Uint8>(std::clamp(210.0 * (1.0 - progress), 0.0, 210.0));
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 88, 40, alpha / 2);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 180, 72, alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, inner_radius);
+
+      for (int spark = 0; spark < 6; spark++) {
+        const double angle =
+            progress * 4.0 + spark * (2.0 * 3.1415926535 / 6.0);
+        const int length =
+            std::max(4, static_cast<int>(element_size * (0.20 + 0.35 * progress)));
+        const int x2 = center_x + static_cast<int>(std::cos(angle) * length);
+        const int y2 = center_y + static_cast<int>(std::sin(angle) * length);
+        SDL_SetRenderDrawColor(sdl_renderer, 255, 220, 120, alpha);
+        SDL_RenderDrawLine(sdl_renderer, center_x, center_y, x2, y2);
+      }
+    } else {
+      const double progress =
+          std::clamp(static_cast<double>(elapsed) / 180.0, 0.0, 1.0);
+      const int radius =
+          std::max(3, static_cast<int>(element_size * (0.14 + 0.12 * progress)));
+      const Uint8 alpha =
+          static_cast<Uint8>(std::clamp(180.0 * (1.0 - progress), 0.0, 180.0));
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 210, 150, alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, radius);
+      SDL_SetRenderDrawColor(sdl_renderer, 210, 190, 180, alpha);
+      SDL_RenderDrawLine(sdl_renderer, center_x - radius, center_y - radius,
+                         center_x + radius, center_y + radius);
+      SDL_RenderDrawLine(sdl_renderer, center_x - radius, center_y + radius,
+                         center_x + radius, center_y - radius);
+    }
   }
 }
 
@@ -1232,6 +1534,7 @@ void Renderer::drawmap() {
         SDL_RenderCopy(sdl_renderer, sdl_wall_texture, nullptr, &sdl_wall_rect);
         break;
       case ElementType::TYPE_PATH:
+      case ElementType::TYPE_TELEPORTER:
       case ElementType::TYPE_GOODIE:
       case ElementType::TYPE_PACMAN:
       case ElementType::TYPE_MONSTER:
@@ -1242,6 +1545,30 @@ void Renderer::drawmap() {
         SDL_RenderFillRect(sdl_renderer, &block);
         break;
       }
+    }
+  }
+}
+
+void Renderer::drawteleporters() {
+  if (map == nullptr) {
+    return;
+  }
+
+  for (size_t teleporter_index = 0;
+       teleporter_index < map->get_teleporter_pairs().size(); teleporter_index++) {
+    const auto &teleporter_pair = map->get_teleporter_pairs()[teleporter_index];
+    const std::vector<MapCoord> positions{teleporter_pair.first,
+                                          teleporter_pair.second};
+    for (size_t position_index = 0; position_index < positions.size();
+         position_index++) {
+      const PixelCoord teleporter_px = getPixelCoord(positions[position_index], 0, 0);
+      SDL_Rect teleporter_rect{teleporter_px.x + int(element_size * 0.08),
+                               teleporter_px.y + int(element_size * 0.08),
+                               int(element_size * 0.84),
+                               int(element_size * 0.84)};
+      drawTeleporterGlyph(
+          teleporter_rect, teleporter_pair.digit,
+          static_cast<int>(teleporter_index * 19 + position_index * 7));
     }
   }
 }
@@ -1268,6 +1595,76 @@ void Renderer::drawLayout(const std::vector<std::string> &layout) {
   }
 }
 
+void Renderer::drawLayoutTeleporters(const std::vector<std::string> &layout) {
+  for (size_t row = 0; row < layout.size(); row++) {
+    for (size_t col = 0; col < layout[row].size(); col++) {
+      if (!Map::IsTeleporterChar(layout[row][col])) {
+        continue;
+      }
+
+      const int x = offset_x + 1 + static_cast<int>(col) * (element_size + 1);
+      const int y = offset_y + 1 + static_cast<int>(row) * (element_size + 1);
+      SDL_Rect teleporter_rect{x + int(element_size * 0.08),
+                               y + int(element_size * 0.08),
+                               int(element_size * 0.84),
+                               int(element_size * 0.84)};
+      drawTeleporterGlyph(
+          teleporter_rect, layout[row][col],
+          static_cast<int>(row * layout[row].size() + col));
+    }
+  }
+}
+
+void Renderer::drawTeleporterGlyph(const SDL_Rect &teleporter_rect,
+                                   char teleporter_digit,
+                                   int animation_seed) {
+  const SDL_Color portal_color = TeleporterColor(teleporter_digit);
+  const int center_x = teleporter_rect.x + teleporter_rect.w / 2;
+  const int center_y = teleporter_rect.y + teleporter_rect.h / 2;
+  const int max_radius = std::max(5, teleporter_rect.w / 2 - 1);
+  const double time =
+      static_cast<double>(SDL_GetTicks() + animation_seed * 113) / 480.0;
+
+  SDL_SetRenderDrawColor(sdl_renderer, portal_color.r / 5, portal_color.g / 5,
+                         portal_color.b / 5, 170);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(3, max_radius - 2));
+
+  for (int arm = 0; arm < 3; arm++) {
+    for (int step = 0; step < 18; step++) {
+      const double progress = static_cast<double>(step) / 17.0;
+      const double angle = time + arm * (2.0 * 3.1415926535 / 3.0) +
+                           progress * 4.5;
+      const double radius = max_radius * (0.18 + progress * 0.72);
+      const int point_x =
+          center_x + static_cast<int>(std::cos(angle) * radius * 1.05);
+      const int point_y =
+          center_y + static_cast<int>(std::sin(angle) * radius * 0.72);
+      const int point_radius =
+          std::max(1, static_cast<int>((1.0 - progress) * max_radius * 0.18));
+      const Uint8 alpha = static_cast<Uint8>(
+          std::clamp(235.0 * (1.0 - progress * 0.55), 40.0, 235.0));
+
+      SDL_SetRenderDrawColor(sdl_renderer, portal_color.r, portal_color.g,
+                             portal_color.b, alpha);
+      SDL_RenderFillCircle(sdl_renderer, point_x, point_y, point_radius);
+
+      if (step % 4 == 0) {
+        SDL_SetRenderDrawColor(sdl_renderer, 246, 244, 255, alpha / 2 + 40);
+        SDL_RenderFillCircle(sdl_renderer, point_x + point_radius / 2,
+                             point_y - point_radius / 2, 1);
+      }
+    }
+  }
+
+  SDL_SetRenderDrawColor(sdl_renderer, 245, 242, 232, 165);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(2, max_radius / 5));
+  SDL_SetRenderDrawColor(sdl_renderer, portal_color.r, portal_color.g,
+                         portal_color.b, 190);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y, max_radius);
+}
+
 void Renderer::drawStaticPacman() {
   if (map == nullptr) {
     return;
@@ -1287,14 +1684,18 @@ void Renderer::drawStaticMonsters() {
   }
 
   for (int i = 0; i < map->get_number_monsters(); i++) {
+    SDL_Texture *monster_texture = getMonsterTexture(i);
+    if (monster_texture == nullptr) {
+      continue;
+    }
+
     const PixelCoord monster_px = getPixelCoord(map->get_coord_monster(i), 0, 0);
     sdl_monster_rect =
         SDL_Rect{monster_px.x + int(element_size * 0.05),
                  monster_px.y + int(element_size * 0.05),
                  int(element_size * 0.9), int(element_size * 0.9)};
     drawMonsterGlow(sdl_monster_rect, map->get_char_monster(i), i);
-    SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
-                   &sdl_monster_rect);
+    SDL_RenderCopy(sdl_renderer, monster_texture, nullptr, &sdl_monster_rect);
   }
 }
 
@@ -1336,13 +1737,18 @@ void Renderer::drawLayoutEntities(const std::vector<std::string> &layout) {
                        &sdl_pacman_rect);
       } else if (entry == MONSTER_FEW || entry == MONSTER_MEDIUM ||
                  entry == MONSTER_MANY) {
+        const int animation_seed =
+            static_cast<int>(row * layout[row].size() + col);
+        SDL_Texture *monster_texture = getMonsterTexture(animation_seed);
+        if (monster_texture == nullptr) {
+          continue;
+        }
         sdl_monster_rect = SDL_Rect{x + int(element_size * 0.05),
                                     y + int(element_size * 0.05),
                                     int(element_size * 0.9),
                                     int(element_size * 0.9)};
-        drawMonsterGlow(sdl_monster_rect, entry,
-                        static_cast<int>(row * layout[row].size() + col));
-        SDL_RenderCopy(sdl_renderer, sdl_monster_texture, nullptr,
+        drawMonsterGlow(sdl_monster_rect, entry, animation_seed);
+        SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
                        &sdl_monster_rect);
       }
     }

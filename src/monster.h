@@ -18,6 +18,8 @@
 #ifndef MONSTER_H
 #define MONSTER_H
 
+#include <SDL.h>
+
 #include <mutex>
 #include <thread>
 #include <iostream>
@@ -42,6 +44,11 @@ protected:
 private:
 std::vector<Directions> options;
 char monster_char;
+bool is_alive;
+Uint32 last_fireball_ticks;
+Uint32 next_gas_cloud_ticks;
+Uint32 death_started_ticks;
+MapCoord death_coord;
 
 friend class Renderer;
 friend class Game;

@@ -41,6 +41,30 @@ class Monster;
 class Goodie;
 class Renderer;
 
+struct Fireball {
+  MapCoord current_coord;
+  Directions direction;
+  Uint32 segment_started_ticks;
+  int owner_id;
+};
+
+struct GasCloud {
+  MapCoord coord;
+  Uint32 started_ticks;
+  Uint32 fade_started_ticks;
+  int animation_seed;
+  bool is_fading;
+  bool triggered_by_pacman;
+};
+
+enum class EffectType { MonsterExplosion, WallImpact };
+
+struct GameEffect {
+  MapCoord coord;
+  Uint32 started_ticks;
+  EffectType type;
+};
+
 class Game {
 public:
   Game(Map *, Events *, Audio *);
@@ -64,9 +88,23 @@ private:
   bool simulation_started;
   Uint32 death_started_ticks;
   MapCoord death_coord;
+  std::vector<Fireball> fireballs;
+  std::vector<GasCloud> gas_clouds;
+  std::vector<GameEffect> effects;
+  Uint32 last_update_ticks;
   friend class Renderer;
   bool dead;
   bool win;
+
+  void TriggerLoss(MapCoord coord, Uint32 now);
+  void ApplyTeleporters();
+  void TryTeleportElement(MapElement *element);
+  void TryShootFireballs(Uint32 now);
+  void TrySpawnGasClouds(Uint32 now);
+  void UpdateFireballs(Uint32 now);
+  void UpdateGasClouds(Uint32 now);
+  void CleanupEffects(Uint32 now);
+  void EliminateMonster(Monster *monster, Uint32 now);
 };
 
 #endif
