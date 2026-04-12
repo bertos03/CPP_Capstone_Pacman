@@ -188,7 +188,6 @@ CMakeFiles/pacman.dir/src/audio.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__charconv/traits.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/convert_to_timespec.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/duration.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/file_clock.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/high_resolution_clock.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/steady_clock.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/system_clock.h \
@@ -421,12 +420,6 @@ CMakeFiles/pacman.dir/src/audio.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__ranges/view_interface.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__split_buffer \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__std_mbstate_t.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/atomic_unique_lock.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/intrusive_list_view.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/intrusive_shared_ptr.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_source.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_state.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_token.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__string/char_traits.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__string/constexpr_c_functions.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__string/extern_template_lists.h \
@@ -435,14 +428,10 @@ CMakeFiles/pacman.dir/src/audio.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__system_error/error_code.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__system_error/error_condition.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__system_error/system_error.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/formatter.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/id.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/jthread.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/poll_with_backoff.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/support.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/support/pthread.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/this_thread.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/thread.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/find_index.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/ignore.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/make_tuple_types.h \
@@ -600,7 +589,6 @@ CMakeFiles/pacman.dir/src/audio.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/bitset \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cctype \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cerrno \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/chrono \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/climits \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/clocale \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cmath \
@@ -621,7 +609,6 @@ CMakeFiles/pacman.dir/src/audio.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/exception \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/float.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/format \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/forward_list \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/functional \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/initializer_list \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/inttypes.h \
@@ -642,7 +629,6 @@ CMakeFiles/pacman.dir/src/audio.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/print \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/queue \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/ratio \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/sstream \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/stack \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/stddef.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/stdexcept \
@@ -654,7 +640,6 @@ CMakeFiles/pacman.dir/src/audio.cpp.o: /Users/robert/Documents/dev/CPP_Capstone_
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/string.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/string_view \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/system_error \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/thread \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/tuple \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/type_traits \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/typeinfo \
@@ -9724,6 +9709,26 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/copy_options.h:
 
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/thread:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/file_time_type.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/directory_options.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/sstream:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/chrono:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/thread.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/jthread.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_source.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/intrusive_shared_ptr.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/atomic_unique_lock.h:
+
 /opt/homebrew/include/SDL2/close_code.h:
 
 /opt/homebrew/include/SDL2/begin_code.h:
@@ -9804,21 +9809,15 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/usr/lib/clang/17/include/arm_vector_types.h:
 
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_wchar_t.h:
-
 /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_ptrdiff_t.h:
-
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_offsetof.h:
 
 /Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_nullptr_t.h:
 
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_null.h:
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/unique_copy.h:
 
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/space_info.h:
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cwctype:
 
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_max_align_t.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_wctype.h:
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg___va_copy.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_wchar.h:
 
@@ -9920,11 +9919,17 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_ino_t.h:
 
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/space_info.h:
+
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_max_align_t.h:
+
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_ino64_t.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/path_iterator.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_id_t.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_gid_t.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/float.h:
 
@@ -9958,9 +9963,9 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_blkcnt_t.h:
 
-/opt/homebrew/include/SDL2/SDL_gesture.h:
-
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_state.h:
+
+/opt/homebrew/include/SDL2/SDL_gesture.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/stdlib.h:
 
@@ -10028,8 +10033,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/tuple:
 
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/thread:
-
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cstring:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/string.h:
@@ -10072,12 +10075,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/functional:
 
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_gid_t.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/signal.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/forward_list:
-
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/format:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ctype.h:
@@ -10086,12 +10083,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/errno.h:
 
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg___va_copy.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/unique_copy.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cwctype:
-
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/mach/machine/_structs.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cwchar:
@@ -10099,6 +10090,8 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cstdio:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cstdint:
+
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_wchar_t.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/signal.h:
 
@@ -10113,6 +10106,8 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cctype:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/bit:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_wctype.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/atomic:
 
@@ -10197,6 +10192,8 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_pthread/_pthread_types.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/negation.h:
+
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_null.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_pthread/_pthread_once_t.h:
 
@@ -10342,11 +10339,11 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/unwrap_ref.h:
 
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/this_thread.h:
+
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__math/min_max.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__format/enable_insertable.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/this_thread.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/disjunction.h:
 
@@ -10355,6 +10352,10 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/is_object.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/desugars_to.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/add_const.h:
+
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg___gnuc_va_list.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/datasizeof.h:
 
@@ -10369,6 +10370,10 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/conditional.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/common_reference.h:
+
+/opt/homebrew/include/SDL2/SDL_thread.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/alignment_of.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__atomic/atomic_flag.h:
 
@@ -10399,10 +10404,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/add_cv.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/decay.h:
-
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg___gnuc_va_list.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/add_const.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/deque:
 
@@ -10440,35 +10441,25 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/id.h:
 
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/is_empty.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__system_error/error_condition.h:
+
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__system_error/error_category.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__system_error/errc.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__string/extern_template_lists.h:
 
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_source.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/intrusive_shared_ptr.h:
-
-/opt/homebrew/include/SDL2/SDL_thread.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/alignment_of.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/is_standard_layout.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/intrusive_list_view.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/is_empty.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__system_error/error_condition.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/atomic_unique_lock.h:
-
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__split_buffer:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/find_first_of.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__ranges/subrange.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__iterator/next.h:
+
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg_va_arg.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__format/format_to_n_result.h:
 
@@ -10519,6 +10510,10 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__ranges/concepts.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__ranges/access.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__concepts/class_or_enum.h:
+
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_header_macro.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/identity.h:
 
@@ -10738,12 +10733,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__fwd/sstream.h:
 
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/file_time_type.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/directory_options.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/sstream:
-
 /opt/homebrew/include/SDL2/SDL_version.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__fwd/queue.h:
@@ -10872,6 +10861,8 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/temporary_buffer.h:
 
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_offsetof.h:
+
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__iterator/move_iterator.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__iterator/iter_swap.h:
@@ -10905,6 +10896,10 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__concepts/same_as.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__configuration/platform.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/intrusive_list_view.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/is_standard_layout.h:
 
 /opt/homebrew/include/SDL2/SDL_shape.h:
 
@@ -10966,23 +10961,13 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__concepts/common_reference_with.h:
 
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stddef_header_macro.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__concepts/class_or_enum.h:
-
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__utility/move.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_types/_intmax_t.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/is_trivially_destructible.h:
 
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/count_if.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/file_clock.h:
-
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/binary_function.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__compare/three_way_comparable.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cstddef:
 
@@ -11023,10 +11008,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__atomic/is_always_lock_free.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__bit_reference:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctype.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_token.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/three_way_comp_ref_type.h:
 
@@ -11115,6 +11096,8 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cmath:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__assert:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__compare/three_way_comparable.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/remove_all_extents.h:
 
@@ -11207,10 +11190,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/ranges_iterator_concept.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__debug_utils/sanitizers.h:
-
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg_va_arg.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__iterator/next.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/copy_if.h:
 
@@ -11316,9 +11295,11 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__cstddef/nullptr_t.h:
 
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/generate_n.h:
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/tuple_like_ext.h:
 
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/jthread.h:
+/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg_va_list.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/generate_n.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/mismatch.h:
 
@@ -11341,8 +11322,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/types.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_rune_t.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/chrono:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__mutex/lock_guard.h:
 
@@ -11380,9 +11359,17 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_printf.h:
 
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_token.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctype.h:
+
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/binary_search.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/new:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__chrono/file_clock.h:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/count_if.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_u_int8_t.h:
 
@@ -11430,13 +11417,13 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/make_unsigned.h:
 
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/forward_list:
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/signal.h:
+
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/is_volatile.h:
-
-/Library/Developer/CommandLineTools/usr/lib/clang/17/include/__stdarg_va_list.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/tuple_like_ext.h:
 
 /opt/homebrew/include/SDL2/SDL_stdinc.h:
 
@@ -11485,8 +11472,6 @@ CMakeFiles/pacman.dir/src/renderer.cpp.o: /Users/robert/Documents/dev/CPP_Capsto
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/_types/_fd_zero.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/pointer_to_unary_function.h:
-
-/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/thread.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/ranges_copy.h:
 

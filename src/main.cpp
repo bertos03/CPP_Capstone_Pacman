@@ -35,7 +35,7 @@ enum MenuSelection { MENU_START = 0, MENU_CONFIG = 1, MENU_END = 2 };
 
 void processMenuEvents(int &selected_item, bool &start_requested,
                        bool &quit_requested, std::string &status_message,
-                       Uint32 &status_message_until) {
+                       Uint32 &status_message_until, Audio *audio) {
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
@@ -51,12 +51,15 @@ void processMenuEvents(int &selected_item, bool &start_requested,
     switch (event.key.keysym.sym) {
     case SDLK_UP:
       selected_item = (selected_item + 2) % 3;
+      audio->PlayMenuMove();
       break;
     case SDLK_DOWN:
       selected_item = (selected_item + 1) % 3;
+      audio->PlayMenuMove();
       break;
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
+      audio->PlayMenuSelect();
       if (selected_item == MENU_START) {
         start_requested = true;
       } else if (selected_item == MENU_CONFIG) {
@@ -89,54 +92,93 @@ void processOverlayEvents(bool &quit_requested) {
   }
 }
 
+void processGameOverEvents(Events *events, bool &return_to_menu,
+                           bool &quit_requested) {
+  SDL_Event event;
+
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_QUIT || event.type == SDL_MOUSEBUTTONDOWN) {
+      quit_requested = true;
+      events->RequestQuit();
+      return;
+    }
+
+    if (event.type == SDL_KEYDOWN) {
+      return_to_menu = true;
+      events->RequestQuit();
+      return;
+    }
+  }
+}
+
 } // namespace
 
 int main() {
   std::cout << "Bobman starting up ...\n";
 
-  std::shared_ptr<Map> map(new Map());
-  std::shared_ptr<Events> events(new Events());
-  std::shared_ptr<Audio> audio(new Audio());
-  std::shared_ptr<Game> game(new Game(map.get(), events.get(), audio.get()));
-  Renderer renderer(map.get(), game.get());
-
   const int countdown_seconds = std::clamp(GAME_START_COUNTDOWN, 3, 9);
-  int selected_item = MENU_START;
-  bool start_requested = false;
-  bool quit_requested = false;
-  std::string status_message;
-  Uint32 status_message_until = 0;
+  bool quit_application = false;
+  std::shared_ptr<Audio> audio(new Audio());
 
-  while (!quit_requested && !start_requested) {
-    processMenuEvents(selected_item, start_requested, quit_requested,
-                      status_message, status_message_until);
+  while (!quit_application) {
+    std::shared_ptr<Map> map(new Map());
+    std::shared_ptr<Events> events(new Events());
+    std::shared_ptr<Game> game(new Game(map.get(), events.get(), audio.get()));
+    Renderer renderer(map.get(), game.get());
 
-    const std::string visible_status =
-        (SDL_GetTicks() < status_message_until) ? status_message : "";
-    renderer.RenderStartMenu(selected_item, visible_status);
-    sleep(40);
-  }
+    int selected_item = MENU_START;
+    bool start_requested = false;
+    std::string status_message;
+    Uint32 status_message_until = 0;
 
-  if (!quit_requested && start_requested) {
-    for (int remaining = countdown_seconds; remaining > 0 && !quit_requested;
+    while (!quit_application && !start_requested) {
+      processMenuEvents(selected_item, start_requested, quit_application,
+                        status_message, status_message_until, audio.get());
+
+      const std::string visible_status =
+          (SDL_GetTicks() < status_message_until) ? status_message : "";
+      renderer.RenderStartMenu(selected_item, visible_status);
+      sleep(40);
+    }
+
+    if (quit_application) {
+      break;
+    }
+
+    for (int remaining = countdown_seconds; remaining > 0 && !quit_application;
          remaining--) {
+      audio->PlayCountdownTick();
       const Uint32 second_started = SDL_GetTicks();
-      while (!quit_requested && SDL_GetTicks() - second_started < 1000) {
-        processOverlayEvents(quit_requested);
+      while (!quit_application && SDL_GetTicks() - second_started < 1000) {
+        processOverlayEvents(quit_application);
         renderer.RenderCountdown(remaining);
         sleep(16);
       }
     }
-  }
 
-  if (!quit_requested && start_requested) {
+    if (quit_application) {
+      break;
+    }
+
+    audio->PlayStartTrumpet();
     game->StartSimulation();
 
-    while (!events->is_quit()) {
-      events->update();
+    bool return_to_menu = false;
+    while (!events->is_quit() && !return_to_menu) {
       if (!game->is_lost() && !game->is_won()) {
-        game->Update();
+        events->update();
+        if (!events->is_quit()) {
+          game->Update();
+        }
+      } else if (game->is_lost()) {
+        processGameOverEvents(events.get(), return_to_menu, quit_application);
+      } else {
+        events->update();
+        if (events->is_quit()) {
+          quit_application = true;
+        }
       }
+
       renderer.Render();
       sleep(40);
     }

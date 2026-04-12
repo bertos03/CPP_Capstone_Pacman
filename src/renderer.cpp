@@ -48,8 +48,9 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
-  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-    std::cerr << "SDL could not initialize.\n";
+  if ((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0 &&
+      SDL_InitSubSystem(SDL_INIT_VIDEO) < 0) {
+    std::cerr << "SDL video could not initialize.\n";
     std::cerr << "SDL_Error: " << SDL_GetError() << "\n";
     exit(1);
   }
@@ -217,7 +218,7 @@ Renderer::~Renderer() {
 
   IMG_Quit();
   TTF_Quit();
-  SDL_Quit();
+  SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
 void Renderer::Render() {

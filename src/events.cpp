@@ -25,6 +25,7 @@
 Events::Events() {
   sdl_events = new SDL_Event;
   quit = false;
+  current_direction = Directions::None;
 }
 
 /**
@@ -38,6 +39,8 @@ Events::~Events() { delete sdl_events; }
  *
  */
 void Events::Keyreset() { current_direction = Directions::None; }
+
+void Events::RequestQuit() { quit = true; }
 
 /**
  * @brief Updates the input buffer each cycle

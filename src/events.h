@@ -29,6 +29,7 @@ public:
   ~Events();
   void update();
   void Keyreset();
+  void RequestQuit();
   bool is_quit() { return quit; }
   Directions get_next_move(){return current_direction;}
 

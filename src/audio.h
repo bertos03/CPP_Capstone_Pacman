@@ -24,7 +24,6 @@
 #include <SDL_mixer.h>
 #endif
 #include <iostream>
-#include <thread>
 #include <vector>
 
 class Audio {
@@ -36,13 +35,27 @@ public:
   void PlayCoin();
   void PlayGameOver();
   void PlayWin();
+  void PlayMenuMove();
+  void PlayMenuSelect();
+  void PlayCountdownTick();
+  void PlayStartTrumpet();
 
 protected:
 private:
+  Mix_Chunk *CreateSynthChunk(const std::vector<int> &frequencies,
+                              int duration_ms, double volume, double attack_ms,
+                              double release_ms);
+  Mix_Chunk *CreateTrumpetChunk();
+  void PlayChunk(Mix_Chunk *);
+
   Mix_Chunk *SFX_coin;
   Mix_Chunk *SFX_win;
   Mix_Chunk *SFX_gameover;
-  std::vector<std::thread> audio_threads;
+  Mix_Chunk *SFX_menu_move;
+  Mix_Chunk *SFX_menu_select;
+  Mix_Chunk *SFX_countdown_tick;
+  Mix_Chunk *SFX_start_trumpet;
+  bool audio_ready;
 #endif
 };
 
