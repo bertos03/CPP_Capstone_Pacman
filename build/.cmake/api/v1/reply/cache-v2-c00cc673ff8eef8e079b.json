@@ -1251,7 +1251,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/opt/homebrew/lib/libSDL2_ttf.dylib;/opt/homebrew/lib/libSDL2_ttf.dylib;-framework Cocoa"
+			"value" : "/opt/homebrew/lib/libSDL2_ttf.dylib;/opt/homebrew/lib/libSDL2_ttf.dylib;/opt/homebrew/lib/libSDL2_ttf.dylib;-framework Cocoa;-framework Cocoa"
 		},
 		{
 			"name" : "SDL2_DIR",

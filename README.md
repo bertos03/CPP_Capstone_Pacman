@@ -1,60 +1,60 @@
 # BobMan (Pacman Capstone in C++)
 
-BobMan ist ein Pacman-inspiriertes 2D-Spiel mit **C++17**, **SDL2** und SDL-Erweiterungen.
-Der aktuelle Stand enthält neben dem eigentlichen Spiel auch ein Menüsystem, Kartenverwaltung, Schwierigkeitsgrade und einen integrierten Karteneditor.
+BobMan is a Pac-Man-inspired 2D game built with **C++17**, **SDL2**, and SDL extensions.
+The current state includes the core game as well as a menu system, map management, difficulty settings, and an integrated map editor.
 
-## Features (aktueller Stand)
+## Features (current state)
 
-- **Startmenü** mit Einträgen für:
-  - Spielstart
-  - Kartenauswahl
-  - Karteneditor
-  - Konfiguration
-- **Schwierigkeitsgrad über Monster-Anzahl** (`Few`, `Medium`, `Many`).
-- **Mehrere Monster-Typen** mit unterschiedlichen Fähigkeiten:
-  - wenige Monster: Standardgegner
-  - mittlere Monster: Gaswolken
-  - viele Monster: Feuerbälle mit Sichtlinienlogik
-- **Teleport-Felder** (`1` bis `5`) als paarweise Portale.
-- **Kartenbibliothek** aus `data/maps/` mit Kartenname in der ersten Zeile.
-- **In-Game-Karteneditor**:
-  - vorhandene Karte laden
-  - neue Karte in vordefinierter Größe anlegen
-  - Karte validieren und speichern
-- **Audioeffekte** (optional über `AUDIO` in `src/definitions.h`).
+- **Start menu** with entries for:
+  - Start game
+  - Map selection
+  - Map editor
+  - Configuration
+- **Difficulty based on monster count** (`Few`, `Medium`, `Many`).
+- **Multiple monster types** with different abilities:
+  - few monsters: standard enemies
+  - medium monsters: gas clouds
+  - many monsters: fireballs with line-of-sight logic
+- **Teleporter tiles** (`1` to `5`) as paired portals.
+- **Map library** from `data/maps/` with the map name in the first line.
+- **In-game map editor**:
+  - load an existing map
+  - create a new map in a predefined size
+  - validate and save the map
+- **Audio effects** (optional via `AUDIO` in `src/definitions.h`).
 
-## Projektstruktur
+## Project structure
 
-- `src/main.cpp`: Menüfluss, Spielstart, Editor-Workflows.
-- `src/game.*`: Spielregeln, Kollisionen, Effekte, Teleport-Handling.
-- `src/map.*`: Karten laden/speichern/discovern, Parsing, Teleporter-Paare.
-- `src/renderer.*`: Zeichnen von Spiel, Menüs, HUD, Editor, Effekten.
-- `src/events.*`: Tastatureingaben und Quit-Handling.
-- `src/audio.*`: Laden und Abspielen von Sounds.
-- `data/maps/`: Karten-Dateien (`.txt`, `.map`).
+- `src/main.cpp`: menu flow, game start, editor workflows.
+- `src/game.*`: game rules, collisions, effects, teleporter handling.
+- `src/map.*`: loading/saving/discovering maps, parsing, teleporter pairs.
+- `src/renderer.*`: drawing the game, menus, HUD, editor, and effects.
+- `src/events.*`: keyboard input and quit handling.
+- `src/audio.*`: loading and playing sounds.
+- `data/maps/`: map files (`.txt`, `.map`).
 
-## Kartenformat
+## Map format
 
-Eine Karten-Datei enthält:
-1. **Zeile 1:** Anzeigename der Karte
-2. **Ab Zeile 2:** Layout
+A map file contains:
+1. **Line 1:** display name of the map
+2. **From line 2 onward:** layout
 
-Wichtige Zeichen:
-- `x` = Wand
-- `.` = Pfad
-- `G` = Goodie
-- `P` = Pacman-Start
-- `a` / `b` / `M` = Monster je Schwierigkeitsstufe (siehe `definitions.h`)
-- `1` bis `5` = Teleporter (jede Ziffer muss genau 0 oder 2-mal vorkommen)
+Important characters:
+- `x` = wall
+- `.` = path
+- `G` = goodie
+- `P` = Pacman start
+- `M` / `N` / `O` = monster depending on difficulty level (see `definitions.h`)
+- `1` to `5` = teleporter (each digit must appear exactly 0 or 2 times)
 
 ## Build
 
-### Voraussetzungen
+### Requirements
 
 - CMake
-- C++17-Compiler (`g++` oder `clang++`)
+- C++17 compiler (`g++` or `clang++`)
 - SDL2 + SDL2_image + SDL2_ttf
-- SDL2_mixer (für Audio)
+- SDL2_mixer (for audio)
 
 ### Ubuntu / Debian
 
@@ -64,7 +64,7 @@ sudo apt install -y build-essential cmake \
   libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev
 ```
 
-### Build + Start
+### Build and run
 
 ```bash
 mkdir -p build
@@ -74,23 +74,23 @@ make -j$(nproc)
 ./pacman
 ```
 
-## Steuerung
+## Controls
 
-- **Menüs:** Pfeiltasten hoch/runter, `Enter` bestätigen, `Esc` zurück.
-- **Spiel:** Pfeiltasten bewegen Pacman, `Esc` beendet.
+- **Menus:** arrow keys up/down, confirm with `Enter`, go back with `Esc`.
+- **Game:** move Pacman with the arrow keys, quit with `Esc`.
 - **Editor:**
-  - Pfeiltasten bewegen Cursor
-  - Zeichen setzen/ändern über die vorgesehenen Tasten laut Overlay
-  - `Esc` öffnet Speichern/Verwerfen-Abfrage
+  - move the cursor with the arrow keys
+  - place/change tiles with the keys shown in the overlay
+  - `Esc` opens the save/discard dialog
 
-## Typische Probleme
+## Common problems
 
-1. **SDL wird nicht gefunden**
-   - Abhängigkeiten installieren und `cmake ..` erneut ausführen.
+1. **SDL is not found**
+   - Install the dependencies and run `cmake ..` again.
 
-2. **Kein Ton**
-   - `AUDIO` in `src/definitions.h` aktivieren und neu bauen.
+2. **No sound**
+   - Enable `AUDIO` in `src/definitions.h` and rebuild.
 
-3. **Karte lädt nicht**
-   - Prüfen, ob erste Zeile ein Name ist und Layoutzeilen danach folgen.
-   - Teleporter-Ziffern müssen paarweise vorhanden sein.
+3. **Map does not load**
+   - Check that the first line is a name and that layout lines follow.
+   - Teleporter digits must exist in pairs.

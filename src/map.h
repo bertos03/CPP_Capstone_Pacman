@@ -1,18 +1,17 @@
 /*
- * PROJEKTKOMMENTAR (map.h)
+ * PROJECT COMMENT (map.h)
  * ---------------------------------------------------------------------------
- * Diese Datei ist Teil von "BobMan", einem Pacman-inspirierten SDL2-Spiel.
- * Der Code in dieser Einheit kapselt einen klaren Verantwortungsbereich, damit
- * Einsteiger die Architektur schnell verstehen: Datenmodell (Map, Elemente),
- * Laufzeitlogik (Game, Events), Darstellung (Renderer) und optionale Audio-
- * Ausgabe.
+ * This file is part of "BobMan", an SDL2 game inspired by Pac-Man.
+ * The code in this unit has a clear responsibility so newcomers can quickly
+ * understand the architecture: data model (map, elements), runtime logic
+ * (game, events), rendering (renderer), and optional audio output.
  *
- * Wichtige Hinweise fuer Newbies:
- * - Header-Dateien deklarieren Klassen, Methoden und Datentypen.
- * - CPP-Dateien enthalten die konkrete Implementierung der Logik.
- * - Mehrere Threads bewegen Spielfiguren parallel; gemeinsame Daten werden
- *   deshalb kontrolliert gelesen/geschrieben.
- * - Makros in definitions.h steuern Ressourcenpfade, Farben und Features.
+ * Important notes for newcomers:
+ * - Header files declare classes, methods, and data types.
+ * - CPP files contain the concrete implementation of the logic.
+ * - Multiple threads move game entities in parallel, so shared data is read
+ *   and written in a controlled way.
+ * - Macros in definitions.h control resource paths, colors, and features.
  */
 
 #ifndef MAP_H
@@ -36,23 +35,23 @@ using std::vector;
 class Renderer;
 
 struct MapDefinition {
-  // Vollständiger Dateipfad der Karte.
+  // Full file path of the map.
   std::string file_path;
-  // Anzeigename aus der ersten Zeile der Datei.
+  // Display name from the first line of the file.
   std::string display_name;
 };
 
 struct MapFileData {
-  // Name, der in Menüs/HUD angezeigt wird.
+  // Name shown in menus/HUD.
   std::string display_name;
-  // Reine Layoutzeilen ohne Header.
+  // Layout lines only, without the header.
   std::vector<std::string> layout_rows;
 };
 
 struct TeleporterPair {
-  // Teleporter-ID ('1'..'5').
+  // Teleporter ID ('1'..'5').
   char digit;
-  // Ein- und Ausgangskoordinaten dieses Portals.
+  // Entry and exit coordinates of this portal.
   MapCoord first;
   MapCoord second;
 };
@@ -75,7 +74,7 @@ public:
   DiscoverAvailableMaps(const std::string &directory_path = MAPS_DIRECTORY_PATH);
   static bool LoadMapFile(const std::string &map_path, MapFileData &map_file);
   static bool SaveMapFile(const std::string &map_path, const MapFileData &map_file);
-  // Teleporter sind als Ziffern 1..5 definiert.
+  // Teleporters are defined as digits 1..5.
   static bool IsTeleporterChar(char);
   size_t get_map_rows();
   size_t get_map_cols();
