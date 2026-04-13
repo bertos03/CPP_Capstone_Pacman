@@ -71,7 +71,7 @@ public:
       MonsterAmount monster_amount = MonsterAmount::Many);
   ~Map();
   static std::vector<MapDefinition>
-  DiscoverAvailableMaps(const std::string &directory_path = MAPS_DIRECTORY_PATH);
+  DiscoverAvailableMaps(const std::string &directory_path = "");
   static bool LoadMapFile(const std::string &map_path, MapFileData &map_file);
   static bool SaveMapFile(const std::string &map_path, const MapFileData &map_file);
   // Teleporters are defined as digits 1..5.

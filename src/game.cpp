@@ -107,6 +107,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   // create Pacman object
   pacman = new Pacman(map->get_coord_pacman());
   death_coord = pacman->map_coord;
+  ScheduleNextInvulnerabilityPotionSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -149,6 +150,7 @@ void Game::StartSimulation() {
 void Game::Update() {
   const Uint32 now = SDL_GetTicks();
   CleanupEffects(now);
+  UpdateInvulnerability(now);
   if (pacman->teleport_animation_active &&
       !pacman->teleport_arrival_sound_played &&
       now - pacman->teleport_animation_started_ticks >=
@@ -169,6 +171,7 @@ void Game::Update() {
   }
 
   ApplyTeleporters();
+  UpdateInvulnerabilityPotion(now);
 
   // Check for collision with Goodies ... game is won if all goodies are
   // collected
@@ -186,6 +189,7 @@ void Game::Update() {
   }
   if (win) {
 #ifdef AUDIO
+    audio->StopInvulnerabilityLoop();
     audio->PlayWin();
 #endif
   }
@@ -205,7 +209,9 @@ void Game::Update() {
     }
     if (pacman->map_coord.u == i->map_coord.u &&
         pacman->map_coord.v == i->map_coord.v) {
-      TriggerLoss(pacman->map_coord, now);
+      if (!IsPacmanInvulnerable(now)) {
+        TriggerLoss(pacman->map_coord, now);
+      }
     }
   }
 }
@@ -215,6 +221,9 @@ void Game::Update() {
  * 
  */
 Game::~Game() {
+#ifdef AUDIO
+  audio->StopInvulnerabilityLoop();
+#endif
   // std::cout << "Waiting for threads to finish ... \n";
   for (size_t i = 0; i < monster_threads.size(); i++) {
     if (monster_threads[i].joinable()) {
@@ -247,6 +256,7 @@ void Game::TriggerLoss(MapCoord coord, Uint32 now) {
   death_coord = coord;
   death_started_ticks = now;
 #ifdef AUDIO
+  audio->StopInvulnerabilityLoop();
   audio->PlayGameOver();
 #endif
   dead = true;
@@ -342,6 +352,130 @@ void Game::TrySpawnGasClouds(Uint32 now) {
   }
 }
 
+void Game::ScheduleNextInvulnerabilityPotionSpawn(Uint32 now) {
+  invulnerability_potion.next_spawn_ticks =
+      now + RandomInterval(BLUE_POTION_SPAWN_MIN_INTERVAL_MS,
+                           BLUE_POTION_SPAWN_MAX_INTERVAL_MS);
+}
+
+bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
+  if (map == nullptr ||
+      map->map_entry(static_cast<size_t>(coord.u), static_cast<size_t>(coord.v)) !=
+          ElementType::TYPE_PATH) {
+    return false;
+  }
+
+  if (SameCoord(coord, pacman->map_coord)) {
+    return false;
+  }
+
+  for (const auto *monster : monsters) {
+    if (monster->is_alive && SameCoord(coord, monster->map_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &fireball : fireballs) {
+    if (SameCoord(coord, fireball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &cloud : gas_clouds) {
+    if (SameCoord(coord, cloud.coord)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void Game::TrySpawnInvulnerabilityPotion(Uint32 now) {
+  if (invulnerability_potion.is_visible ||
+      now < invulnerability_potion.next_spawn_ticks) {
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForInvulnerabilityPotion(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    invulnerability_potion.next_spawn_ticks = now + 1000;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  invulnerability_potion.coord = candidates[distribution(RandomGenerator())];
+  invulnerability_potion.appeared_ticks = now;
+  invulnerability_potion.fade_started_ticks = 0;
+  invulnerability_potion.animation_seed =
+      static_cast<int>((now % 997) + invulnerability_potion.coord.u * 31 +
+                       invulnerability_potion.coord.v * 17);
+  invulnerability_potion.is_visible = true;
+  invulnerability_potion.is_fading = false;
+  ScheduleNextInvulnerabilityPotionSpawn(now);
+#ifdef AUDIO
+  audio->PlayPotionSpawn();
+#endif
+}
+
+void Game::ActivateInvulnerability(Uint32 now) {
+  pacman->invulnerable_until_ticks = now + PACMAN_INVULNERABLE_MS;
+#ifdef AUDIO
+  audio->StartInvulnerabilityLoop();
+#endif
+}
+
+void Game::UpdateInvulnerabilityPotion(Uint32 now) {
+  TrySpawnInvulnerabilityPotion(now);
+  if (!invulnerability_potion.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, invulnerability_potion.coord)) {
+    ActivateInvulnerability(now);
+    invulnerability_potion.is_visible = false;
+    invulnerability_potion.is_fading = false;
+    invulnerability_potion.fade_started_ticks = 0;
+    return;
+  }
+
+  if (!invulnerability_potion.is_fading &&
+      now - invulnerability_potion.appeared_ticks >= BLUE_POTION_VISIBLE_MS) {
+    invulnerability_potion.is_fading = true;
+    invulnerability_potion.fade_started_ticks = now;
+  }
+
+  if (invulnerability_potion.is_fading &&
+      now - invulnerability_potion.fade_started_ticks >= BLUE_POTION_FADE_MS) {
+    invulnerability_potion.is_visible = false;
+    invulnerability_potion.is_fading = false;
+    invulnerability_potion.fade_started_ticks = 0;
+  }
+}
+
+void Game::UpdateInvulnerability(Uint32 now) {
+  if (pacman->invulnerable_until_ticks != 0 &&
+      now >= pacman->invulnerable_until_ticks) {
+    pacman->invulnerable_until_ticks = 0;
+#ifdef AUDIO
+    audio->StopInvulnerabilityLoop();
+#endif
+  }
+}
+
+bool Game::IsPacmanInvulnerable(Uint32 now) const {
+  return pacman != nullptr && pacman->invulnerable_until_ticks > now;
+}
+
 void Game::UpdateFireballs(Uint32 now) {
   for (size_t index = 0; index < fireballs.size();) {
     Fireball &fireball = fireballs[index];
@@ -364,7 +498,9 @@ void Game::UpdateFireballs(Uint32 now) {
       fireball.segment_started_ticks += FIREBALL_STEP_DURATION_MS;
 
       if (SameCoord(pacman->map_coord, fireball.current_coord)) {
-        TriggerLoss(fireball.current_coord, now);
+        if (!IsPacmanInvulnerable(now)) {
+          TriggerLoss(fireball.current_coord, now);
+        }
         remove_fireball = true;
         break;
       }
@@ -402,13 +538,15 @@ void Game::UpdateGasClouds(Uint32 now) {
       cloud.is_fading = true;
       cloud.fade_started_ticks = now;
       cloud.triggered_by_pacman = true;
-      pacman->paralyzed_until_ticks =
-          std::max(pacman->paralyzed_until_ticks, now + PACMAN_PARALYSIS_MS);
-      pacman->px_delta.x = 0;
-      pacman->px_delta.y = 0;
+      if (!IsPacmanInvulnerable(now)) {
+        pacman->paralyzed_until_ticks =
+            std::max(pacman->paralyzed_until_ticks, now + PACMAN_PARALYSIS_MS);
+        pacman->px_delta.x = 0;
+        pacman->px_delta.y = 0;
 #ifdef AUDIO
-      audio->PlayPacmanGag();
+        audio->PlayPacmanGag();
 #endif
+      }
     }
 
     if (cloud.is_fading &&

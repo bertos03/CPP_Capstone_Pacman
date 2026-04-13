@@ -46,6 +46,9 @@ public:
   void PlayTeleporterZap();
   void PlayTeleporterArc();
   void PlayEditorBlocked();
+  void PlayPotionSpawn();
+  void StartInvulnerabilityLoop();
+  void StopInvulnerabilityLoop();
 
 protected:
 private:
@@ -60,6 +63,8 @@ private:
   Mix_Chunk *CreateTeleporterZapChunk();
   Mix_Chunk *CreateTeleporterArcChunk();
   Mix_Chunk *CreateEditorBlockedChunk();
+  Mix_Chunk *CreatePotionSpawnChunk();
+  Mix_Chunk *CreateInvulnerabilityLoopChunk();
   void PlayChunk(Mix_Chunk *);
 
   Mix_Chunk *SFX_coin;
@@ -77,6 +82,9 @@ private:
   Mix_Chunk *SFX_teleporter_zap;
   Mix_Chunk *SFX_teleporter_arc;
   Mix_Chunk *SFX_editor_blocked;
+  Mix_Chunk *SFX_potion_spawn;
+  Mix_Chunk *SFX_invulnerability_loop;
+  int invulnerability_loop_channel;
   bool audio_ready;
 #endif
 };

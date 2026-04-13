@@ -29,6 +29,7 @@ Pacman::Pacman(MapCoord _coord) {
   px_delta.x = 0;
   px_delta.y = 0;
   paralyzed_until_ticks = 0;
+  invulnerable_until_ticks = 0;
   teleport_animation_active = false;
   teleport_animation_started_ticks = 0;
   teleport_animation_from_coord = _coord;

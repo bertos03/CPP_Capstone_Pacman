@@ -15,6 +15,7 @@
  */
 
 #include "audio.h"
+#include "paths.h"
 
 #include <algorithm>
 #include <cmath>
@@ -92,6 +93,9 @@ Audio::Audio() {
   SFX_teleporter_zap = nullptr;
   SFX_teleporter_arc = nullptr;
   SFX_editor_blocked = nullptr;
+  SFX_potion_spawn = nullptr;
+  SFX_invulnerability_loop = nullptr;
+  invulnerability_loop_channel = -1;
 
   if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0 &&
       SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
@@ -106,8 +110,11 @@ Audio::Audio() {
 
   Mix_AllocateChannels(16);
 
-  SFX_coin = Mix_LoadWAV(COIN_SOUND_PATH);
-  SFX_win = Mix_LoadWAV(WIN_SOUND_PATH);
+  const std::string coin_sound_path = Paths::GetDataFilePath("coin.wav");
+  const std::string win_sound_path = Paths::GetDataFilePath("win.wav");
+
+  SFX_coin = Mix_LoadWAV(coin_sound_path.c_str());
+  SFX_win = Mix_LoadWAV(win_sound_path.c_str());
   SFX_gameover = CreateViolinLamentChunk();
   SFX_menu_move = CreateSynthChunk({1396, 1865}, 70, 0.30, 4.0, 38.0);
   SFX_menu_select = CreateSynthChunk({784, 988, 1175}, 150, 0.42, 6.0, 90.0);
@@ -121,6 +128,8 @@ Audio::Audio() {
   SFX_teleporter_zap = CreateTeleporterZapChunk();
   SFX_teleporter_arc = CreateTeleporterArcChunk();
   SFX_editor_blocked = CreateEditorBlockedChunk();
+  SFX_potion_spawn = CreatePotionSpawnChunk();
+  SFX_invulnerability_loop = CreateInvulnerabilityLoopChunk();
 
   if (SFX_coin == nullptr || SFX_win == nullptr || SFX_gameover == nullptr ||
       SFX_menu_move == nullptr || SFX_menu_select == nullptr ||
@@ -128,7 +137,8 @@ Audio::Audio() {
       SFX_monster_shot == nullptr || SFX_fireball_wall_hit == nullptr ||
       SFX_monster_explosion == nullptr || SFX_monster_fart == nullptr ||
       SFX_pacman_gag == nullptr || SFX_teleporter_zap == nullptr ||
-      SFX_teleporter_arc == nullptr || SFX_editor_blocked == nullptr) {
+      SFX_teleporter_arc == nullptr || SFX_editor_blocked == nullptr ||
+      SFX_potion_spawn == nullptr || SFX_invulnerability_loop == nullptr) {
     std::cerr << "Failed to load SFX: " << Mix_GetError() << "\n";
     return;
   }
@@ -143,6 +153,7 @@ Audio::Audio() {
  */
 Audio::~Audio() {
 #ifdef AUDIO
+  StopInvulnerabilityLoop();
   if (audio_ready) {
     Mix_HaltChannel(-1);
   }
@@ -191,6 +202,12 @@ Audio::~Audio() {
   }
   if (SFX_editor_blocked != nullptr) {
     Mix_FreeChunk(SFX_editor_blocked);
+  }
+  if (SFX_potion_spawn != nullptr) {
+    Mix_FreeChunk(SFX_potion_spawn);
+  }
+  if (SFX_invulnerability_loop != nullptr) {
+    Mix_FreeChunk(SFX_invulnerability_loop);
   }
 
   if (Mix_QuerySpec(nullptr, nullptr, nullptr) != 0) {
@@ -630,6 +647,130 @@ Mix_Chunk *Audio::CreateEditorBlockedChunk() {
   return Mix_LoadWAV_RW(wav_stream, 1);
 }
 
+Mix_Chunk *Audio::CreatePotionSpawnChunk() {
+  struct Note {
+    double frequency;
+    int duration_ms;
+    double volume;
+  };
+
+  const std::vector<Note> melody{
+      {880.0, 90, 0.18}, {1174.66, 95, 0.20}, {1396.91, 120, 0.22},
+      {1760.0, 170, 0.19}};
+  std::vector<Sint16> pcm_samples;
+
+  double time_offset = 0.0;
+  for (const auto &note : melody) {
+    const int sample_count = std::max(1, note.duration_ms * kSampleRate / 1000);
+    const int attack_samples = std::max(1, sample_count / 10);
+    const int release_samples = std::max(1, sample_count / 5);
+
+    for (int i = 0; i < sample_count; i++) {
+      double envelope = 1.0;
+      if (i < attack_samples) {
+        envelope = static_cast<double>(i) / attack_samples;
+      } else if (i > sample_count - release_samples) {
+        envelope =
+            static_cast<double>(sample_count - i) / std::max(1, release_samples);
+      }
+      envelope = std::clamp(envelope, 0.0, 1.0);
+
+      const double time = static_cast<double>(i) / kSampleRate;
+      const double absolute_time = time_offset + time;
+      const double shimmer =
+          1.0 + 0.015 * std::sin(2.0 * kPi * 8.0 * absolute_time + 0.3);
+      const double fundamental =
+          std::sin(2.0 * kPi * note.frequency * shimmer * time);
+      const double bright =
+          0.48 * std::sin(2.0 * kPi * note.frequency * 2.0 * time + 0.6);
+      const double sparkle =
+          0.18 * std::sin(2.0 * kPi * (note.frequency * 3.4) * time + 1.1);
+      double sample_value =
+          (fundamental + bright + sparkle) * envelope * note.volume;
+
+      sample_value = std::clamp(sample_value, -1.0, 1.0);
+      const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+      pcm_samples.push_back(pcm);
+      pcm_samples.push_back(pcm);
+    }
+
+    time_offset += static_cast<double>(note.duration_ms) / 1000.0;
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
+Mix_Chunk *Audio::CreateInvulnerabilityLoopChunk() {
+  struct Note {
+    double frequency;
+    int duration_ms;
+    double volume;
+  };
+
+  const std::vector<Note> melody{
+      {392.0, 160, 0.11}, {523.25, 160, 0.11}, {659.25, 160, 0.11},
+      {783.99, 160, 0.12}, {659.25, 160, 0.11}, {523.25, 160, 0.11},
+      {880.0, 160, 0.12}, {783.99, 220, 0.12}};
+  std::vector<Sint16> pcm_samples;
+
+  double time_offset = 0.0;
+  for (const auto &note : melody) {
+    const int sample_count = std::max(1, note.duration_ms * kSampleRate / 1000);
+    const int attack_samples = std::max(1, sample_count / 20);
+    const int release_samples = std::max(1, sample_count / 8);
+
+    for (int i = 0; i < sample_count; i++) {
+      double envelope = 1.0;
+      if (i < attack_samples) {
+        envelope = static_cast<double>(i) / attack_samples;
+      } else if (i > sample_count - release_samples) {
+        envelope =
+            static_cast<double>(sample_count - i) / std::max(1, release_samples);
+      }
+      envelope = std::clamp(envelope, 0.0, 1.0);
+
+      const double time = static_cast<double>(i) / kSampleRate;
+      const double absolute_time = time_offset + time;
+      const double square =
+          (std::sin(2.0 * kPi * note.frequency * time) >= 0.0) ? 1.0 : -1.0;
+      const double octave =
+          (std::sin(2.0 * kPi * note.frequency * 2.0 * time + 0.4) >= 0.0)
+              ? 1.0
+              : -1.0;
+      const double bass =
+          std::sin(2.0 * kPi * (note.frequency / 2.0) * time + 0.2);
+      const double shimmer =
+          0.74 + 0.26 * std::sin(2.0 * kPi * 6.0 * absolute_time);
+      double sample_value =
+          (0.58 * square + 0.26 * octave + 0.20 * bass) * shimmer *
+          envelope * note.volume;
+
+      sample_value = std::clamp(sample_value, -1.0, 1.0);
+      const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+      pcm_samples.push_back(pcm);
+      pcm_samples.push_back(pcm);
+    }
+
+    time_offset += static_cast<double>(note.duration_ms) / 1000.0;
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
 void Audio::PlayChunk(Mix_Chunk *chunk) {
   if (!audio_ready || chunk == nullptr) {
     return;
@@ -678,5 +819,29 @@ void Audio::PlayTeleporterZap() { PlayChunk(SFX_teleporter_zap); };
 void Audio::PlayTeleporterArc() { PlayChunk(SFX_teleporter_arc); };
 
 void Audio::PlayEditorBlocked() { PlayChunk(SFX_editor_blocked); };
+
+void Audio::PlayPotionSpawn() { PlayChunk(SFX_potion_spawn); };
+
+void Audio::StartInvulnerabilityLoop() {
+  if (!audio_ready || SFX_invulnerability_loop == nullptr) {
+    return;
+  }
+
+  if (invulnerability_loop_channel != -1 &&
+      Mix_Playing(invulnerability_loop_channel) != 0) {
+    return;
+  }
+
+  invulnerability_loop_channel = Mix_PlayChannel(-1, SFX_invulnerability_loop, -1);
+}
+
+void Audio::StopInvulnerabilityLoop() {
+  if (!audio_ready || invulnerability_loop_channel == -1) {
+    return;
+  }
+
+  Mix_HaltChannel(invulnerability_loop_channel);
+  invulnerability_loop_channel = -1;
+}
 
 #endif

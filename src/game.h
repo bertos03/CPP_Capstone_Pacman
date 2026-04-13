@@ -59,6 +59,16 @@ struct GasCloud {
   bool triggered_by_pacman;
 };
 
+struct InvulnerabilityPotion {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
 enum class EffectType { MonsterExplosion, WallImpact };
 
 struct GameEffect {
@@ -92,6 +102,7 @@ private:
   MapCoord death_coord;
   std::vector<Fireball> fireballs;
   std::vector<GasCloud> gas_clouds;
+  InvulnerabilityPotion invulnerability_potion;
   std::vector<GameEffect> effects;
   Uint32 last_update_ticks;
   friend class Renderer;
@@ -103,6 +114,13 @@ private:
   void TryTeleportElement(MapElement *element);
   void TryShootFireballs(Uint32 now);
   void TrySpawnGasClouds(Uint32 now);
+  void ScheduleNextInvulnerabilityPotionSpawn(Uint32 now);
+  void TrySpawnInvulnerabilityPotion(Uint32 now);
+  void UpdateInvulnerabilityPotion(Uint32 now);
+  void UpdateInvulnerability(Uint32 now);
+  void ActivateInvulnerability(Uint32 now);
+  bool IsCellFreeForInvulnerabilityPotion(MapCoord coord) const;
+  bool IsPacmanInvulnerable(Uint32 now) const;
   void UpdateFireballs(Uint32 now);
   void UpdateGasClouds(Uint32 now);
   void CleanupEffects(Uint32 now);

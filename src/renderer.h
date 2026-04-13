@@ -71,6 +71,7 @@ private:
   void drawLayoutTeleporters(const std::vector<std::string> &layout);
   void drawTeleporterGlyph(const SDL_Rect &teleporter_rect, char teleporter_digit,
                            int animation_seed);
+  void drawbonusflask();
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
@@ -82,6 +83,8 @@ private:
   void drawfireballs();
   void draweffects();
   void drawDefeatEffect();
+  void drawPacmanShield(int center_x, int center_y, int base_radius,
+                        double pulse_clock);
   void drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
                        int shimmer_seed);
   void drawhud();

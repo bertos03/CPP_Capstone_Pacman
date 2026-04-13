@@ -32,6 +32,7 @@
 #include "globaltypes.h"
 #include "map.h"
 #include "renderer.h"
+#include "paths.h"
 
 namespace {
 
@@ -232,7 +233,8 @@ std::string CreateUniqueMapPath(const std::string &display_name) {
   namespace fs = std::filesystem;
 
   const std::string slug = Slugify(display_name);
-  fs::path base_path = fs::path(MAPS_DIRECTORY_PATH) / (slug + ".txt");
+  fs::path base_path = fs::path(Paths::GetWritableMapsDirectory()) /
+                       (slug + ".txt");
   if (!fs::exists(base_path)) {
     return base_path.string();
   }
@@ -240,13 +242,30 @@ std::string CreateUniqueMapPath(const std::string &display_name) {
   int suffix = 2;
   while (true) {
     fs::path candidate =
-        fs::path(MAPS_DIRECTORY_PATH) /
+        fs::path(Paths::GetWritableMapsDirectory()) /
         (slug + "_" + std::to_string(suffix) + ".txt");
     if (!fs::exists(candidate)) {
       return candidate.string();
     }
     suffix++;
   }
+}
+
+std::string ResolveEditableMapPath(const std::string &current_map_path,
+                                   const std::string &display_name) {
+  namespace fs = std::filesystem;
+
+  if (Paths::IsWritableMapPath(current_map_path)) {
+    return current_map_path;
+  }
+
+  const fs::path current_filename = fs::path(current_map_path).filename();
+  if (!current_filename.empty()) {
+    return (fs::path(Paths::GetWritableMapsDirectory()) / current_filename)
+        .string();
+  }
+
+  return CreateUniqueMapPath(display_name);
 }
 
 EditorRequest CreateNewMapRequest(NewMapSize size) {
@@ -604,6 +623,8 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
             if (editor_state.is_new_map) {
               begin_name_dialog();
             } else {
+              editor_state.map_path = ResolveEditableMapPath(
+                  editor_state.map_path, editor_state.map_file.display_name);
               fs::create_directories(
                   fs::path(editor_state.map_path).parent_path());
               if (Map::SaveMapFile(editor_state.map_path,
@@ -986,7 +1007,8 @@ int main() {
   const int countdown_seconds = std::clamp(GAME_START_COUNTDOWN, 3, 9);
   std::vector<MapDefinition> available_maps = Map::DiscoverAvailableMaps();
   if (available_maps.empty()) {
-    std::cerr << "No maps found in " << MAPS_DIRECTORY_PATH << "\n";
+    std::cerr << "No maps found in "
+              << Paths::DescribeMapSearchDirectories() << "\n";
     return 1;
   }
 
@@ -1007,7 +1029,8 @@ int main() {
     if (maps_need_reload) {
       available_maps = Map::DiscoverAvailableMaps();
       if (available_maps.empty()) {
-        std::cerr << "No maps found in " << MAPS_DIRECTORY_PATH << "\n";
+        std::cerr << "No maps found in "
+                  << Paths::DescribeMapSearchDirectories() << "\n";
         return 1;
       }
       RefreshSelectedMap(available_maps, preferred_selected_map_path,

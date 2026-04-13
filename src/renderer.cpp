@@ -15,6 +15,7 @@
  */
 
 #include "renderer.h"
+#include "paths.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,6 +36,7 @@ const SDL_Color kWarningTextColor{255, 110, 110, 255};
 const SDL_Color kPanelFillColor{10, 6, 18, 205};
 const SDL_Color kPanelBorderColor{196, 130, 92, 255};
 const SDL_Color kBrickOutlineColor{78, 20, 14, 255};
+const SDL_Color kShieldTextColor{116, 220, 255, 255};
 const SDL_Color kFewMonsterGlowColor{120, 210, 255, 255};
 const SDL_Color kMediumMonsterGlowColor{255, 170, 72, 255};
 const SDL_Color kManyMonsterGlowColor{255, 82, 82, 255};
@@ -202,10 +204,14 @@ void Renderer::initializeRenderer(size_t row_count_value,
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
 
-  sdl_font_hud = TTF_OpenFont(FONT_PATH, hud_fontsize);
-  sdl_font_menu = TTF_OpenFont(FONT_PATH, std::max(30, screen_res_y / 22));
-  sdl_font_logo = TTF_OpenFont(FONT_PATH, std::max(84, screen_res_y / 5));
-  sdl_font_display = TTF_OpenFont(FONT_PATH, std::max(72, screen_res_y / 7));
+  const std::string font_path = Paths::GetDataFilePath("font.ttf");
+  sdl_font_hud = TTF_OpenFont(font_path.c_str(), hud_fontsize);
+  sdl_font_menu =
+      TTF_OpenFont(font_path.c_str(), std::max(30, screen_res_y / 22));
+  sdl_font_logo =
+      TTF_OpenFont(font_path.c_str(), std::max(84, screen_res_y / 5));
+  sdl_font_display =
+      TTF_OpenFont(font_path.c_str(), std::max(72, screen_res_y / 7));
 
   if (sdl_font_hud == nullptr || sdl_font_menu == nullptr ||
       sdl_font_logo == nullptr || sdl_font_display == nullptr) {
@@ -215,15 +221,21 @@ void Renderer::initializeRenderer(size_t row_count_value,
 
   sdl_font_color = kHudTextColor;
 
-  sdl_wall_surface = SDL_LoadBMP(WALL_PATH);
-  sdl_goodie_surface = SDL_LoadBMP(GOODIE_PATH);
-  sdl_pacman_surface = SDL_LoadBMP(PACMAN_PATH);
+  const std::string wall_path = Paths::GetDataFilePath("brick.bmp");
+  const std::string goodie_path = Paths::GetDataFilePath("goodie.bmp");
+  const std::string pacman_path = Paths::GetDataFilePath("pacman.bmp");
 
-  const std::vector<const char *> monster_frame_paths{
-      MONSTER_PATH, MONSTER_FRAME_1_PATH, MONSTER_FRAME_2_PATH,
-      MONSTER_FRAME_3_PATH};
-  for (const char *monster_frame_path : monster_frame_paths) {
-    SDL_Surface *monster_surface = SDL_LoadBMP(monster_frame_path);
+  sdl_wall_surface = SDL_LoadBMP(wall_path.c_str());
+  sdl_goodie_surface = SDL_LoadBMP(goodie_path.c_str());
+  sdl_pacman_surface = SDL_LoadBMP(pacman_path.c_str());
+
+  const std::vector<std::string> monster_frame_paths{
+      Paths::GetDataFilePath("monster.bmp"),
+      Paths::GetDataFilePath("monster_1.bmp"),
+      Paths::GetDataFilePath("monster_2.bmp"),
+      Paths::GetDataFilePath("monster_3.bmp")};
+  for (const std::string &monster_frame_path : monster_frame_paths) {
+    SDL_Surface *monster_surface = SDL_LoadBMP(monster_frame_path.c_str());
     if (monster_surface == nullptr) {
       std::cerr << "Could not open monster sprite asset "
                 << monster_frame_path << ": " << SDL_GetError() << "\n";
@@ -255,9 +267,10 @@ void Renderer::initializeRenderer(size_t row_count_value,
     sdl_monster_textures.push_back(monster_texture);
   }
 
-  SDL_Surface *brick_surface = IMG_Load(LOGO_BRICK_TEXTURE_PATH);
+  const std::string logo_brick_path = Paths::GetDataFilePath("brick.png");
+  SDL_Surface *brick_surface = IMG_Load(logo_brick_path.c_str());
   if (brick_surface == nullptr) {
-    brick_surface = SDL_LoadBMP(WALL_PATH);
+    brick_surface = SDL_LoadBMP(wall_path.c_str());
   }
   if (brick_surface == nullptr) {
     std::cerr << "Could not open brick texture for logo: " << IMG_GetError()
@@ -433,6 +446,7 @@ void Renderer::renderFrame(bool show_hud) {
   drawteleporters();
   if (game != nullptr) {
     drawgoodies();
+    drawbonusflask();
     drawpacman();
     drawmonsters();
     drawgasclouds();
@@ -472,6 +486,17 @@ void Renderer::drawhud() {
       "BOBMAN        Score: " + std::to_string(game->score);
   renderSimpleText(sdl_font_hud, title_text, sdl_font_color, screen_res_x / 2,
                    30);
+
+  const Uint32 now = SDL_GetTicks();
+  if (game->pacman != nullptr && game->pacman->invulnerable_until_ticks > now) {
+    const Uint32 remaining_ms = game->pacman->invulnerable_until_ticks - now;
+    const int remaining_seconds =
+        static_cast<int>((remaining_ms + 999) / 1000);
+    renderSimpleText(sdl_font_hud,
+                     "Schild: " + std::to_string(remaining_seconds) + "s",
+                     kShieldTextColor, screen_res_x / 2,
+                     30 + TTF_FontHeight(sdl_font_hud) + 6);
+  }
 
   if (game->win) {
     renderBrickText(sdl_font_display, "You Won", screen_res_x / 2,
@@ -1186,6 +1211,9 @@ void Renderer::drawpacman() {
     return;
   }
 
+  const Uint32 now = SDL_GetTicks();
+  const bool invulnerable = game->pacman->invulnerable_until_ticks > now;
+
   if (game->dead) {
     drawDefeatEffect();
     return;
@@ -1211,13 +1239,20 @@ void Renderer::drawpacman() {
     const PixelCoord base_px = getPixelCoord(render_coord, 0, 0);
     const int size =
         std::max(1, static_cast<int>(element_size * 0.9 * std::max(0.0, scale)));
-    const SDL_Rect animated_rect{
-        base_px.x + element_size / 2 - size / 2,
-        base_px.y + element_size / 2 - size / 2, size, size};
-    const SDL_Point rotation_center{size / 2, size / 2};
+	    const SDL_Rect animated_rect{
+	        base_px.x + element_size / 2 - size / 2,
+	        base_px.y + element_size / 2 - size / 2, size, size};
+	    const SDL_Point rotation_center{size / 2, size / 2};
 
-    const Uint8 spark_alpha = static_cast<Uint8>(
-        std::clamp((in_departure_phase ? (1.0 - phase_progress)
+    if (invulnerable) {
+      drawPacmanShield(animated_rect.x + animated_rect.w / 2,
+                       animated_rect.y + animated_rect.h / 2,
+                       std::max(8, animated_rect.w / 2 + 5),
+                       static_cast<double>(now) / 180.0);
+    }
+
+	    const Uint8 spark_alpha = static_cast<Uint8>(
+	        std::clamp((in_departure_phase ? (1.0 - phase_progress)
                                        : (0.35 + 0.65 * phase_progress)) *
                        170.0,
                    0.0, 200.0));
@@ -1254,7 +1289,142 @@ void Renderer::drawpacman() {
       SDL_Rect{game->pacman->px_coord.x + int(element_size * 0.05),
                game->pacman->px_coord.y + int(element_size * 0.05),
                int(element_size * 0.9), int(element_size * 0.9)};
+  if (invulnerable) {
+    drawPacmanShield(sdl_pacman_rect.x + sdl_pacman_rect.w / 2,
+                     sdl_pacman_rect.y + sdl_pacman_rect.h / 2,
+                     std::max(8, sdl_pacman_rect.w / 2 + 5),
+                     static_cast<double>(now) / 180.0);
+  }
   SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, nullptr, &sdl_pacman_rect);
+}
+
+void Renderer::drawbonusflask() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const auto &potion = game->invulnerability_potion;
+  if (!potion.is_visible) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  double alpha_factor = 1.0;
+  if (potion.is_fading) {
+    alpha_factor =
+        1.0 - std::clamp(static_cast<double>(now - potion.fade_started_ticks) /
+                             static_cast<double>(BLUE_POTION_FADE_MS),
+                         0.0, 1.0);
+  }
+
+  if (alpha_factor <= 0.0) {
+    return;
+  }
+
+  const PixelCoord potion_px = getPixelCoord(potion.coord, 0, 0);
+  const int center_x = potion_px.x + element_size / 2;
+  const int center_y = potion_px.y + element_size / 2;
+  const double wobble_clock =
+      static_cast<double>(now + potion.animation_seed * 53) / 260.0;
+  const double pulse = 0.76 + 0.24 * std::sin(wobble_clock);
+  const Uint8 glow_alpha =
+      static_cast<Uint8>(std::clamp(120.0 * alpha_factor, 0.0, 140.0));
+  const Uint8 glass_alpha =
+      static_cast<Uint8>(std::clamp(175.0 * alpha_factor, 0.0, 200.0));
+  const Uint8 fluid_alpha =
+      static_cast<Uint8>(std::clamp(210.0 * alpha_factor, 0.0, 230.0));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 72, 164, 255, glow_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(6, static_cast<int>(element_size * 0.30 * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 124, 214, 255, glow_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(8, static_cast<int>(element_size * 0.38 * pulse)));
+
+  const int flask_width = std::max(10, static_cast<int>(element_size * 0.34));
+  const int flask_body_height =
+      std::max(12, static_cast<int>(element_size * 0.36));
+  const int flask_neck_width =
+      std::max(5, static_cast<int>(flask_width * 0.42));
+  const int flask_neck_height =
+      std::max(5, static_cast<int>(element_size * 0.16));
+  const int flask_top = center_y - flask_body_height / 2;
+
+  SDL_Rect neck_rect{center_x - flask_neck_width / 2,
+                     flask_top - flask_neck_height / 2, flask_neck_width,
+                     flask_neck_height};
+  SDL_Rect body_rect{center_x - flask_width / 2, flask_top, flask_width,
+                     flask_body_height};
+
+  SDL_SetRenderDrawColor(sdl_renderer, 225, 245, 255, glass_alpha / 4);
+  SDL_RenderFillRect(sdl_renderer, &neck_rect);
+  SDL_RenderFillRect(sdl_renderer, &body_rect);
+  SDL_RenderFillCircle(sdl_renderer, center_x, body_rect.y + body_rect.h,
+                       std::max(5, flask_width / 2));
+
+  const int liquid_height = std::max(
+      5, static_cast<int>(flask_body_height * (0.42 + 0.10 * std::sin(wobble_clock))));
+  SDL_Rect liquid_rect{body_rect.x + 2, body_rect.y + body_rect.h - liquid_height,
+                       std::max(2, body_rect.w - 4), liquid_height};
+  SDL_SetRenderDrawColor(sdl_renderer, 44, 112, 255, fluid_alpha);
+  SDL_RenderFillRect(sdl_renderer, &liquid_rect);
+  SDL_SetRenderDrawColor(sdl_renderer, 118, 204, 255, fluid_alpha);
+  SDL_RenderFillCircle(
+      sdl_renderer, center_x,
+      body_rect.y + body_rect.h - std::max(2, liquid_height / 3),
+      std::max(4, flask_width / 2 - 2));
+
+  for (int bubble = 0; bubble < 3; bubble++) {
+    const double bubble_phase = wobble_clock * 1.15 + bubble * 1.7;
+    const double bubble_progress = std::fmod(now / 900.0 + bubble * 0.31, 1.0);
+    const int bubble_x = center_x +
+                         static_cast<int>(std::sin(bubble_phase) * flask_width * 0.16);
+    const int bubble_y =
+        liquid_rect.y + liquid_rect.h -
+        static_cast<int>(bubble_progress * std::max(6, liquid_rect.h - 2));
+    const int bubble_radius = std::max(2, element_size / 14 + bubble % 2);
+    SDL_SetRenderDrawColor(sdl_renderer, 220, 245, 255, glow_alpha);
+    SDL_RenderFillCircle(sdl_renderer, bubble_x, bubble_y, bubble_radius);
+  }
+
+  SDL_SetRenderDrawColor(sdl_renderer, 224, 246, 255, glass_alpha);
+  SDL_RenderDrawRect(sdl_renderer, &neck_rect);
+  SDL_RenderDrawRect(sdl_renderer, &body_rect);
+  SDL_RenderDrawLine(sdl_renderer, body_rect.x, body_rect.y + body_rect.h,
+                     center_x - flask_width / 4, body_rect.y + body_rect.h + flask_width / 3);
+  SDL_RenderDrawLine(sdl_renderer, body_rect.x + body_rect.w,
+                     body_rect.y + body_rect.h,
+                     center_x + flask_width / 4,
+                     body_rect.y + body_rect.h + flask_width / 3);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, body_rect.y + body_rect.h,
+                       std::max(5, flask_width / 2));
+}
+
+void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
+                                double pulse_clock) {
+  const double pulse = 0.72 + 0.28 * std::sin(pulse_clock);
+  const int outer_radius =
+      std::max(base_radius, static_cast<int>(base_radius * (1.08 + 0.16 * pulse)));
+  const int inner_radius =
+      std::max(base_radius - 3, static_cast<int>(base_radius * (0.82 + 0.08 * pulse)));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 32, 126, 255, 58);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, 86, 196, 255, 78);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, inner_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, 200, 245, 255, 165);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y, outer_radius);
+
+  for (int orb = 0; orb < 4; orb++) {
+    const double angle = pulse_clock * 0.85 + orb * (2.0 * 3.1415926535 / 4.0);
+    const int orb_radius =
+        std::max(2, static_cast<int>(element_size * (0.05 + 0.02 * pulse)));
+    const int orbit_radius = std::max(outer_radius - 2, inner_radius);
+    const int orb_x = center_x + static_cast<int>(std::cos(angle) * orbit_radius);
+    const int orb_y = center_y + static_cast<int>(std::sin(angle) * orbit_radius);
+    SDL_SetRenderDrawColor(sdl_renderer, 214, 250, 255, 180);
+    SDL_RenderFillCircle(sdl_renderer, orb_x, orb_y, orb_radius);
+  }
 }
 
 void Renderer::drawDefeatEffect() {

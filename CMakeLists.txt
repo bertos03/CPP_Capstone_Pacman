@@ -7,19 +7,23 @@
 cmake_minimum_required(VERSION 3.11.3)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_definitions(-std=c++17)
 
-project(pacman)
+project(pacman VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread")
 
 # Set default build type to Debug if not specified
-if(NOT CMAKE_BUILD_TYPE)
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
 endif()
 
 # Set the possible values of build type for cmake-gui
-set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
+if(NOT CMAKE_CONFIGURATION_TYPES)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
+endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl2)
@@ -36,27 +40,26 @@ include_directories(${SDL2_INCLUDE_DIRS} ${SDL2_IMAGE_INCLUDE_DIRS} ${SDL2TTF_IN
 file(GLOB project_SRCS src/*.cpp) #src/*.h
 
 # Add project executable
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    # For Release build, create a macOS app bundle
+if(APPLE)
     add_executable(pacman MACOSX_BUNDLE ${project_SRCS})
     set_target_properties(pacman PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.pacman"
         MACOSX_BUNDLE_BUNDLE_NAME "Pacman"
-        MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/cmake/MacOSXBundleInfo.plist.in"
     )
-    # Copy data directory to the app bundle
     add_custom_command(TARGET pacman POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/data
         $<TARGET_BUNDLE_CONTENT_DIR:pacman>/Resources/data
     )
 else()
-    # For Debug build, create regular executable
     add_executable(pacman ${project_SRCS})
 endif()
+
+target_compile_definitions(pacman PRIVATE PACMAN_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 #string(STRIP ${SDL2_LIBRARIES} SDL2_LIBRARIES)
 target_link_libraries(pacman ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES} ${SDL2TTF_LIBRARY} ${SDL2_MIXER_LIBRARIES})
@@ -70,11 +73,34 @@ message ([STATUS] "SDL2TTF_LIBRARY" ${SDL2TTF_LIBRARY})
 message ([STATUS] "SDL2_MIXER_INCLUDE_DIRS" ${SDL2_MIXER_INCLUDE_DIRS})
 message ([STATUS] "SDL2_MIXER_LIBRARIES" ${SDL2_MIXER_LIBRARIES})
 
+if(APPLE)
+    install(TARGETS pacman BUNDLE DESTINATION .)
+
+    set(PACMAN_BUNDLE_SEARCH_DIRS "")
+    foreach(dep IN LISTS SDL2_LIBRARIES SDL2_IMAGE_LIBRARIES SDL2TTF_LIBRARY SDL2_MIXER_LIBRARIES)
+        if(IS_ABSOLUTE "${dep}" AND EXISTS "${dep}")
+            get_filename_component(dep_dir "${dep}" DIRECTORY)
+            list(APPEND PACMAN_BUNDLE_SEARCH_DIRS "${dep_dir}")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES PACMAN_BUNDLE_SEARCH_DIRS)
+
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/cmake/FixupBundle.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake"
+        @ONLY
+    )
+    install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake")
+else()
+    install(TARGETS pacman RUNTIME DESTINATION bin)
+endif()
+
 # CPack configuration for packaging
 set(CPACK_PACKAGE_NAME "Pacman")
-set(CPACK_PACKAGE_VERSION "1.0")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Pacman Game")
 set(CPACK_PACKAGE_VENDOR "Your Name")
+set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 if(APPLE)
     set(CPACK_GENERATOR "DragNDrop")

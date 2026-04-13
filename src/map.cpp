@@ -15,11 +15,14 @@
  */
 
 #include "map.h"
+#include "paths.h"
 
 #include <array>
 #include <filesystem>
 
 namespace {
+
+namespace fs = std::filesystem;
 
 bool ReadMapFileContents(const std::string &map_path, MapFileData &map_file) {
   std::ifstream stream(map_path);
@@ -42,16 +45,10 @@ bool ReadMapFileContents(const std::string &map_path, MapFileData &map_file) {
   return !map_file.layout_rows.empty();
 }
 
-} // namespace
-
-std::vector<MapDefinition>
-Map::DiscoverAvailableMaps(const std::string &directory_path) {
-  namespace fs = std::filesystem;
-
-  std::vector<MapDefinition> maps;
-  const fs::path map_directory(directory_path);
+void DiscoverMapsInDirectory(const fs::path &map_directory,
+                             std::vector<MapDefinition> &maps) {
   if (!fs::exists(map_directory) || !fs::is_directory(map_directory)) {
-    return maps;
+    return;
   }
 
   for (const auto &entry : fs::directory_iterator(map_directory)) {
@@ -64,12 +61,34 @@ Map::DiscoverAvailableMaps(const std::string &directory_path) {
       continue;
     }
 
+    const std::string file_path = entry.path().string();
+    const auto duplicate =
+        std::find_if(maps.begin(), maps.end(), [&](const MapDefinition &map) {
+          return map.file_path == file_path;
+        });
+    if (duplicate != maps.end()) {
+      continue;
+    }
+
     MapFileData map_file;
     const std::string display_name =
-        ReadMapFileContents(entry.path().string(), map_file)
-            ? map_file.display_name
-            : entry.path().stem().string();
-    maps.push_back({entry.path().string(), display_name});
+        ReadMapFileContents(file_path, map_file) ? map_file.display_name
+                                                 : entry.path().stem().string();
+    maps.push_back({file_path, display_name});
+  }
+}
+
+} // namespace
+
+std::vector<MapDefinition>
+Map::DiscoverAvailableMaps(const std::string &directory_path) {
+  std::vector<MapDefinition> maps;
+  if (!directory_path.empty()) {
+    DiscoverMapsInDirectory(fs::path(directory_path), maps);
+  } else {
+    for (const std::string &search_directory : Paths::GetMapSearchDirectories()) {
+      DiscoverMapsInDirectory(fs::path(search_directory), maps);
+    }
   }
 
   std::sort(maps.begin(), maps.end(),

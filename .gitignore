@@ -12,6 +12,7 @@
 /CPackConfig.cmake
 /CPackSourceConfig.cmake
 /install_manifest.txt
+/_CPack_Packages/
 CMakeUserPresets.json
 
 # Local IDE settings
