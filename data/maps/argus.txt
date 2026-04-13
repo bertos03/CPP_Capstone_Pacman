@@ -6,7 +6,7 @@ x....O..xxx.....x.......x.xG.x
 xxxx.x......xxx.xxxx..x.G..x.x
 xxGx.xGx.xx...x.x..xx..x.x...x
 x..xxxx..xG.x.x5..Gxxxxxxxxxxx
-xx.......xxxx.xxxxx.x.xG.....x
+xx.......xxxx.xxxxx.xGxG.....x
 x5..x..x..xGx.PxG.x.x..xxxxx.x
 x.xxGxxx..x.xxxxx.x..x....2x.x
 x.x..1xGx.x...Gx..xG...xxx...x
