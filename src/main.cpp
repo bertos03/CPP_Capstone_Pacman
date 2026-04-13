@@ -1147,22 +1147,22 @@ int main() {
     game->StartSimulation();
 
     bool return_to_menu = false;
-    bool frozen_loss_screen = false;
-    while ((!events->is_quit() || frozen_loss_screen) && !return_to_menu &&
+    bool frozen_end_screen = false;
+    while ((!events->is_quit() || frozen_end_screen) && !return_to_menu &&
            !quit_application) {
       if (!game->is_lost() && !game->is_won()) {
         events->update();
         if (!events->is_quit()) {
           game->Update();
         }
-        if (game->is_lost() && !frozen_loss_screen) {
+        if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
-          frozen_loss_screen = true;
+          frozen_end_screen = true;
         }
       } else {
-        if (game->is_lost() && !frozen_loss_screen) {
+        if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
-          frozen_loss_screen = true;
+          frozen_end_screen = true;
         }
         processEndScreenEvents(return_to_menu, quit_application);
       }
