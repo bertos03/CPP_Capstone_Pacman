@@ -34,6 +34,8 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char) {
   last_fireball_ticks = 0;
   next_gas_cloud_ticks = 0;
   death_started_ticks = 0;
+  scheduled_dynamite_blast_ticks = 0;
+  scheduled_dynamite_blast_coord = _coord;
   px_delta.x = 0;
   px_delta.y = 0;
 }

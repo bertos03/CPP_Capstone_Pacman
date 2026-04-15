@@ -69,12 +69,36 @@ struct InvulnerabilityPotion {
   bool is_fading = false;
 };
 
-enum class EffectType { MonsterExplosion, WallImpact };
+struct DynamitePickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
+struct PlacedDynamite {
+  MapCoord coord{0, 0};
+  Uint32 placed_ticks = 0;
+  Uint32 explode_at_ticks = 0;
+  int animation_seed = 0;
+};
+
+struct ScheduledMonsterBlast {
+  Monster *monster = nullptr;
+  MapCoord coord{0, 0};
+  Uint32 trigger_ticks = 0;
+};
+
+enum class EffectType { MonsterExplosion, WallImpact, DynamiteExplosion };
 
 struct GameEffect {
   MapCoord coord;
   Uint32 started_ticks;
   EffectType type;
+  int radius_cells;
 };
 
 class Game {
@@ -103,8 +127,12 @@ private:
   std::vector<Fireball> fireballs;
   std::vector<GasCloud> gas_clouds;
   InvulnerabilityPotion invulnerability_potion;
+  DynamitePickup dynamite_pickup;
+  std::vector<PlacedDynamite> placed_dynamites;
+  std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
   Uint32 last_update_ticks;
+  int dynamite_inventory;
   friend class Renderer;
   bool dead;
   bool win;
@@ -119,6 +147,16 @@ private:
   void UpdateInvulnerabilityPotion(Uint32 now);
   void UpdateInvulnerability(Uint32 now);
   void ActivateInvulnerability(Uint32 now);
+  void ScheduleNextDynamiteSpawn(Uint32 now);
+  void TrySpawnDynamite(Uint32 now);
+  void UpdateDynamitePickup(Uint32 now);
+  void TryPlaceDynamite(Uint32 now);
+  void UpdatePlacedDynamites(Uint32 now);
+  void DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now);
+  void UpdateScheduledMonsterBlasts(Uint32 now);
+  void ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks);
+  bool IsCellFreeForDynamitePickup(MapCoord coord) const;
+  bool IsWithinDynamiteRadius(MapCoord center, MapCoord target) const;
   bool IsCellFreeForInvulnerabilityPotion(MapCoord coord) const;
   bool IsPacmanInvulnerable(Uint32 now) const;
   void UpdateFireballs(Uint32 now);

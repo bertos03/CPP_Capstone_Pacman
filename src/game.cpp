@@ -17,13 +17,15 @@
 #include "game.h"
 
 #include <algorithm>
+#include <cmath>
 #include <random>
 
 namespace {
 
 constexpr Uint32 kFireballCooldownMs = 10000;
-constexpr Uint32 kMonsterExplosionDurationMs = 520;
+constexpr Uint32 kMonsterExplosionDurationMs = 900;
 constexpr Uint32 kWallImpactDurationMs = 180;
+constexpr Uint32 kDynamiteChainDelayMs = 140;
 
 std::mt19937 &RandomGenerator() {
   static std::mt19937 generator(std::random_device{}());
@@ -57,6 +59,12 @@ MapCoord StepCoord(MapCoord coord, Directions direction) {
 
 bool SameCoord(MapCoord left, MapCoord right) {
   return left.u == right.u && left.v == right.v;
+}
+
+int DistanceSquared(MapCoord left, MapCoord right) {
+  const int delta_u = left.u - right.u;
+  const int delta_v = left.v - right.v;
+  return delta_u * delta_u + delta_v * delta_v;
 }
 
 bool HasLineOfSight(Map *map, MapCoord from, MapCoord to,
@@ -101,6 +109,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   win = false;
   dead = false;
   score = 0;
+  dynamite_inventory = 0;
   simulation_started = false;
   death_started_ticks = 0;
   last_update_ticks = SDL_GetTicks();
@@ -108,6 +117,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   pacman = new Pacman(map->get_coord_pacman());
   death_coord = pacman->map_coord;
   ScheduleNextInvulnerabilityPotionSpawn(last_update_ticks);
+  ScheduleNextDynamiteSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -150,6 +160,7 @@ void Game::StartSimulation() {
 void Game::Update() {
   const Uint32 now = SDL_GetTicks();
   CleanupEffects(now);
+  UpdateScheduledMonsterBlasts(now);
   UpdateInvulnerability(now);
   if (pacman->teleport_animation_active &&
       !pacman->teleport_arrival_sound_played &&
@@ -167,11 +178,18 @@ void Game::Update() {
     pacman->teleport_animation_active = false;
   }
   if (dead) {
+    UpdatePlacedDynamites(now);
     return;
   }
 
   ApplyTeleporters();
   UpdateInvulnerabilityPotion(now);
+  UpdateDynamitePickup(now);
+  TryPlaceDynamite(now);
+  UpdatePlacedDynamites(now);
+  if (dead) {
+    return;
+  }
 
   // Check for collision with Goodies ... game is won if all goodies are
   // collected
@@ -198,6 +216,7 @@ void Game::Update() {
   TrySpawnGasClouds(now);
   UpdateFireballs(now);
   UpdateGasClouds(now);
+  UpdateScheduledMonsterBlasts(now);
   if (dead) {
     return;
   }
@@ -358,6 +377,62 @@ void Game::ScheduleNextInvulnerabilityPotionSpawn(Uint32 now) {
                            BLUE_POTION_SPAWN_MAX_INTERVAL_MS);
 }
 
+void Game::ScheduleNextDynamiteSpawn(Uint32 now) {
+  dynamite_pickup.next_spawn_ticks =
+      now + RandomInterval(DYNAMITE_SPAWN_MIN_INTERVAL_MS,
+                           DYNAMITE_SPAWN_MAX_INTERVAL_MS);
+}
+
+bool Game::IsWithinDynamiteRadius(MapCoord center, MapCoord target) const {
+  return DistanceSquared(center, target) <=
+         DYNAMITE_EXPLOSION_RADIUS_CELLS * DYNAMITE_EXPLOSION_RADIUS_CELLS;
+}
+
+bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
+  if (map == nullptr ||
+      map->map_entry(static_cast<size_t>(coord.u), static_cast<size_t>(coord.v)) !=
+          ElementType::TYPE_PATH) {
+    return false;
+  }
+
+  if (SameCoord(coord, pacman->map_coord)) {
+    return false;
+  }
+
+  if (invulnerability_potion.is_visible &&
+      SameCoord(coord, invulnerability_potion.coord)) {
+    return false;
+  }
+
+  for (const auto *monster : monsters) {
+    if ((monster->is_alive ||
+         monster->scheduled_dynamite_blast_ticks != 0) &&
+        SameCoord(coord, monster->map_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &fireball : fireballs) {
+    if (SameCoord(coord, fireball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &cloud : gas_clouds) {
+    if (SameCoord(coord, cloud.coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &dynamite : placed_dynamites) {
+    if (SameCoord(coord, dynamite.coord)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
   if (map == nullptr ||
       map->map_entry(static_cast<size_t>(coord.u), static_cast<size_t>(coord.v)) !=
@@ -383,6 +458,16 @@ bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
 
   for (const auto &cloud : gas_clouds) {
     if (SameCoord(coord, cloud.coord)) {
+      return false;
+    }
+  }
+
+  if (dynamite_pickup.is_visible && SameCoord(coord, dynamite_pickup.coord)) {
+    return false;
+  }
+
+  for (const auto &dynamite : placed_dynamites) {
+    if (SameCoord(coord, dynamite.coord)) {
       return false;
     }
   }
@@ -432,6 +517,174 @@ void Game::ActivateInvulnerability(Uint32 now) {
 #ifdef AUDIO
   audio->StartInvulnerabilityLoop();
 #endif
+}
+
+void Game::TrySpawnDynamite(Uint32 now) {
+  if (dynamite_pickup.is_visible || now < dynamite_pickup.next_spawn_ticks) {
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForDynamitePickup(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    dynamite_pickup.next_spawn_ticks = now + 1000;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  dynamite_pickup.coord = candidates[distribution(RandomGenerator())];
+  dynamite_pickup.appeared_ticks = now;
+  dynamite_pickup.fade_started_ticks = 0;
+  dynamite_pickup.animation_seed = static_cast<int>(
+      (now % 997) + dynamite_pickup.coord.u * 19 + dynamite_pickup.coord.v * 37);
+  dynamite_pickup.is_visible = true;
+  dynamite_pickup.is_fading = false;
+  dynamite_pickup.next_spawn_ticks = 0;
+#ifdef AUDIO
+  audio->PlayDynamiteSpawn();
+#endif
+}
+
+void Game::UpdateDynamitePickup(Uint32 now) {
+  TrySpawnDynamite(now);
+  if (!dynamite_pickup.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, dynamite_pickup.coord)) {
+    dynamite_inventory++;
+    dynamite_pickup.is_visible = false;
+    dynamite_pickup.is_fading = false;
+    dynamite_pickup.fade_started_ticks = 0;
+    ScheduleNextDynamiteSpawn(now);
+    return;
+  }
+
+  if (!dynamite_pickup.is_fading &&
+      now - dynamite_pickup.appeared_ticks >= DYNAMITE_VISIBLE_MS) {
+    dynamite_pickup.is_fading = true;
+    dynamite_pickup.fade_started_ticks = now;
+  }
+
+  if (dynamite_pickup.is_fading &&
+      now - dynamite_pickup.fade_started_ticks >= DYNAMITE_FADE_MS) {
+    dynamite_pickup.is_visible = false;
+    dynamite_pickup.is_fading = false;
+    dynamite_pickup.fade_started_ticks = 0;
+    ScheduleNextDynamiteSpawn(now);
+  }
+}
+
+void Game::TryPlaceDynamite(Uint32 now) {
+  if (events == nullptr || pacman == nullptr) {
+    return;
+  }
+
+  const bool place_requested = events->ConsumePlaceDynamiteRequest();
+  if (!place_requested || dynamite_inventory <= 0) {
+    return;
+  }
+
+  for (const auto &placed_dynamite : placed_dynamites) {
+    if (SameCoord(placed_dynamite.coord, pacman->map_coord)) {
+      return;
+    }
+  }
+
+  placed_dynamites.push_back(
+      {pacman->map_coord, now, now + DYNAMITE_COUNTDOWN_MS,
+       static_cast<int>((now % 997) + pacman->map_coord.u * 23 +
+                        pacman->map_coord.v * 29 + dynamite_inventory * 17)});
+  dynamite_inventory--;
+}
+
+void Game::ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks) {
+  if (monster == nullptr || !monster->is_alive) {
+    return;
+  }
+
+  monster->is_alive = false;
+  monster->px_delta.x = 0;
+  monster->px_delta.y = 0;
+  monster->scheduled_dynamite_blast_ticks = trigger_ticks;
+  monster->scheduled_dynamite_blast_coord = monster->map_coord;
+  monster->death_coord = monster->map_coord;
+  scheduled_monster_blasts.push_back(
+      {monster, monster->map_coord, trigger_ticks});
+}
+
+void Game::DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now) {
+  effects.push_back(
+      {dynamite.coord, now, EffectType::DynamiteExplosion,
+       DYNAMITE_EXPLOSION_RADIUS_CELLS});
+#ifdef AUDIO
+  audio->PlayDynamiteExplosion();
+#endif
+
+  for (auto *monster : monsters) {
+    if (!monster->is_alive ||
+        !IsWithinDynamiteRadius(dynamite.coord, monster->map_coord)) {
+      continue;
+    }
+
+    const int distance_steps =
+        std::max(std::abs(monster->map_coord.u - dynamite.coord.u),
+                 std::abs(monster->map_coord.v - dynamite.coord.v));
+    const Uint32 trigger_ticks =
+        now + kDynamiteChainDelayMs +
+        static_cast<Uint32>(std::max(0, distance_steps) * 80);
+    ScheduleMonsterBlast(monster, trigger_ticks);
+  }
+
+  if (!IsPacmanInvulnerable(now) &&
+      IsWithinDynamiteRadius(dynamite.coord, pacman->map_coord)) {
+    TriggerLoss(pacman->map_coord, now);
+  }
+}
+
+void Game::UpdatePlacedDynamites(Uint32 now) {
+  for (size_t index = 0; index < placed_dynamites.size();) {
+    if (now < placed_dynamites[index].explode_at_ticks) {
+      index++;
+      continue;
+    }
+
+    const PlacedDynamite detonated_dynamite = placed_dynamites[index];
+    placed_dynamites.erase(placed_dynamites.begin() + static_cast<long>(index));
+    DetonateDynamite(detonated_dynamite, now);
+  }
+}
+
+void Game::UpdateScheduledMonsterBlasts(Uint32 now) {
+  for (size_t index = 0; index < scheduled_monster_blasts.size();) {
+    ScheduledMonsterBlast &blast = scheduled_monster_blasts[index];
+    if (now < blast.trigger_ticks) {
+      index++;
+      continue;
+    }
+
+    if (blast.monster != nullptr) {
+      blast.monster->scheduled_dynamite_blast_ticks = 0;
+      blast.monster->death_coord = blast.coord;
+      blast.monster->death_started_ticks = now;
+      effects.push_back({blast.coord, now, EffectType::MonsterExplosion, 1});
+#ifdef AUDIO
+      audio->PlayDynamiteExplosion();
+#endif
+    }
+
+    scheduled_monster_blasts.erase(scheduled_monster_blasts.begin() +
+                                   static_cast<long>(index));
+  }
 }
 
 void Game::UpdateInvulnerabilityPotion(Uint32 now) {
@@ -486,7 +739,7 @@ void Game::UpdateFireballs(Uint32 now) {
       MapCoord next_coord = StepCoord(fireball.current_coord, fireball.direction);
 
       if (map->map_entry(next_coord.u, next_coord.v) == ElementType::TYPE_WALL) {
-        effects.push_back({next_coord, now, EffectType::WallImpact});
+        effects.push_back({next_coord, now, EffectType::WallImpact, 0});
 #ifdef AUDIO
         audio->PlayFireballWallHit();
 #endif
@@ -498,6 +751,9 @@ void Game::UpdateFireballs(Uint32 now) {
       fireball.segment_started_ticks += FIREBALL_STEP_DURATION_MS;
 
       if (SameCoord(pacman->map_coord, fireball.current_coord)) {
+#ifdef AUDIO
+        audio->PlayFireballWallHit();
+#endif
         if (!IsPacmanInvulnerable(now)) {
           TriggerLoss(fireball.current_coord, now);
         }
@@ -562,10 +818,17 @@ void Game::CleanupEffects(Uint32 now) {
   effects.erase(
       std::remove_if(effects.begin(), effects.end(),
                      [now](const GameEffect &effect) {
-                       const Uint32 max_age =
-                           (effect.type == EffectType::MonsterExplosion)
-                               ? kMonsterExplosionDurationMs
-                               : kWallImpactDurationMs;
+                       if (now < effect.started_ticks) {
+                         return false;
+                       }
+
+                       Uint32 max_age = kWallImpactDurationMs;
+                       if (effect.type == EffectType::MonsterExplosion) {
+                         max_age = kMonsterExplosionDurationMs;
+                       } else if (effect.type ==
+                                  EffectType::DynamiteExplosion) {
+                         max_age = DYNAMITE_EXPLOSION_DURATION_MS;
+                       }
                        return now - effect.started_ticks > max_age;
                      }),
       effects.end());
@@ -579,9 +842,11 @@ void Game::EliminateMonster(Monster *monster, Uint32 now) {
   monster->is_alive = false;
   monster->px_delta.x = 0;
   monster->px_delta.y = 0;
+  monster->scheduled_dynamite_blast_ticks = 0;
   monster->death_coord = monster->map_coord;
   monster->death_started_ticks = now;
-  effects.push_back({monster->death_coord, now, EffectType::MonsterExplosion});
+  effects.push_back(
+      {monster->death_coord, now, EffectType::MonsterExplosion, 1});
 #ifdef AUDIO
   audio->PlayMonsterExplosion();
 #endif

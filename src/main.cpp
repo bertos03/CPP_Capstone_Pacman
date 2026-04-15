@@ -1005,6 +1005,7 @@ int main() {
   std::cout << "Bobman starting up ...\n";
 
   const int countdown_seconds = std::clamp(GAME_START_COUNTDOWN, 3, 9);
+  const int menu_music_fade_ms = std::max(0, MENU_MUSIC_FADE_OUT_MS);
   std::vector<MapDefinition> available_maps = Map::DiscoverAvailableMaps();
   if (available_maps.empty()) {
     std::cerr << "No maps found in "
@@ -1053,6 +1054,7 @@ int main() {
     MenuScreen menu_screen = next_menu_screen_after_rebuild;
     next_menu_screen_after_rebuild = MenuScreen::Main;
     EditorRequest editor_request;
+    audio->StartMenuMusic();
 
     while (!quit_application && !start_requested && !rebuild_menu_session &&
            !launch_editor) {
@@ -1107,6 +1109,7 @@ int main() {
     }
 
     if (launch_editor) {
+      audio->StopMenuMusic();
       const EditorResult editor_result =
           RunEditorSession(editor_request, audio.get());
       if (editor_result.quit_requested) {
@@ -1127,6 +1130,25 @@ int main() {
     }
 
     preferred_selected_map_path = available_maps[selected_map_index].file_path;
+
+    if (menu_music_fade_ms > 0 && audio->FadeOutMenuMusic(menu_music_fade_ms)) {
+      const Uint32 fade_started = SDL_GetTicks();
+      while (!quit_application && audio->IsMenuMusicPlaying() &&
+             SDL_GetTicks() - fade_started <=
+                 static_cast<Uint32>(menu_music_fade_ms + 250)) {
+        processOverlayEvents(quit_application);
+        renderer.RenderStartMenu(main_selected_item,
+                                 available_maps[selected_map_index].display_name,
+                                 "");
+        sleep(16);
+      }
+    } else {
+      audio->StopMenuMusic();
+    }
+
+    if (quit_application) {
+      break;
+    }
 
     for (int remaining = countdown_seconds; remaining > 0 && !quit_application;
          remaining--) {
@@ -1163,6 +1185,9 @@ int main() {
         if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
           frozen_end_screen = true;
+        }
+        if (game->is_lost()) {
+          game->Update();
         }
         processEndScreenEvents(return_to_menu, quit_application);
       }

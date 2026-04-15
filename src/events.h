@@ -30,13 +30,15 @@ public:
   void Keyreset();
   void RequestQuit();
   bool is_quit() { return quit; }
-  Directions get_next_move(){return current_direction;}
+  Directions get_next_move() { return current_direction; }
+  bool ConsumePlaceDynamiteRequest();
 
 protected:
 private:
   SDL_Event *sdl_events;
   bool quit;
   Directions current_direction;
+  bool place_dynamite_requested;
 };
 
 #endif

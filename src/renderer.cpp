@@ -45,6 +45,8 @@ const SDL_Color kTeleporterRed{255, 104, 104, 255};
 const SDL_Color kTeleporterGreen{110, 205, 118, 255};
 const SDL_Color kTeleporterGrey{172, 176, 186, 255};
 const SDL_Color kTeleporterYellow{244, 214, 88, 255};
+constexpr int kPacmanFramesPerDirection = 4;
+constexpr Uint32 kPacmanWalkFrameMs = 140;
 
 const char *MonsterAmountLabel(MonsterAmount monster_amount) {
   switch (monster_amount) {
@@ -114,8 +116,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       offset_y(0), rows(0), cols(0), map(_map), game(_game),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
-      sdl_goodie_texture(nullptr), sdl_pacman_surface(nullptr),
-      sdl_pacman_texture(nullptr), sdl_logo_brick_surface(nullptr),
+      sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -127,8 +128,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       offset_y(0), rows(0), cols(0), map(nullptr), game(nullptr),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
-      sdl_goodie_texture(nullptr), sdl_pacman_surface(nullptr),
-      sdl_pacman_texture(nullptr), sdl_logo_brick_surface(nullptr),
+      sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -189,6 +189,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
     exit(1);
   }
 
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
   sdl_renderer = SDL_CreateRenderer(
       sdl_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (sdl_renderer == nullptr) {
@@ -223,11 +224,9 @@ void Renderer::initializeRenderer(size_t row_count_value,
 
   const std::string wall_path = Paths::GetDataFilePath("brick.bmp");
   const std::string goodie_path = Paths::GetDataFilePath("goodie.bmp");
-  const std::string pacman_path = Paths::GetDataFilePath("pacman.bmp");
 
   sdl_wall_surface = SDL_LoadBMP(wall_path.c_str());
   sdl_goodie_surface = SDL_LoadBMP(goodie_path.c_str());
-  sdl_pacman_surface = SDL_LoadBMP(pacman_path.c_str());
 
   const std::vector<std::string> monster_frame_paths{
       Paths::GetDataFilePath("monster.bmp"),
@@ -244,8 +243,34 @@ void Renderer::initializeRenderer(size_t row_count_value,
     sdl_monster_surfaces.push_back(monster_surface);
   }
 
-  if (sdl_goodie_surface == nullptr || sdl_wall_surface == nullptr ||
-      sdl_pacman_surface == nullptr) {
+  const std::vector<std::string> pacman_frame_paths{
+      Paths::GetDataFilePath("pacman_frames/down_0.png"),
+      Paths::GetDataFilePath("pacman_frames/down_1.png"),
+      Paths::GetDataFilePath("pacman_frames/down_2.png"),
+      Paths::GetDataFilePath("pacman_frames/down_3.png"),
+      Paths::GetDataFilePath("pacman_frames/up_0.png"),
+      Paths::GetDataFilePath("pacman_frames/up_1.png"),
+      Paths::GetDataFilePath("pacman_frames/up_2.png"),
+      Paths::GetDataFilePath("pacman_frames/up_3.png"),
+      Paths::GetDataFilePath("pacman_frames/left_0.png"),
+      Paths::GetDataFilePath("pacman_frames/left_1.png"),
+      Paths::GetDataFilePath("pacman_frames/left_2.png"),
+      Paths::GetDataFilePath("pacman_frames/left_3.png"),
+      Paths::GetDataFilePath("pacman_frames/right_0.png"),
+      Paths::GetDataFilePath("pacman_frames/right_1.png"),
+      Paths::GetDataFilePath("pacman_frames/right_2.png"),
+      Paths::GetDataFilePath("pacman_frames/right_3.png")};
+  for (const std::string &pacman_frame_path : pacman_frame_paths) {
+    SDL_Surface *pacman_surface = IMG_Load(pacman_frame_path.c_str());
+    if (pacman_surface == nullptr) {
+      std::cerr << "Could not open pacman sprite asset "
+                << pacman_frame_path << ": " << IMG_GetError() << "\n";
+      exit(1);
+    }
+    sdl_pacman_surfaces.push_back(pacman_surface);
+  }
+
+  if (sdl_goodie_surface == nullptr || sdl_wall_surface == nullptr) {
     std::cerr << "Could not open sprite assets: " << SDL_GetError() << "\n";
     exit(1);
   }
@@ -254,8 +279,16 @@ void Renderer::initializeRenderer(size_t row_count_value,
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_wall_surface);
   sdl_goodie_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_goodie_surface);
-  sdl_pacman_texture =
-      SDL_CreateTextureFromSurface(sdl_renderer, sdl_pacman_surface);
+  for (SDL_Surface *pacman_surface : sdl_pacman_surfaces) {
+    SDL_Texture *pacman_texture =
+        SDL_CreateTextureFromSurface(sdl_renderer, pacman_surface);
+    if (pacman_texture == nullptr) {
+      std::cerr << "Could not create pacman texture: " << SDL_GetError()
+                << "\n";
+      exit(1);
+    }
+    sdl_pacman_textures.push_back(pacman_texture);
+  }
   for (SDL_Surface *monster_surface : sdl_monster_surfaces) {
     SDL_Texture *monster_texture =
         SDL_CreateTextureFromSurface(sdl_renderer, monster_surface);
@@ -299,8 +332,10 @@ Renderer::~Renderer() {
       SDL_DestroyTexture(monster_texture);
     }
   }
-  if (sdl_pacman_texture != nullptr) {
-    SDL_DestroyTexture(sdl_pacman_texture);
+  for (SDL_Texture *pacman_texture : sdl_pacman_textures) {
+    if (pacman_texture != nullptr) {
+      SDL_DestroyTexture(pacman_texture);
+    }
   }
   if (sdl_renderer != nullptr) {
     SDL_DestroyRenderer(sdl_renderer);
@@ -320,8 +355,10 @@ Renderer::~Renderer() {
       SDL_FreeSurface(monster_surface);
     }
   }
-  if (sdl_pacman_surface != nullptr) {
-    SDL_FreeSurface(sdl_pacman_surface);
+  for (SDL_Surface *pacman_surface : sdl_pacman_surfaces) {
+    if (pacman_surface != nullptr) {
+      SDL_FreeSurface(pacman_surface);
+    }
   }
   if (sdl_logo_brick_surface != nullptr) {
     SDL_FreeSurface(sdl_logo_brick_surface);
@@ -447,7 +484,9 @@ void Renderer::renderFrame(bool show_hud) {
   if (game != nullptr) {
     drawgoodies();
     drawbonusflask();
+    drawdynamitepickup();
     drawpacman();
+    drawplaceddynamites();
     drawmonsters();
     drawgasclouds();
     drawfireballs();
@@ -482,10 +521,43 @@ void Renderer::drawhud() {
     return;
   }
 
-  const std::string title_text =
-      "BOBMAN        Score: " + std::to_string(game->score);
-  renderSimpleText(sdl_font_hud, title_text, sdl_font_color, screen_res_x / 2,
-                   30);
+  const std::string title_text = "BOBMAN";
+  const std::string score_text = "Score: " + std::to_string(game->score);
+  const std::string dynamite_text = std::to_string(game->dynamite_inventory) + "x";
+  int title_width = 0;
+  int score_width = 0;
+  int dynamite_text_width = 0;
+  TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
+  TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
+  if (game->dynamite_inventory > 0) {
+    TTF_SizeUTF8(sdl_font_hud, dynamite_text.c_str(), &dynamite_text_width,
+                 nullptr);
+  }
+
+  const int line_top = 30;
+  const int hud_gap = std::max(14, element_size / 2);
+  const int icon_size = std::max(18, TTF_FontHeight(sdl_font_hud) - 2);
+  int line_width = title_width + hud_gap + score_width;
+  if (game->dynamite_inventory > 0) {
+    line_width += hud_gap + icon_size + 10 + dynamite_text_width;
+  }
+
+  int cursor_x = screen_res_x / 2 - line_width / 2;
+  renderTextLeft(sdl_font_hud, title_text, sdl_font_color, cursor_x, line_top);
+  cursor_x += title_width + hud_gap;
+  renderTextLeft(sdl_font_hud, score_text, sdl_font_color, cursor_x, line_top);
+
+  if (game->dynamite_inventory > 0) {
+    cursor_x += score_width + hud_gap;
+    const SDL_Rect icon_rect{
+        cursor_x, line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
+        icon_size, icon_size};
+    drawDynamiteIcon(icon_rect, true, static_cast<double>(SDL_GetTicks()) / 180.0,
+                     255);
+    cursor_x += icon_rect.w + 10;
+    renderTextLeft(sdl_font_hud, dynamite_text, sdl_font_color, cursor_x,
+                   line_top);
+  }
 
   const Uint32 now = SDL_GetTicks();
   if (game->pacman != nullptr && game->pacman->invulnerable_until_ticks > now) {
@@ -1019,6 +1091,29 @@ void Renderer::renderSimpleText(TTF_Font *font, const std::string &text,
   SDL_FreeSurface(text_surface);
 }
 
+void Renderer::renderTextLeft(TTF_Font *font, const std::string &text,
+                              const SDL_Color &color, int left_x, int top_y) {
+  if (text.empty()) {
+    return;
+  }
+
+  SDL_Surface *text_surface =
+      TTF_RenderUTF8_Blended(font, text.c_str(), color);
+  if (text_surface == nullptr) {
+    return;
+  }
+
+  SDL_Texture *text_texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, text_surface);
+  if (text_texture != nullptr) {
+    SDL_Rect destination{left_x, top_y, text_surface->w, text_surface->h};
+    SDL_RenderCopy(sdl_renderer, text_texture, nullptr, &destination);
+    SDL_DestroyTexture(text_texture);
+  }
+
+  SDL_FreeSurface(text_surface);
+}
+
 void Renderer::renderBrickText(TTF_Font *font, const std::string &text,
                                int center_x, int top_y,
                                const SDL_Color &outline_color) {
@@ -1058,6 +1153,47 @@ void Renderer::renderBrickText(TTF_Font *font, const std::string &text,
   }
 
   SDL_FreeSurface(brick_surface);
+}
+
+int Renderer::getPacmanAnimationFrame(bool walking) const {
+  if (!walking) {
+    return 0;
+  }
+
+  const Uint32 frame_clock = SDL_GetTicks() / kPacmanWalkFrameMs;
+  return static_cast<int>(frame_clock % kPacmanFramesPerDirection);
+}
+
+SDL_Texture *Renderer::getPacmanTexture(Directions facing_direction,
+                                        bool walking) const {
+  if (sdl_pacman_textures.size() <
+      static_cast<size_t>(kPacmanFramesPerDirection * 4)) {
+    return nullptr;
+  }
+
+  int direction_index = 0;
+  switch (facing_direction) {
+  case Directions::Up:
+    direction_index = 1;
+    break;
+  case Directions::Left:
+    direction_index = 2;
+    break;
+  case Directions::Right:
+    direction_index = 3;
+    break;
+  case Directions::Down:
+  case Directions::None:
+  default:
+    direction_index = 0;
+    break;
+  }
+
+  const int frame_index =
+      direction_index * kPacmanFramesPerDirection +
+      std::clamp(getPacmanAnimationFrame(walking), 0,
+                 kPacmanFramesPerDirection - 1);
+  return sdl_pacman_textures[static_cast<size_t>(frame_index)];
 }
 
 SDL_Surface *Renderer::createBrickTextSurface(TTF_Font *font,
@@ -1213,10 +1349,13 @@ void Renderer::drawpacman() {
 
   const Uint32 now = SDL_GetTicks();
   const bool invulnerable = game->pacman->invulnerable_until_ticks > now;
+  const bool walking =
+      game->pacman->px_delta.x != 0 || game->pacman->px_delta.y != 0;
   const Directions facing_direction =
       (game->pacman->facing_direction == Directions::None)
           ? Directions::Down
           : game->pacman->facing_direction;
+  SDL_Texture *pacman_texture = getPacmanTexture(facing_direction, walking);
 
   if (game->dead) {
     drawDefeatEffect();
@@ -1278,9 +1417,9 @@ void Renderer::drawpacman() {
               static_cast<int>(std::sin(angle) * spark_length));
     }
 
-    if (size > 1) {
-      drawDwarf(animated_rect, facing_direction,
-                (rotation / 180.0) * 3.1415926535 * 0.25, true);
+    if (size > 1 && pacman_texture != nullptr) {
+      SDL_RenderCopyEx(sdl_renderer, pacman_texture, nullptr, &animated_rect,
+                       rotation, nullptr, SDL_FLIP_NONE);
     }
     return;
   }
@@ -1298,10 +1437,9 @@ void Renderer::drawpacman() {
                      std::max(8, sdl_pacman_rect.w / 2 + 5),
                      static_cast<double>(now) / 180.0);
   }
-  const bool walking =
-      game->pacman->px_delta.x != 0 || game->pacman->px_delta.y != 0;
-  drawDwarf(sdl_pacman_rect, facing_direction, static_cast<double>(now) / 120.0,
-            walking);
+  if (pacman_texture != nullptr) {
+    SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr, &sdl_pacman_rect);
+  }
 }
 
 void Renderer::drawbonusflask() {
@@ -1404,6 +1542,164 @@ void Renderer::drawbonusflask() {
                      body_rect.y + body_rect.h + flask_width / 3);
   SDL_RenderDrawCircle(sdl_renderer, center_x, body_rect.y + body_rect.h,
                        std::max(5, flask_width / 2));
+}
+
+void Renderer::drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
+                                double animation_clock, Uint8 alpha) {
+  if (icon_rect.w <= 0 || icon_rect.h <= 0) {
+    return;
+  }
+
+  const int body_height = std::max(5, icon_rect.h / 3);
+  const int body_y = icon_rect.y + icon_rect.h / 2 - body_height / 2;
+  const SDL_Rect body_rect{icon_rect.x + std::max(1, icon_rect.w / 10), body_y,
+                           std::max(6, icon_rect.w - std::max(2, icon_rect.w / 5)),
+                           body_height};
+  const int cap_radius = std::max(2, body_rect.h / 2);
+  const int center_y = body_rect.y + body_rect.h / 2;
+
+  SDL_SetRenderDrawColor(sdl_renderer, 122, 18, 12, alpha);
+  SDL_RenderFillCircle(sdl_renderer, body_rect.x, center_y, cap_radius);
+  SDL_RenderFillCircle(sdl_renderer, body_rect.x + body_rect.w, center_y,
+                       cap_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, 186, 40, 28, alpha);
+  SDL_RenderFillRect(sdl_renderer, &body_rect);
+  SDL_SetRenderDrawColor(sdl_renderer, 242, 130, 76, alpha);
+  SDL_RenderDrawLine(sdl_renderer, body_rect.x + 1, body_rect.y + 1,
+                     body_rect.x + body_rect.w - 1, body_rect.y + 1);
+  SDL_SetRenderDrawColor(sdl_renderer, 88, 10, 8, alpha);
+  SDL_RenderDrawRect(sdl_renderer, &body_rect);
+
+  const int band_width = std::max(2, body_rect.w / 8);
+  for (int band = 0; band < 2; band++) {
+    const int band_x = body_rect.x + body_rect.w / 3 + band * body_rect.w / 4;
+    SDL_Rect band_rect{band_x, body_rect.y - 1, band_width, body_rect.h + 2};
+    SDL_SetRenderDrawColor(sdl_renderer, 236, 220, 174, alpha);
+    SDL_RenderFillRect(sdl_renderer, &band_rect);
+  }
+
+  const int fuse_start_x = body_rect.x + body_rect.w - std::max(2, body_rect.w / 7);
+  const int fuse_start_y = body_rect.y;
+  const int fuse_tip_x = icon_rect.x + icon_rect.w - std::max(2, icon_rect.w / 10);
+  const int fuse_tip_y = icon_rect.y + std::max(2, icon_rect.h / 8);
+  SDL_SetRenderDrawColor(sdl_renderer, 86, 62, 28, alpha);
+  SDL_RenderDrawLine(sdl_renderer, fuse_start_x, fuse_start_y, fuse_tip_x,
+                     fuse_tip_y);
+
+  if (!lit_fuse) {
+    return;
+  }
+
+  const double spark_pulse = 0.55 + 0.45 * std::sin(animation_clock * 2.4);
+  const int spark_radius =
+      std::max(2, static_cast<int>(std::max(icon_rect.w, icon_rect.h) * 0.10));
+  const Uint8 spark_alpha = static_cast<Uint8>(
+      std::clamp(static_cast<double>(alpha) * (0.70 + 0.30 * spark_pulse), 0.0,
+                 255.0));
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 120, 32, spark_alpha);
+  SDL_RenderFillCircle(sdl_renderer, fuse_tip_x, fuse_tip_y, spark_radius + 1);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 224, 126, spark_alpha);
+  SDL_RenderFillCircle(sdl_renderer, fuse_tip_x, fuse_tip_y, spark_radius);
+
+  for (int spark = 0; spark < 4; spark++) {
+    const double angle = animation_clock * 1.8 + spark * (2.0 * 3.1415926535 / 4.0);
+    const int length =
+        std::max(3, static_cast<int>(icon_rect.w * (0.18 + 0.08 * spark_pulse)));
+    const int x2 = fuse_tip_x + static_cast<int>(std::cos(angle) * length);
+    const int y2 = fuse_tip_y + static_cast<int>(std::sin(angle) * length);
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 236, 158, spark_alpha);
+    SDL_RenderDrawLine(sdl_renderer, fuse_tip_x, fuse_tip_y, x2, y2);
+  }
+}
+
+void Renderer::drawdynamitepickup() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const auto &dynamite = game->dynamite_pickup;
+  if (!dynamite.is_visible) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  double alpha_factor = 1.0;
+  if (dynamite.is_fading) {
+    alpha_factor =
+        1.0 - std::clamp(static_cast<double>(now - dynamite.fade_started_ticks) /
+                             static_cast<double>(DYNAMITE_FADE_MS),
+                         0.0, 1.0);
+  }
+  if (alpha_factor <= 0.0) {
+    return;
+  }
+
+  const PixelCoord pickup_px = getPixelCoord(dynamite.coord, 0, 0);
+  const int center_x = pickup_px.x + element_size / 2;
+  const int center_y = pickup_px.y + element_size / 2;
+  const double animation_clock =
+      static_cast<double>(now + dynamite.animation_seed * 41) / 180.0;
+  const double pulse = 0.80 + 0.20 * std::sin(animation_clock);
+  const Uint8 glow_alpha = static_cast<Uint8>(
+      std::clamp(96.0 * alpha_factor, 0.0, 140.0));
+  const Uint8 body_alpha = static_cast<Uint8>(
+      std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 118, 24, glow_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(7, static_cast<int>(element_size * 0.28 * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 202, 110, glow_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(9, static_cast<int>(element_size * 0.38 * pulse)));
+
+  const int icon_size = std::max(12, static_cast<int>(element_size * 0.74));
+  const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
+                           icon_size, icon_size};
+  drawDynamiteIcon(icon_rect, true, animation_clock, body_alpha);
+}
+
+void Renderer::drawplaceddynamites() {
+  if (game == nullptr) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  for (const auto &placed_dynamite : game->placed_dynamites) {
+    const PixelCoord placed_px = getPixelCoord(placed_dynamite.coord, 0, 0);
+    const int center_x = placed_px.x + element_size / 2;
+    const int center_y = placed_px.y + element_size / 2;
+    const Uint32 remaining_ms =
+        (placed_dynamite.explode_at_ticks > now)
+            ? (placed_dynamite.explode_at_ticks - now)
+            : 0;
+    const double countdown_progress =
+        std::clamp(static_cast<double>(remaining_ms) /
+                       static_cast<double>(std::max(1, DYNAMITE_COUNTDOWN_MS)),
+                   0.0, 1.0);
+    const double urgency = 1.0 - countdown_progress;
+    const double pulse_clock =
+        static_cast<double>(now + placed_dynamite.animation_seed * 29) / 130.0;
+    const double pulse =
+        0.88 + (0.12 + urgency * 0.22) * std::sin(pulse_clock);
+
+    SDL_SetRenderDrawColor(
+        sdl_renderer, 255, 88, 32,
+        static_cast<Uint8>(std::clamp(72.0 + urgency * 90.0, 0.0, 190.0)));
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y + element_size / 6,
+                         std::max(6, static_cast<int>(element_size * 0.24 * pulse)));
+
+    const int icon_size = std::max(12, static_cast<int>(element_size * 0.78));
+    const SDL_Rect icon_rect{center_x - icon_size / 2,
+                             center_y - icon_size / 2 - element_size / 10,
+                             icon_size, icon_size};
+    drawDynamiteIcon(icon_rect, true, pulse_clock, 255);
+
+    const int remaining_seconds =
+        static_cast<int>((std::max<Uint32>(1, remaining_ms) + 999) / 1000);
+    renderSimpleText(sdl_font_hud, std::to_string(remaining_seconds),
+                     SDL_Color{255, 238, 206, 255}, center_x,
+                     placed_px.y - TTF_FontHeight(sdl_font_hud) / 3);
+  }
 }
 
 void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
@@ -2049,12 +2345,12 @@ void Renderer::drawmonsters() {
     return;
   }
 
-  if (game->dead) {
-    return;
-  }
-
+  const Uint32 now = SDL_GetTicks();
   for (auto monster : game->monsters) {
-    if (!monster->is_alive) {
+    const bool waiting_for_blast =
+        monster->scheduled_dynamite_blast_ticks != 0 &&
+        now < monster->scheduled_dynamite_blast_ticks;
+    if (!monster->is_alive && !waiting_for_blast) {
       continue;
     }
 
@@ -2063,15 +2359,35 @@ void Renderer::drawmonsters() {
       continue;
     }
 
-    monster->px_coord = getPixelCoord(
-        monster->map_coord, element_size * monster->px_delta.x / 100.0,
-        element_size * monster->px_delta.y / 100.0);
+    if (waiting_for_blast) {
+      monster->px_coord = getPixelCoord(monster->scheduled_dynamite_blast_coord, 0, 0);
+    } else {
+      monster->px_coord = getPixelCoord(
+          monster->map_coord, element_size * monster->px_delta.x / 100.0,
+          element_size * monster->px_delta.y / 100.0);
+    }
     sdl_monster_rect =
         SDL_Rect{monster->px_coord.x + int(element_size * 0.05),
                  monster->px_coord.y + int(element_size * 0.05),
                  int(element_size * 0.9), int(element_size * 0.9)};
     drawMonsterGlow(sdl_monster_rect, monster->monster_char, monster->id);
+    if (waiting_for_blast) {
+      const Uint32 remaining_ticks = monster->scheduled_dynamite_blast_ticks - now;
+      const double blink = std::sin(static_cast<double>(now) / 60.0);
+      const Uint8 warning_alpha = static_cast<Uint8>(
+          std::clamp(120.0 + 110.0 * std::max(0.0, blink), 0.0, 255.0));
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 120, 48, warning_alpha / 2);
+      SDL_RenderFillCircle(sdl_renderer, sdl_monster_rect.x + sdl_monster_rect.w / 2,
+                           sdl_monster_rect.y + sdl_monster_rect.h / 2,
+                           std::max(7, static_cast<int>(element_size * 0.44)));
+      const int alpha_mod = std::min(255, 170 + static_cast<int>(remaining_ticks % 80));
+      SDL_SetTextureAlphaMod(
+          monster_texture, static_cast<Uint8>(alpha_mod));
+    } else {
+      SDL_SetTextureAlphaMod(monster_texture, 255);
+    }
     SDL_RenderCopy(sdl_renderer, monster_texture, nullptr, &sdl_monster_rect);
+    SDL_SetTextureAlphaMod(monster_texture, 255);
   }
 }
 
@@ -2172,23 +2488,84 @@ void Renderer::drawgasclouds() {
 }
 
 void Renderer::draweffects() {
-  if (game == nullptr || game->dead) {
+  if (game == nullptr) {
     return;
   }
 
+  const Uint32 now = SDL_GetTicks();
   for (const auto &effect : game->effects) {
+    if (now < effect.started_ticks) {
+      continue;
+    }
+
     const PixelCoord effect_px = getPixelCoord(effect.coord, 0, 0);
     const int center_x = effect_px.x + element_size / 2;
     const int center_y = effect_px.y + element_size / 2;
-    const Uint32 elapsed = SDL_GetTicks() - effect.started_ticks;
+    const Uint32 elapsed = now - effect.started_ticks;
 
-    if (effect.type == EffectType::MonsterExplosion) {
+    if (effect.type == EffectType::DynamiteExplosion) {
       const double progress =
-          std::clamp(static_cast<double>(elapsed) / 520.0, 0.0, 1.0);
+          std::clamp(static_cast<double>(elapsed) /
+                         static_cast<double>(DYNAMITE_EXPLOSION_DURATION_MS),
+                     0.0, 1.0);
+      const double bloom = std::sin(progress * 3.1415926535);
+      const int max_radius =
+          std::max(element_size,
+                   static_cast<int>(element_size * effect.radius_cells * 1.02));
       const int outer_radius =
-          std::max(5, static_cast<int>(element_size * (0.18 + 0.42 * progress)));
-      const int inner_radius =
-          std::max(3, static_cast<int>(element_size * (0.10 + 0.22 * progress)));
+          std::max(10, static_cast<int>(max_radius * (0.28 + 0.92 * progress)));
+      const int mid_radius =
+          std::max(7, static_cast<int>(max_radius * (0.18 + 0.58 * bloom)));
+      const int core_radius =
+          std::max(4, static_cast<int>(max_radius * (0.08 + 0.28 * bloom)));
+      const Uint8 outer_alpha =
+          static_cast<Uint8>(std::clamp(168.0 * (1.0 - progress * 0.72), 0.0, 180.0));
+      const Uint8 mid_alpha =
+          static_cast<Uint8>(std::clamp(210.0 * (1.0 - progress * 0.46), 0.0, 220.0));
+      const Uint8 core_alpha =
+          static_cast<Uint8>(std::clamp(240.0 * (1.0 - progress * 0.30), 0.0, 255.0));
+
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 78, 20, outer_alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 154, 52, mid_alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, mid_radius);
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 232, 138, core_alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, core_radius);
+
+      const int spark_count = 12;
+      for (int spark = 0; spark < spark_count; spark++) {
+        const double angle =
+            progress * 5.8 + spark * (2.0 * 3.1415926535 / spark_count);
+        const int spark_start =
+            std::max(6, static_cast<int>(max_radius * (0.10 + 0.20 * bloom)));
+        const int spark_end =
+            std::max(spark_start + 4,
+                     static_cast<int>(max_radius * (0.56 + 0.46 * progress)));
+        const int x1 = center_x + static_cast<int>(std::cos(angle) * spark_start);
+        const int y1 = center_y + static_cast<int>(std::sin(angle) * spark_start);
+        const int x2 = center_x + static_cast<int>(std::cos(angle) * spark_end);
+        const int y2 = center_y + static_cast<int>(std::sin(angle) * spark_end);
+        SDL_SetRenderDrawColor(
+            sdl_renderer, 255, 224 - spark * 5, 112,
+            static_cast<Uint8>(std::clamp(220.0 * (1.0 - progress), 0.0, 220.0)));
+        SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
+      }
+
+      SDL_SetRenderDrawColor(
+          sdl_renderer, 255, 248, 180,
+          static_cast<Uint8>(std::clamp(120.0 * (1.0 - progress), 0.0, 120.0)));
+      SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                           std::max(outer_radius - element_size / 4, mid_radius + 1));
+    } else if (effect.type == EffectType::MonsterExplosion) {
+      const double progress =
+          std::clamp(static_cast<double>(elapsed) /
+                         static_cast<double>(900.0),
+                     0.0, 1.0);
+      const int effect_radius = std::max(1, effect.radius_cells);
+      const int outer_radius = std::max(
+          5, static_cast<int>(element_size * effect_radius * (0.18 + 0.42 * progress)));
+      const int inner_radius = std::max(
+          3, static_cast<int>(element_size * effect_radius * (0.10 + 0.22 * progress)));
       const Uint8 alpha =
           static_cast<Uint8>(std::clamp(210.0 * (1.0 - progress), 0.0, 210.0));
       SDL_SetRenderDrawColor(sdl_renderer, 255, 88, 40, alpha / 2);
@@ -2387,7 +2764,10 @@ void Renderer::drawStaticPacman() {
   sdl_pacman_rect = SDL_Rect{pacman_px.x + int(element_size * 0.05),
                              pacman_px.y + int(element_size * 0.05),
                              int(element_size * 0.9), int(element_size * 0.9)};
-  drawDwarf(sdl_pacman_rect, Directions::Down, 0.0, false);
+  SDL_Texture *pacman_texture = getPacmanTexture(Directions::Down, false);
+  if (pacman_texture != nullptr) {
+    SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr, &sdl_pacman_rect);
+  }
 }
 
 void Renderer::drawStaticMonsters() {
@@ -2445,7 +2825,10 @@ void Renderer::drawLayoutEntities(const std::vector<std::string> &layout) {
                                    y + int(element_size * 0.05),
                                    int(element_size * 0.9),
                                    int(element_size * 0.9)};
-        drawDwarf(sdl_pacman_rect, Directions::Down, 0.0, false);
+        SDL_Texture *pacman_texture = getPacmanTexture(Directions::Down, false);
+        if (pacman_texture != nullptr) {
+          SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr, &sdl_pacman_rect);
+        }
       } else if (entry == MONSTER_FEW || entry == MONSTER_MEDIUM ||
                  entry == MONSTER_MANY) {
         const int animation_seed =
