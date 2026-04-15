@@ -100,7 +100,7 @@
     {
       "label": "Build Executable Debug",
       "type": "process",
-      "command": "${workspaceFolder}/build/macos-executable-debug/pacman",
+      "command": "${workspaceFolder}/build/macos-executable-debug/BobMan",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -112,7 +112,7 @@
     {
       "label": "Build Executable Release",
       "type": "process",
-      "command": "${workspaceFolder}/build/macos-executable-release/pacman",
+      "command": "${workspaceFolder}/build/macos-executable-release/BobMan",
       "options": {
         "cwd": "${workspaceFolder}"
       },

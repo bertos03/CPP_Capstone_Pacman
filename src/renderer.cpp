@@ -40,6 +40,11 @@ const SDL_Color kShieldTextColor{116, 220, 255, 255};
 const SDL_Color kFewMonsterGlowColor{120, 210, 255, 255};
 const SDL_Color kMediumMonsterGlowColor{255, 170, 72, 255};
 const SDL_Color kManyMonsterGlowColor{255, 82, 82, 255};
+const SDL_Color kStartLogoHighlightColor{226, 248, 255, 255};
+const SDL_Color kStartLogoLightColor{124, 224, 255, 255};
+const SDL_Color kStartLogoMidColor{66, 150, 255, 255};
+const SDL_Color kStartLogoDeepColor{26, 68, 194, 255};
+const SDL_Color kStartLogoOutlineColor{8, 22, 92, 255};
 const SDL_Color kTeleporterBlue{78, 160, 255, 255};
 const SDL_Color kTeleporterRed{255, 104, 104, 255};
 const SDL_Color kTeleporterGreen{110, 205, 118, 255};
@@ -87,6 +92,20 @@ SDL_Color TeleporterColor(char teleporter_digit) {
   default:
     return kTeleporterYellow;
   }
+}
+
+SDL_Color LerpColor(const SDL_Color &from, const SDL_Color &to, float factor) {
+  factor = std::clamp(factor, 0.0f, 1.0f);
+  const auto mix_channel = [factor](Uint8 start, Uint8 end) -> Uint8 {
+    const float blended =
+        static_cast<float>(start) +
+        (static_cast<float>(end) - static_cast<float>(start)) * factor;
+    return static_cast<Uint8>(std::clamp(static_cast<int>(std::lround(blended)),
+                                         0, 255));
+  };
+
+  return SDL_Color{mix_channel(from.r, to.r), mix_channel(from.g, to.g),
+                   mix_channel(from.b, to.b), 255};
 }
 
 MapCoord StepRenderCoord(MapCoord coord, Directions direction) {
@@ -603,8 +622,7 @@ void Renderer::drawStartMenuOverlay(int selected_item,
                                     const std::string &map_name,
                                     const std::string &status_message) {
   const int logo_top = screen_res_y / 18;
-  renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
-                  kBrickOutlineColor);
+  renderStartLogo(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top);
 
   const std::vector<std::string> menu_items{
       "Start Spiel", "Karte: " + map_name, "Map Editor", "Konfiguration",
@@ -1114,6 +1132,116 @@ void Renderer::renderTextLeft(TTF_Font *font, const std::string &text,
   SDL_FreeSurface(text_surface);
 }
 
+void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
+                               int center_x, int top_y) {
+  if (text.empty()) {
+    return;
+  }
+
+  SDL_Surface *logo_surface = createStartLogoSurface(font, text);
+  if (logo_surface == nullptr) {
+    return;
+  }
+
+  SDL_Texture *logo_texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, logo_surface);
+  if (logo_texture == nullptr) {
+    SDL_FreeSurface(logo_surface);
+    return;
+  }
+
+  const int logo_width = logo_surface->w;
+  const int logo_height = logo_surface->h;
+  const Uint32 now = SDL_GetTicks();
+  const double clock = static_cast<double>(now);
+  const double base_sway_x =
+      std::sin(clock / 620.0) * std::max(4.0, logo_width * 0.010);
+  const double base_sway_y =
+      std::sin(clock / 890.0 + 0.7) * std::max(2.0, logo_height * 0.040);
+
+  SDL_SetTextureBlendMode(logo_texture, SDL_BLENDMODE_BLEND);
+  SDL_SetTextureColorMod(logo_texture, 6, 18, 86);
+  SDL_SetTextureAlphaMod(logo_texture, 176);
+  const int shadow_offset = std::max(5, TTF_FontHeight(font) / 20);
+  SDL_Rect shadow_rect{
+      center_x - logo_width / 2 + static_cast<int>(std::lround(base_sway_x)) +
+          shadow_offset,
+      top_y + static_cast<int>(std::lround(base_sway_y)) + shadow_offset,
+      logo_width, logo_height};
+  SDL_RenderCopy(sdl_renderer, logo_texture, nullptr, &shadow_rect);
+
+  SDL_SetTextureBlendMode(logo_texture, SDL_BLENDMODE_ADD);
+  for (int pass = 0; pass < 3; ++pass) {
+    const int padding = std::max(6, (pass + 1) * TTF_FontHeight(font) / 18);
+    const double glow_clock = clock / (680.0 + pass * 110.0) + pass * 0.9;
+    SDL_SetTextureColorMod(
+        logo_texture, static_cast<Uint8>(72 + pass * 32),
+        static_cast<Uint8>(156 + pass * 24), 255);
+    SDL_SetTextureAlphaMod(logo_texture, static_cast<Uint8>(58 - pass * 14));
+    SDL_Rect glow_rect{
+        center_x - logo_width / 2 - padding +
+            static_cast<int>(std::lround(base_sway_x * 0.7 +
+                                         std::sin(glow_clock) * (pass + 1))),
+        top_y - padding / 2 +
+            static_cast<int>(std::lround(base_sway_y * 0.5 +
+                                         std::cos(glow_clock * 0.9) * pass)),
+        logo_width + padding * 2, logo_height + padding};
+    SDL_RenderCopy(sdl_renderer, logo_texture, nullptr, &glow_rect);
+  }
+
+  SDL_SetTextureBlendMode(logo_texture, SDL_BLENDMODE_BLEND);
+  SDL_SetTextureColorMod(logo_texture, 255, 255, 255);
+  SDL_SetTextureAlphaMod(logo_texture, 255);
+
+  const int slice_height = std::max(4, logo_height / 18);
+  const int slice_count =
+      std::max(1, (logo_height + slice_height - 1) / slice_height);
+
+  // Draw the logo in thin horizontal slices so each band can lag behind the
+  // main sway and feel like stacked retro layers.
+  for (int slice = 0; slice < slice_count; ++slice) {
+    const int src_y = slice * slice_height;
+    const int src_h = std::min(slice_height + 1, logo_height - src_y);
+    const double progress =
+        (slice_count > 1)
+            ? static_cast<double>(slice) / static_cast<double>(slice_count - 1)
+            : 0.0;
+    const double trailing_phase = progress * 2.6;
+    const double layer_drag =
+        std::sin(clock / 340.0 - trailing_phase * 1.7) *
+        std::max(2.0, logo_width * 0.006);
+    const double layer_pull =
+        std::sin(clock / 760.0 - trailing_phase) *
+        std::max(3.0, logo_width * 0.008);
+    const double stretch =
+        1.0 + 0.026 * std::sin(clock / 470.0 + progress * 5.5) +
+        0.010 * std::sin(clock / 230.0 - progress * 6.3);
+    const int dest_width =
+        std::max(1, static_cast<int>(std::lround(logo_width * stretch)));
+    const int dest_x = center_x - dest_width / 2 +
+                       static_cast<int>(std::lround(base_sway_x + layer_drag +
+                                                    layer_pull));
+    const int dest_y =
+        top_y + src_y +
+        static_cast<int>(std::lround(base_sway_y +
+                                     std::sin(clock / 720.0 + progress * 4.1)));
+    const SDL_Rect src_rect{0, src_y, logo_width, src_h};
+    const SDL_Rect slice_shadow_rect{dest_x + 2, dest_y + 2, dest_width,
+                                     src_h + 1};
+    SDL_SetTextureColorMod(logo_texture, 8, 26, 100);
+    SDL_SetTextureAlphaMod(logo_texture, 96);
+    SDL_RenderCopy(sdl_renderer, logo_texture, &src_rect, &slice_shadow_rect);
+
+    SDL_SetTextureColorMod(logo_texture, 255, 255, 255);
+    SDL_SetTextureAlphaMod(logo_texture, 255);
+    const SDL_Rect dest_rect{dest_x, dest_y, dest_width, src_h + 1};
+    SDL_RenderCopy(sdl_renderer, logo_texture, &src_rect, &dest_rect);
+  }
+
+  SDL_DestroyTexture(logo_texture);
+  SDL_FreeSurface(logo_surface);
+}
+
 void Renderer::renderBrickText(TTF_Font *font, const std::string &text,
                                int center_x, int top_y,
                                const SDL_Color &outline_color) {
@@ -1194,6 +1322,152 @@ SDL_Texture *Renderer::getPacmanTexture(Directions facing_direction,
       std::clamp(getPacmanAnimationFrame(walking), 0,
                  kPacmanFramesPerDirection - 1);
   return sdl_pacman_textures[static_cast<size_t>(frame_index)];
+}
+
+SDL_Surface *Renderer::createStartLogoSurface(TTF_Font *font,
+                                              const std::string &text) {
+  SDL_Surface *glyph_surface_raw =
+      TTF_RenderUTF8_Blended(font, text.c_str(), SDL_Color{255, 255, 255, 255});
+  if (glyph_surface_raw == nullptr) {
+    return nullptr;
+  }
+
+  SDL_Surface *glyph_surface =
+      SDL_ConvertSurfaceFormat(glyph_surface_raw, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_FreeSurface(glyph_surface_raw);
+  if (glyph_surface == nullptr) {
+    return nullptr;
+  }
+
+  SDL_Surface *output_surface = SDL_CreateRGBSurfaceWithFormat(
+      0, glyph_surface->w, glyph_surface->h, 32, SDL_PIXELFORMAT_RGBA32);
+  if (output_surface == nullptr) {
+    SDL_FreeSurface(glyph_surface);
+    return nullptr;
+  }
+
+  SDL_FillRect(output_surface, nullptr,
+               SDL_MapRGBA(output_surface->format, 0, 0, 0, 0));
+
+  const bool lock_glyph = SDL_MUSTLOCK(glyph_surface);
+  const bool lock_output = SDL_MUSTLOCK(output_surface);
+  if (lock_glyph) {
+    SDL_LockSurface(glyph_surface);
+  }
+  if (lock_output) {
+    SDL_LockSurface(output_surface);
+  }
+
+  const int glyph_height = std::max(1, glyph_surface->h - 1);
+  const int band_height = std::max(3, glyph_surface->h / 12);
+  auto glyph_alpha = [&](int px, int py) -> Uint8 {
+    if (px < 0 || py < 0 || px >= glyph_surface->w || py >= glyph_surface->h) {
+      return 0;
+    }
+
+    Uint8 red = 0;
+    Uint8 green = 0;
+    Uint8 blue = 0;
+    Uint8 alpha = 0;
+    SDL_GetRGBA(readPixel(glyph_surface, px, py), glyph_surface->format, &red,
+                &green, &blue, &alpha);
+    return alpha;
+  };
+
+  auto gradient_color = [](float progress) -> SDL_Color {
+    if (progress < 0.18f) {
+      return LerpColor(kStartLogoHighlightColor, kStartLogoLightColor,
+                       progress / 0.18f);
+    }
+    if (progress < 0.52f) {
+      return LerpColor(kStartLogoLightColor, kStartLogoMidColor,
+                       (progress - 0.18f) / 0.34f);
+    }
+    return LerpColor(kStartLogoMidColor, kStartLogoDeepColor,
+                     (progress - 0.52f) / 0.48f);
+  };
+
+  for (int y = 0; y < glyph_surface->h; ++y) {
+    for (int x = 0; x < glyph_surface->w; ++x) {
+      const Uint8 alpha = glyph_alpha(x, y);
+      if (alpha == 0) {
+        continue;
+      }
+
+      const float progress = static_cast<float>(y) / glyph_height;
+      const SDL_Color base_color = gradient_color(progress);
+      float raster_boost = 1.0f;
+      switch ((y / band_height) % 4) {
+      case 0:
+        raster_boost = 1.20f;
+        break;
+      case 1:
+        raster_boost = 1.08f;
+        break;
+      case 2:
+        raster_boost = 0.94f;
+        break;
+      default:
+        raster_boost = 0.82f;
+        break;
+      }
+      const float scanline_boost =
+          ((y + x / 5) % 2 == 0) ? 1.04f : 0.91f;
+      const float shine_boost =
+          (progress < 0.34f && ((x + y / 2) % 9) < 3) ? 1.10f : 1.0f;
+
+      int red =
+          static_cast<int>(base_color.r * raster_boost * scanline_boost *
+                           shine_boost);
+      int green =
+          static_cast<int>(base_color.g * raster_boost * scanline_boost *
+                           shine_boost);
+      int blue =
+          static_cast<int>(base_color.b * raster_boost * scanline_boost *
+                           shine_boost);
+
+      const Uint8 left = glyph_alpha(x - 1, y);
+      const Uint8 right = glyph_alpha(x + 1, y);
+      const Uint8 up = glyph_alpha(x, y - 1);
+      const Uint8 down = glyph_alpha(x, y + 1);
+      const Uint8 diagonal = glyph_alpha(x - 1, y - 1);
+      const bool edge = left == 0 || right == 0 || up == 0 || down == 0;
+      const bool highlight_edge = left == 0 || up == 0 || diagonal == 0;
+      const bool shadow_edge = right == 0 || down == 0;
+
+      if (highlight_edge) {
+        red = (red * 2 + kStartLogoHighlightColor.r * 3) / 5 + 8;
+        green = (green * 2 + kStartLogoHighlightColor.g * 3) / 5 + 10;
+        blue = (blue * 2 + kStartLogoHighlightColor.b * 3) / 5 + 10;
+      }
+      if (shadow_edge) {
+        red = (red * 2 + kStartLogoOutlineColor.r * 3) / 5;
+        green = (green * 2 + kStartLogoOutlineColor.g * 3) / 5;
+        blue = (blue * 2 + kStartLogoOutlineColor.b * 3) / 5;
+      } else if (edge) {
+        red = (red * 3 + kStartLogoOutlineColor.r * 2) / 5;
+        green = (green * 3 + kStartLogoOutlineColor.g * 2) / 5;
+        blue = (blue * 3 + kStartLogoOutlineColor.b * 2) / 5;
+      }
+
+      red = std::clamp(red, 0, 255);
+      green = std::clamp(green, 0, 255);
+      blue = std::clamp(blue, 0, 255);
+
+      writePixel(output_surface, x, y,
+                 SDL_MapRGBA(output_surface->format, red, green, blue, alpha));
+    }
+  }
+
+  if (lock_output) {
+    SDL_UnlockSurface(output_surface);
+  }
+  if (lock_glyph) {
+    SDL_UnlockSurface(glyph_surface);
+  }
+
+  SDL_FreeSurface(glyph_surface);
+  return output_surface;
 }
 
 SDL_Surface *Renderer::createBrickTextSurface(TTF_Font *font,

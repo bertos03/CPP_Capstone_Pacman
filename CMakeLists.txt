@@ -35,6 +35,9 @@ endif()
 option(PACMAN_BUILD_APP_BUNDLE
     "Build the macOS target as a .app bundle instead of a plain executable."
     ${PACMAN_BUILD_APP_BUNDLE_DEFAULT})
+option(BOBMAN_ENABLE_CPACK
+    "Enable CPack packaging generation during configure."
+    OFF)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl2)
@@ -112,7 +115,9 @@ set(CPACK_PACKAGE_NAME "BobMan")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "BobMan Game")
 set(CPACK_PACKAGE_VENDOR "Your Name")
-set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}")
+set(CPACK_PACKAGE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set(CPACK_OUTPUT_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/CPackConfig.cmake")
+set(CPACK_SOURCE_OUTPUT_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/CPackSourceConfig.cmake")
 
 if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
     set(CPACK_GENERATOR "DragNDrop")
@@ -122,4 +127,6 @@ elseif(APPLE)
     set(CPACK_GENERATOR "ZIP")
 endif()
 
-include(CPack)
+if(BOBMAN_ENABLE_CPACK)
+    include(CPack)
+endif()

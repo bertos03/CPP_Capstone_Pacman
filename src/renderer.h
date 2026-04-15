@@ -116,8 +116,11 @@ private:
                         const SDL_Color &color, int center_x, int top_y);
   void renderTextLeft(TTF_Font *font, const std::string &text,
                       const SDL_Color &color, int left_x, int top_y);
+  void renderStartLogo(TTF_Font *font, const std::string &text, int center_x,
+                       int top_y);
   void renderBrickText(TTF_Font *font, const std::string &text, int center_x,
                        int top_y, const SDL_Color &outline_color);
+  SDL_Surface *createStartLogoSurface(TTF_Font *font, const std::string &text);
   SDL_Texture *getPacmanTexture(Directions facing_direction,
                                 bool walking) const;
   int getPacmanAnimationFrame(bool walking) const;
