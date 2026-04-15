@@ -1,0 +1,93 @@
+{
+  "version": 2,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "macos-app-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "PACMAN_BUILD_APP_BUNDLE": "ON"
+      }
+    },
+    {
+      "name": "macos-executable-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "PACMAN_BUILD_APP_BUNDLE": "OFF"
+      }
+    },
+    {
+      "name": "macos-app-debug",
+      "displayName": "macOS App Debug",
+      "description": "Builds the project as a .app bundle in Debug mode.",
+      "inherits": "macos-app-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-app-release",
+      "displayName": "macOS App Release",
+      "description": "Builds the project as a .app bundle in Release mode.",
+      "inherits": "macos-app-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "macos-executable-debug",
+      "displayName": "macOS Executable Debug",
+      "description": "Builds the project as a normal executable in Debug mode.",
+      "inherits": "macos-executable-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-executable-release",
+      "displayName": "macOS Executable Release",
+      "description": "Builds the project as a normal executable in Release mode.",
+      "inherits": "macos-executable-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "macos-app-debug",
+      "configurePreset": "macos-app-debug",
+      "jobs": 4
+    },
+    {
+      "name": "macos-app-release",
+      "configurePreset": "macos-app-release",
+      "jobs": 4
+    },
+    {
+      "name": "macos-executable-debug",
+      "configurePreset": "macos-executable-debug",
+      "jobs": 4
+    },
+    {
+      "name": "macos-executable-release",
+      "configurePreset": "macos-executable-release",
+      "jobs": 4
+    }
+  ]
+}

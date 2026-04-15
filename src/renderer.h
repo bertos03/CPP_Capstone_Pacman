@@ -83,6 +83,8 @@ private:
   void drawfireballs();
   void draweffects();
   void drawDefeatEffect();
+  void drawDwarf(const SDL_Rect &dwarf_rect, Directions facing_direction,
+                 double gait_phase, bool walking);
   void drawPacmanShield(int center_x, int center_y, int base_radius,
                         double pulse_clock);
   void drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,

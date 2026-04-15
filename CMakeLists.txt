@@ -25,6 +25,14 @@ if(NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
 endif()
 
+set(PACMAN_BUILD_APP_BUNDLE_DEFAULT OFF)
+if(APPLE)
+    set(PACMAN_BUILD_APP_BUNDLE_DEFAULT ON)
+endif()
+option(PACMAN_BUILD_APP_BUNDLE
+    "Build the macOS target as a .app bundle instead of a plain executable."
+    ${PACMAN_BUILD_APP_BUNDLE_DEFAULT})
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl2)
 
@@ -40,7 +48,7 @@ include_directories(${SDL2_INCLUDE_DIRS} ${SDL2_IMAGE_INCLUDE_DIRS} ${SDL2TTF_IN
 file(GLOB project_SRCS src/*.cpp) #src/*.h
 
 # Add project executable
-if(APPLE)
+if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
     add_executable(pacman MACOSX_BUNDLE ${project_SRCS})
     set_target_properties(pacman PROPERTIES
         MACOSX_BUNDLE TRUE
@@ -73,7 +81,7 @@ message ([STATUS] "SDL2TTF_LIBRARY" ${SDL2TTF_LIBRARY})
 message ([STATUS] "SDL2_MIXER_INCLUDE_DIRS" ${SDL2_MIXER_INCLUDE_DIRS})
 message ([STATUS] "SDL2_MIXER_LIBRARIES" ${SDL2_MIXER_LIBRARIES})
 
-if(APPLE)
+if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
     install(TARGETS pacman BUNDLE DESTINATION .)
 
     set(PACMAN_BUNDLE_SEARCH_DIRS "")
@@ -93,6 +101,7 @@ if(APPLE)
     install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake")
 else()
     install(TARGETS pacman RUNTIME DESTINATION bin)
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/data" DESTINATION share/pacman)
 endif()
 
 # CPack configuration for packaging
@@ -102,10 +111,12 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Pacman Game")
 set(CPACK_PACKAGE_VENDOR "Your Name")
 set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}")
 
-if(APPLE)
+if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
     set(CPACK_GENERATOR "DragNDrop")
     set(CPACK_DMG_VOLUME_NAME "Pacman")
     set(CPACK_DMG_FORMAT "UDZO")
+elseif(APPLE)
+    set(CPACK_GENERATOR "ZIP")
 endif()
 
 include(CPack)

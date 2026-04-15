@@ -30,6 +30,7 @@ Pacman::Pacman(MapCoord _coord) {
   px_delta.y = 0;
   paralyzed_until_ticks = 0;
   invulnerable_until_ticks = 0;
+  facing_direction = Directions::Down;
   teleport_animation_active = false;
   teleport_animation_started_ticks = 0;
   teleport_animation_from_coord = _coord;
@@ -75,9 +76,10 @@ void Pacman::simulate(Events *events, Map *map) {
     map->get_options(map_coord, options);
     events->Keyreset();
     sleep(5);
-    for (auto i : options) {
-      if (i == next_move) {
-        switch (next_move) {
+	    for (auto i : options) {
+	      if (i == next_move) {
+        facing_direction = next_move;
+	        switch (next_move) {
         case Directions::Up:
           for (int i = 0; i > -100 && SDL_GetTicks() >= paralyzed_until_ticks;
                i--) {

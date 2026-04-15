@@ -1213,6 +1213,10 @@ void Renderer::drawpacman() {
 
   const Uint32 now = SDL_GetTicks();
   const bool invulnerable = game->pacman->invulnerable_until_ticks > now;
+  const Directions facing_direction =
+      (game->pacman->facing_direction == Directions::None)
+          ? Directions::Down
+          : game->pacman->facing_direction;
 
   if (game->dead) {
     drawDefeatEffect();
@@ -1239,10 +1243,9 @@ void Renderer::drawpacman() {
     const PixelCoord base_px = getPixelCoord(render_coord, 0, 0);
     const int size =
         std::max(1, static_cast<int>(element_size * 0.9 * std::max(0.0, scale)));
-	    const SDL_Rect animated_rect{
-	        base_px.x + element_size / 2 - size / 2,
-	        base_px.y + element_size / 2 - size / 2, size, size};
-	    const SDL_Point rotation_center{size / 2, size / 2};
+    const SDL_Rect animated_rect{
+        base_px.x + element_size / 2 - size / 2,
+        base_px.y + element_size / 2 - size / 2, size, size};
 
     if (invulnerable) {
       drawPacmanShield(animated_rect.x + animated_rect.w / 2,
@@ -1251,8 +1254,8 @@ void Renderer::drawpacman() {
                        static_cast<double>(now) / 180.0);
     }
 
-	    const Uint8 spark_alpha = static_cast<Uint8>(
-	        std::clamp((in_departure_phase ? (1.0 - phase_progress)
+    const Uint8 spark_alpha = static_cast<Uint8>(
+        std::clamp((in_departure_phase ? (1.0 - phase_progress)
                                        : (0.35 + 0.65 * phase_progress)) *
                        170.0,
                    0.0, 200.0));
@@ -1276,8 +1279,8 @@ void Renderer::drawpacman() {
     }
 
     if (size > 1) {
-      SDL_RenderCopyEx(sdl_renderer, sdl_pacman_texture, nullptr, &animated_rect,
-                       rotation, &rotation_center, SDL_FLIP_NONE);
+      drawDwarf(animated_rect, facing_direction,
+                (rotation / 180.0) * 3.1415926535 * 0.25, true);
     }
     return;
   }
@@ -1295,7 +1298,10 @@ void Renderer::drawpacman() {
                      std::max(8, sdl_pacman_rect.w / 2 + 5),
                      static_cast<double>(now) / 180.0);
   }
-  SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, nullptr, &sdl_pacman_rect);
+  const bool walking =
+      game->pacman->px_delta.x != 0 || game->pacman->px_delta.y != 0;
+  drawDwarf(sdl_pacman_rect, facing_direction, static_cast<double>(now) / 120.0,
+            walking);
 }
 
 void Renderer::drawbonusflask() {
@@ -1424,6 +1430,507 @@ void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
     const int orb_y = center_y + static_cast<int>(std::sin(angle) * orbit_radius);
     SDL_SetRenderDrawColor(sdl_renderer, 214, 250, 255, 180);
     SDL_RenderFillCircle(sdl_renderer, orb_x, orb_y, orb_radius);
+  }
+}
+
+void Renderer::drawDwarf(const SDL_Rect &dwarf_rect,
+                         Directions facing_direction, double gait_phase,
+                         bool walking) {
+  const double pi = 3.1415926535;
+  const Directions resolved_facing =
+      (facing_direction == Directions::None) ? Directions::Down
+                                             : facing_direction;
+  const bool facing_front = resolved_facing == Directions::Down;
+  const bool facing_back = resolved_facing == Directions::Up;
+  const int mirror = resolved_facing == Directions::Left ? -1 : 1;
+  const int center_x = dwarf_rect.x + dwarf_rect.w / 2;
+  const int center_y = dwarf_rect.y + dwarf_rect.h / 2;
+  const double stride =
+      walking ? std::sin(gait_phase) * dwarf_rect.w * 0.08 : 0.0;
+  const double counter_stride =
+      walking ? std::sin(gait_phase + pi) * dwarf_rect.w * 0.08 : 0.0;
+  const double bob =
+      walking ? std::sin(gait_phase * 2.0) * dwarf_rect.h * 0.018 : 0.0;
+  const double arm_swing =
+      walking ? std::sin(gait_phase + pi * 0.5) * dwarf_rect.h * 0.05 : 0.0;
+  const double braid_sway =
+      walking ? std::sin(gait_phase * 0.75) * dwarf_rect.w * 0.035 : 0.0;
+
+  const SDL_Color outline{34, 24, 18, 255};
+  const SDL_Color outline_soft{58, 45, 34, 255};
+  const SDL_Color rim_light{246, 232, 196, 110};
+  const SDL_Color gold_dark{104, 72, 24, 255};
+  const SDL_Color gold{170, 126, 50, 255};
+  const SDL_Color gold_light{224, 190, 104, 255};
+  const SDL_Color steel_dark{76, 68, 64, 255};
+  const SDL_Color steel{126, 114, 102, 255};
+  const SDL_Color steel_light{210, 198, 180, 255};
+  const SDL_Color leather_dark{68, 42, 20, 255};
+  const SDL_Color leather{106, 66, 30, 255};
+  const SDL_Color beard_dark{108, 52, 16, 255};
+  const SDL_Color beard{164, 82, 28, 255};
+  const SDL_Color beard_light{220, 140, 68, 255};
+  const SDL_Color skin{214, 170, 120, 255};
+  const SDL_Color eye{236, 238, 244, 255};
+  const SDL_Color eye_glow{255, 216, 158, 255};
+  const SDL_Color shadow{0, 0, 0, 255};
+
+  auto setColor = [&](const SDL_Color &color, Uint8 alpha_override = 255) {
+    SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b,
+                           alpha_override);
+  };
+  auto point = [&](double x, double y) {
+    return SDL_Point{center_x + static_cast<int>(std::lround(x)),
+                     center_y + static_cast<int>(std::lround(y + bob))};
+  };
+  auto sidePoint = [&](double x, double y) {
+    return SDL_Point{center_x + static_cast<int>(std::lround(x * mirror)),
+                     center_y + static_cast<int>(std::lround(y + bob))};
+  };
+  auto fillPoint = [&](const SDL_Point &point_value, int radius,
+                       const SDL_Color &color,
+                       Uint8 alpha_override = 255) {
+    setColor(color, alpha_override);
+    SDL_RenderFillCircle(sdl_renderer, point_value.x, point_value.y, radius);
+  };
+  auto outlinePoint = [&](const SDL_Point &point_value, int radius,
+                          const SDL_Color &color,
+                          Uint8 alpha_override = 255) {
+    setColor(color, alpha_override);
+    SDL_RenderDrawCircle(sdl_renderer, point_value.x, point_value.y, radius);
+  };
+  auto drawThickLine = [&](const SDL_Point &from, const SDL_Point &to,
+                           int thickness, const SDL_Color &color,
+                           Uint8 alpha_override = 255) {
+    setColor(color, alpha_override);
+    const int radius = std::max(0, thickness / 2);
+    for (int dx = -radius; dx <= radius; dx++) {
+      for (int dy = -radius; dy <= radius; dy++) {
+        if (dx * dx + dy * dy > radius * radius + 1) {
+          continue;
+        }
+        SDL_RenderDrawLine(sdl_renderer, from.x + dx, from.y + dy, to.x + dx,
+                           to.y + dy);
+      }
+    }
+  };
+  auto fillTriangle = [&](const SDL_Point &base_one, const SDL_Point &base_two,
+                          const SDL_Point &tip, const SDL_Color &color,
+                          Uint8 alpha_override = 255) {
+    setColor(color, alpha_override);
+    const int steps =
+        std::max(10, std::max(std::abs(tip.y - base_one.y),
+                              std::abs(tip.y - base_two.y)));
+    for (int step = 0; step <= steps; step++) {
+      const double t = static_cast<double>(step) / steps;
+      const int x1 = base_one.x +
+                     static_cast<int>(std::lround((tip.x - base_one.x) * t));
+      const int y1 = base_one.y +
+                     static_cast<int>(std::lround((tip.y - base_one.y) * t));
+      const int x2 = base_two.x +
+                     static_cast<int>(std::lround((tip.x - base_two.x) * t));
+      const int y2 = base_two.y +
+                     static_cast<int>(std::lround((tip.y - base_two.y) * t));
+      SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
+    }
+  };
+  auto drawInsetRect = [&](const SDL_Rect &rect, const SDL_Color &fill_color,
+                           const SDL_Color &border_color,
+                           Uint8 fill_alpha = 255,
+                           Uint8 border_alpha = 255) {
+    if (rect.w <= 0 || rect.h <= 0) {
+      return;
+    }
+    setColor(border_color, border_alpha);
+    SDL_RenderFillRect(sdl_renderer, &rect);
+    if (rect.w > 2 && rect.h > 2) {
+      SDL_Rect inner{rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2};
+      setColor(fill_color, fill_alpha);
+      SDL_RenderFillRect(sdl_renderer, &inner);
+    }
+  };
+  auto drawBoot = [&](const SDL_Point &ankle, int toe_direction, bool large,
+                      bool shaded) {
+    const int boot_width = large ? std::max(8, dwarf_rect.w / 9)
+                                 : std::max(7, dwarf_rect.w / 10);
+    const int boot_height = large ? std::max(6, dwarf_rect.h / 12)
+                                  : std::max(5, dwarf_rect.h / 13);
+    SDL_Rect boot_rect{ankle.x - boot_width / 2, ankle.y - boot_height / 2,
+                       boot_width, boot_height};
+    drawInsetRect(boot_rect, shaded ? leather_dark : leather, outline);
+    fillPoint({ankle.x + toe_direction * std::max(2, boot_width / 3),
+               ankle.y + boot_height / 6},
+              std::max(2, boot_height / 2), shaded ? leather_dark : leather);
+    outlinePoint({ankle.x + toe_direction * std::max(2, boot_width / 3),
+                  ankle.y + boot_height / 6},
+                 std::max(2, boot_height / 2), outline_soft);
+    setColor(gold_light, 145);
+    SDL_RenderDrawLine(sdl_renderer, boot_rect.x + 1, boot_rect.y + 1,
+                       boot_rect.x + boot_rect.w - 2, boot_rect.y + 1);
+  };
+  auto drawGauntlet = [&](const SDL_Point &hand, bool highlighted) {
+    fillPoint(hand, std::max(3, dwarf_rect.w / 16), outline);
+    fillPoint(hand, std::max(2, dwarf_rect.w / 18),
+              highlighted ? gold_light : gold);
+    outlinePoint(hand, std::max(3, dwarf_rect.w / 16), outline_soft);
+  };
+
+  fillPoint({center_x, dwarf_rect.y + dwarf_rect.h - std::max(4, dwarf_rect.h / 12)},
+            std::max(6, dwarf_rect.w / 4), shadow, 74);
+
+  const int head_radius = std::max(6, dwarf_rect.w / 7);
+  const int shoulder_radius = std::max(6, dwarf_rect.w / 7);
+  const int limb_width = std::max(4, dwarf_rect.w / 12);
+  const int body_width = std::max(18, static_cast<int>(dwarf_rect.w * 0.35));
+  const int body_height = std::max(18, static_cast<int>(dwarf_rect.h * 0.30));
+
+  if (facing_front) {
+    const SDL_Point head = point(0, -dwarf_rect.h * 0.22);
+    const SDL_Point left_shoulder = point(-dwarf_rect.w * 0.18, -dwarf_rect.h * 0.05);
+    const SDL_Point right_shoulder = point(dwarf_rect.w * 0.18, -dwarf_rect.h * 0.05);
+    const SDL_Point left_hip = point(-dwarf_rect.w * 0.08, dwarf_rect.h * 0.12);
+    const SDL_Point right_hip = point(dwarf_rect.w * 0.08, dwarf_rect.h * 0.12);
+    const SDL_Point left_knee = point(-dwarf_rect.w * 0.10 + stride * 0.35,
+                                      dwarf_rect.h * 0.23);
+    const SDL_Point right_knee = point(dwarf_rect.w * 0.10 + counter_stride * 0.35,
+                                       dwarf_rect.h * 0.23);
+    const SDL_Point left_foot = point(-dwarf_rect.w * 0.11 + stride * 0.55,
+                                      dwarf_rect.h * 0.35);
+    const SDL_Point right_foot = point(dwarf_rect.w * 0.11 + counter_stride * 0.55,
+                                       dwarf_rect.h * 0.35);
+    const SDL_Point left_elbow = point(-dwarf_rect.w * 0.23,
+                                       dwarf_rect.h * (0.07 + arm_swing / dwarf_rect.h));
+    const SDL_Point right_elbow = point(dwarf_rect.w * 0.23,
+                                        dwarf_rect.h * (0.07 - arm_swing / dwarf_rect.h));
+    const SDL_Point left_hand = point(-dwarf_rect.w * 0.17,
+                                      dwarf_rect.h * (0.21 + arm_swing / dwarf_rect.h * 0.6));
+    const SDL_Point right_hand =
+        point(dwarf_rect.w * 0.17,
+              dwarf_rect.h * (0.21 - arm_swing / dwarf_rect.h * 0.6));
+
+    fillPoint(head, head_radius + 4, rim_light, 72);
+    fillPoint(point(0, 0), std::max(10, body_width / 2 + 5), rim_light, 58);
+
+    drawThickLine(left_hip, left_knee, limb_width + 2, outline);
+    drawThickLine(left_knee, left_foot, limb_width + 2, outline);
+    drawThickLine(right_hip, right_knee, limb_width + 2, outline);
+    drawThickLine(right_knee, right_foot, limb_width + 2, outline);
+    drawThickLine(left_hip, left_knee, limb_width, steel_dark);
+    drawThickLine(left_knee, left_foot, limb_width, leather);
+    drawThickLine(right_hip, right_knee, limb_width, steel_dark);
+    drawThickLine(right_knee, right_foot, limb_width, leather);
+    drawBoot(left_foot, -1, true, false);
+    drawBoot(right_foot, 1, true, false);
+
+    drawThickLine(left_shoulder, left_elbow, limb_width + 2, outline);
+    drawThickLine(left_elbow, left_hand, limb_width + 2, outline);
+    drawThickLine(right_shoulder, right_elbow, limb_width + 2, outline);
+    drawThickLine(right_elbow, right_hand, limb_width + 2, outline);
+    drawThickLine(left_shoulder, left_elbow, limb_width, leather_dark);
+    drawThickLine(left_elbow, left_hand, limb_width, gold_dark);
+    drawThickLine(right_shoulder, right_elbow, limb_width, leather_dark);
+    drawThickLine(right_elbow, right_hand, limb_width, gold_dark);
+    drawGauntlet(left_hand, false);
+    drawGauntlet(right_hand, true);
+
+    fillPoint(left_shoulder, shoulder_radius + 2, outline);
+    fillPoint(right_shoulder, shoulder_radius + 2, outline);
+    fillPoint(left_shoulder, shoulder_radius, gold_dark);
+    fillPoint(right_shoulder, shoulder_radius, gold_dark);
+    fillPoint(left_shoulder, std::max(4, shoulder_radius - 3), gold);
+    fillPoint(right_shoulder, std::max(4, shoulder_radius - 3), gold);
+    outlinePoint(left_shoulder, shoulder_radius, gold_light, 210);
+    outlinePoint(right_shoulder, shoulder_radius, gold_light, 210);
+
+    SDL_Rect torso{center_x - body_width / 2,
+                   center_y - body_height / 3 + static_cast<int>(std::lround(bob)),
+                   body_width, body_height};
+    drawInsetRect(torso, steel, outline);
+    SDL_Rect torso_highlight{torso.x + 3, torso.y + 2, torso.w - 6,
+                             std::max(3, torso.h / 3)};
+    drawInsetRect(torso_highlight, steel_light, gold_dark, 230, 170);
+    SDL_Rect belt{center_x - body_width / 2 + 2,
+                  center_y + static_cast<int>(dwarf_rect.h * 0.12 + bob),
+                  body_width - 4, std::max(6, dwarf_rect.h / 13)};
+    drawInsetRect(belt, leather_dark, outline);
+    SDL_Rect buckle{center_x - std::max(4, dwarf_rect.w / 12),
+                    belt.y - 1, std::max(8, dwarf_rect.w / 6),
+                    belt.h + 2};
+    drawInsetRect(buckle, gold_light, outline);
+    SDL_Rect buckle_inner{buckle.x + 2, buckle.y + 2, std::max(2, buckle.w - 4),
+                          std::max(2, buckle.h - 4)};
+    drawInsetRect(buckle_inner, gold_dark, leather_dark);
+
+    const SDL_Point beard_left =
+        point(-dwarf_rect.w * 0.12, -dwarf_rect.h * 0.06);
+    const SDL_Point beard_right =
+        point(dwarf_rect.w * 0.12, -dwarf_rect.h * 0.06);
+    const SDL_Point beard_tip =
+        point(braid_sway, dwarf_rect.h * 0.25);
+    fillTriangle(beard_left, beard_right, beard_tip, outline);
+    fillTriangle(point(-dwarf_rect.w * 0.11, -dwarf_rect.h * 0.05),
+                 point(dwarf_rect.w * 0.11, -dwarf_rect.h * 0.05),
+                 point(braid_sway, dwarf_rect.h * 0.24), beard_dark);
+    fillTriangle(point(-dwarf_rect.w * 0.08, -dwarf_rect.h * 0.04),
+                 point(dwarf_rect.w * 0.08, -dwarf_rect.h * 0.04),
+                 point(braid_sway * 0.8, dwarf_rect.h * 0.22), beard);
+    drawThickLine(point(-dwarf_rect.w * 0.02, -dwarf_rect.h * 0.03),
+                  point(braid_sway * 0.6, dwarf_rect.h * 0.21),
+                  std::max(2, dwarf_rect.w / 18), beard_light, 210);
+    drawThickLine(point(dwarf_rect.w * 0.03, -dwarf_rect.h * 0.02),
+                  point(dwarf_rect.w * 0.07 + braid_sway * 0.2,
+                        dwarf_rect.h * 0.17),
+                  std::max(2, dwarf_rect.w / 20), beard_light, 180);
+    drawThickLine(point(-dwarf_rect.w * 0.07, -dwarf_rect.h * 0.02),
+                  point(-dwarf_rect.w * 0.08 + braid_sway * 0.2,
+                        dwarf_rect.h * 0.17),
+                  std::max(2, dwarf_rect.w / 20), beard_light, 180);
+
+    fillPoint(head, head_radius + 2, outline);
+    fillPoint(point(0, -dwarf_rect.h * 0.14), std::max(4, head_radius / 3), skin);
+    fillPoint(head, head_radius, steel_dark);
+    fillPoint(point(0, -dwarf_rect.h * 0.25), std::max(5, head_radius - 2),
+              gold_dark);
+    fillPoint(point(0, -dwarf_rect.h * 0.26), std::max(4, head_radius - 4),
+              gold);
+    SDL_Rect brow_band{center_x - head_radius - 2,
+                       head.y - std::max(2, head_radius / 6),
+                       head_radius * 2 + 4, std::max(7, head_radius / 2)};
+    drawInsetRect(brow_band, gold, outline);
+    SDL_Rect nose_guard{center_x - std::max(2, dwarf_rect.w / 30), head.y - 1,
+                        std::max(4, dwarf_rect.w / 15),
+                        std::max(12, dwarf_rect.h / 8)};
+    drawInsetRect(nose_guard, gold, outline);
+    SDL_Rect left_cheek{head.x - head_radius - 2, head.y - 1,
+                        std::max(5, dwarf_rect.w / 11),
+                        std::max(14, dwarf_rect.h / 7)};
+    SDL_Rect right_cheek{head.x + head_radius - std::max(3, dwarf_rect.w / 18),
+                         head.y - 1, std::max(5, dwarf_rect.w / 11),
+                         std::max(14, dwarf_rect.h / 7)};
+    drawInsetRect(left_cheek, steel, outline);
+    drawInsetRect(right_cheek, steel, outline);
+    fillPoint(point(-dwarf_rect.w * 0.05, -dwarf_rect.h * 0.17),
+              std::max(2, dwarf_rect.w / 25), eye);
+    fillPoint(point(dwarf_rect.w * 0.05, -dwarf_rect.h * 0.17),
+              std::max(2, dwarf_rect.w / 25), eye);
+    fillPoint(point(-dwarf_rect.w * 0.05, -dwarf_rect.h * 0.17), 1, eye_glow);
+    fillPoint(point(dwarf_rect.w * 0.05, -dwarf_rect.h * 0.17), 1, eye_glow);
+
+    outlinePoint(head, head_radius + 1, rim_light, 130);
+    outlinePoint(point(0, 0), std::max(8, body_width / 2 + 1), rim_light, 86);
+  } else if (facing_back) {
+    const SDL_Point head = point(0, -dwarf_rect.h * 0.21);
+    const SDL_Point left_shoulder = point(-dwarf_rect.w * 0.17, -dwarf_rect.h * 0.05);
+    const SDL_Point right_shoulder = point(dwarf_rect.w * 0.17, -dwarf_rect.h * 0.05);
+    const SDL_Point left_hip = point(-dwarf_rect.w * 0.08, dwarf_rect.h * 0.11);
+    const SDL_Point right_hip = point(dwarf_rect.w * 0.08, dwarf_rect.h * 0.11);
+    const SDL_Point left_knee = point(-dwarf_rect.w * 0.10 + stride * 0.32,
+                                      dwarf_rect.h * 0.23);
+    const SDL_Point right_knee = point(dwarf_rect.w * 0.10 + counter_stride * 0.32,
+                                       dwarf_rect.h * 0.23);
+    const SDL_Point left_foot = point(-dwarf_rect.w * 0.11 + stride * 0.48,
+                                      dwarf_rect.h * 0.35);
+    const SDL_Point right_foot = point(dwarf_rect.w * 0.11 + counter_stride * 0.48,
+                                       dwarf_rect.h * 0.35);
+    const SDL_Point left_hand =
+        point(-dwarf_rect.w * 0.17, dwarf_rect.h * (0.18 + arm_swing / dwarf_rect.h));
+    const SDL_Point right_hand =
+        point(dwarf_rect.w * 0.17,
+              dwarf_rect.h * (0.18 - arm_swing / dwarf_rect.h));
+
+    fillPoint(head, head_radius + 4, rim_light, 68);
+    fillPoint(point(0, 0), std::max(10, body_width / 2 + 4), rim_light, 52);
+
+    drawThickLine(left_hip, left_knee, limb_width + 2, outline);
+    drawThickLine(left_knee, left_foot, limb_width + 2, outline);
+    drawThickLine(right_hip, right_knee, limb_width + 2, outline);
+    drawThickLine(right_knee, right_foot, limb_width + 2, outline);
+    drawThickLine(left_hip, left_knee, limb_width, steel_dark);
+    drawThickLine(left_knee, left_foot, limb_width, leather);
+    drawThickLine(right_hip, right_knee, limb_width, steel_dark);
+    drawThickLine(right_knee, right_foot, limb_width, leather);
+    drawBoot(left_foot, -1, false, true);
+    drawBoot(right_foot, 1, false, true);
+
+    drawThickLine(left_shoulder, left_hand, limb_width + 2, outline);
+    drawThickLine(right_shoulder, right_hand, limb_width + 2, outline);
+    drawThickLine(left_shoulder, left_hand, limb_width, leather_dark);
+    drawThickLine(right_shoulder, right_hand, limb_width, leather_dark);
+    drawGauntlet(left_hand, false);
+    drawGauntlet(right_hand, false);
+
+    fillPoint(left_shoulder, shoulder_radius + 2, outline);
+    fillPoint(right_shoulder, shoulder_radius + 2, outline);
+    fillPoint(left_shoulder, shoulder_radius, gold_dark);
+    fillPoint(right_shoulder, shoulder_radius, gold_dark);
+    fillPoint(left_shoulder, std::max(4, shoulder_radius - 4), gold);
+    fillPoint(right_shoulder, std::max(4, shoulder_radius - 4), gold);
+
+    SDL_Rect backplate{center_x - body_width / 2,
+                       center_y - body_height / 3 + static_cast<int>(std::lround(bob)),
+                       body_width, body_height};
+    drawInsetRect(backplate, steel_dark, outline);
+    SDL_Rect cloak_band{backplate.x + 2, backplate.y + 2, backplate.w - 4,
+                        std::max(6, backplate.h / 4)};
+    drawInsetRect(cloak_band, gold, outline);
+    SDL_Rect belt{center_x - body_width / 2 + 2,
+                  center_y + static_cast<int>(dwarf_rect.h * 0.12 + bob),
+                  body_width - 4, std::max(6, dwarf_rect.h / 13)};
+    drawInsetRect(belt, leather_dark, outline);
+    SDL_Rect pouch{center_x - std::max(5, dwarf_rect.w / 12),
+                   belt.y + std::max(1, belt.h / 4), std::max(10, dwarf_rect.w / 7),
+                   std::max(8, dwarf_rect.h / 10)};
+    drawInsetRect(pouch, leather, outline);
+
+    fillPoint(head, head_radius + 2, outline);
+    fillPoint(head, head_radius, steel_dark);
+    fillPoint(point(0, -dwarf_rect.h * 0.25), std::max(5, head_radius - 2),
+              gold_dark);
+    fillPoint(point(0, -dwarf_rect.h * 0.26), std::max(4, head_radius - 4),
+              gold);
+    SDL_Rect back_rim{center_x - head_radius - 1, head.y + head_radius / 4,
+                      head_radius * 2 + 2, std::max(6, dwarf_rect.h / 14)};
+    drawInsetRect(back_rim, steel, outline);
+    drawThickLine(point(0, -dwarf_rect.h * 0.12),
+                  point(braid_sway * 0.35, dwarf_rect.h * 0.20),
+                  std::max(6, dwarf_rect.w / 10), outline);
+    drawThickLine(point(0, -dwarf_rect.h * 0.12),
+                  point(braid_sway * 0.30, dwarf_rect.h * 0.20),
+                  std::max(5, dwarf_rect.w / 11), beard_dark);
+    drawThickLine(point(0, -dwarf_rect.h * 0.11),
+                  point(braid_sway * 0.28, dwarf_rect.h * 0.18),
+                  std::max(3, dwarf_rect.w / 14), beard);
+    drawThickLine(point(0, -dwarf_rect.h * 0.10),
+                  point(braid_sway * 0.24, dwarf_rect.h * 0.14),
+                  std::max(2, dwarf_rect.w / 18), beard_light, 200);
+    outlinePoint(head, head_radius + 1, rim_light, 118);
+  } else {
+    const SDL_Point head = sidePoint(dwarf_rect.w * 0.01, -dwarf_rect.h * 0.21);
+    const SDL_Point front_shoulder =
+        sidePoint(dwarf_rect.w * 0.04, -dwarf_rect.h * 0.06);
+    const SDL_Point back_shoulder =
+        sidePoint(-dwarf_rect.w * 0.08, -dwarf_rect.h * 0.04);
+    const SDL_Point front_hip = sidePoint(dwarf_rect.w * 0.03, dwarf_rect.h * 0.11);
+    const SDL_Point back_hip = sidePoint(-dwarf_rect.w * 0.06, dwarf_rect.h * 0.11);
+    const SDL_Point front_knee =
+        sidePoint(dwarf_rect.w * 0.05 + stride * 0.35, dwarf_rect.h * 0.23);
+    const SDL_Point back_knee =
+        sidePoint(-dwarf_rect.w * 0.03 + counter_stride * 0.28,
+                  dwarf_rect.h * 0.23);
+    const SDL_Point front_foot =
+        sidePoint(dwarf_rect.w * 0.10 + stride * 0.5, dwarf_rect.h * 0.35);
+    const SDL_Point back_foot =
+        sidePoint(-dwarf_rect.w * 0.02 + counter_stride * 0.38,
+                  dwarf_rect.h * 0.34);
+    const SDL_Point front_elbow =
+        sidePoint(dwarf_rect.w * 0.15, dwarf_rect.h * (0.05 - arm_swing / dwarf_rect.h));
+    const SDL_Point front_hand =
+        sidePoint(dwarf_rect.w * 0.12, dwarf_rect.h * (0.18 - arm_swing / dwarf_rect.h * 0.7));
+    const SDL_Point back_elbow =
+        sidePoint(-dwarf_rect.w * 0.12, dwarf_rect.h * (0.07 + arm_swing / dwarf_rect.h * 0.6));
+    const SDL_Point back_hand =
+        sidePoint(-dwarf_rect.w * 0.08, dwarf_rect.h * (0.18 + arm_swing / dwarf_rect.h * 0.45));
+    const SDL_Point torso = sidePoint(-dwarf_rect.w * 0.02, 0.01 * dwarf_rect.h);
+
+    fillPoint(head, head_radius + 4, rim_light, 74);
+    fillPoint(torso, std::max(10, body_width / 2 + 4), rim_light, 56);
+
+    drawThickLine(back_hip, back_knee, limb_width + 1, outline);
+    drawThickLine(back_knee, back_foot, limb_width + 1, outline);
+    drawThickLine(back_hip, back_knee, std::max(3, limb_width - 1), steel_dark);
+    drawThickLine(back_knee, back_foot, std::max(3, limb_width - 1), leather_dark);
+    drawBoot(back_foot, mirror, false, true);
+
+    drawThickLine(back_shoulder, back_elbow, limb_width + 1, outline);
+    drawThickLine(back_elbow, back_hand, limb_width + 1, outline);
+    drawThickLine(back_shoulder, back_elbow, std::max(3, limb_width - 1),
+                  leather_dark);
+    drawThickLine(back_elbow, back_hand, std::max(3, limb_width - 1), gold_dark);
+    drawGauntlet(back_hand, false);
+
+    fillPoint(back_shoulder, shoulder_radius, outline);
+    fillPoint(back_shoulder, std::max(5, shoulder_radius - 1), gold_dark);
+    fillPoint(back_shoulder, std::max(3, shoulder_radius - 4), gold);
+
+    fillPoint(sidePoint(-dwarf_rect.w * 0.03, dwarf_rect.h * 0.02),
+              std::max(10, body_width / 2), outline);
+    fillPoint(sidePoint(-dwarf_rect.w * 0.03, dwarf_rect.h * 0.02),
+              std::max(9, body_width / 2 - 1), steel_dark);
+    fillPoint(torso, std::max(8, body_width / 2 - 2), steel);
+    fillPoint(front_shoulder, shoulder_radius + 2, outline);
+    fillPoint(front_shoulder, shoulder_radius, gold_dark);
+    fillPoint(front_shoulder, std::max(4, shoulder_radius - 3), gold);
+    outlinePoint(front_shoulder, shoulder_radius, gold_light, 210);
+
+    SDL_Rect belt{center_x - std::max(10, dwarf_rect.w / 9),
+                  center_y + static_cast<int>(dwarf_rect.h * 0.12 + bob),
+                  std::max(16, dwarf_rect.w / 4), std::max(6, dwarf_rect.h / 13)};
+    drawInsetRect(belt, leather_dark, outline);
+    SDL_Rect buckle{belt.x + belt.w - std::max(8, dwarf_rect.w / 9),
+                    belt.y - 1, std::max(8, dwarf_rect.w / 8), belt.h + 2};
+    drawInsetRect(buckle, gold_light, outline);
+
+    drawThickLine(front_hip, front_knee, limb_width + 2, outline);
+    drawThickLine(front_knee, front_foot, limb_width + 2, outline);
+    drawThickLine(front_hip, front_knee, limb_width, steel_dark);
+    drawThickLine(front_knee, front_foot, limb_width, leather);
+    drawBoot(front_foot, mirror, true, false);
+
+    drawThickLine(front_shoulder, front_elbow, limb_width + 2, outline);
+    drawThickLine(front_elbow, front_hand, limb_width + 2, outline);
+    drawThickLine(front_shoulder, front_elbow, limb_width, leather_dark);
+    drawThickLine(front_elbow, front_hand, limb_width, gold_dark);
+    drawGauntlet(front_hand, true);
+
+    fillPoint(head, head_radius + 2, outline);
+    fillPoint(head, head_radius, steel_dark);
+    fillPoint(sidePoint(dwarf_rect.w * 0.03, -dwarf_rect.h * 0.25),
+              std::max(5, head_radius - 2), gold_dark);
+    fillPoint(sidePoint(dwarf_rect.w * 0.03, -dwarf_rect.h * 0.26),
+              std::max(4, head_radius - 4), gold);
+    SDL_Rect brow_band{head.x - head_radius / 2,
+                       head.y - std::max(2, head_radius / 6),
+                       head_radius + std::max(6, dwarf_rect.w / 11),
+                       std::max(7, head_radius / 2)};
+    if (mirror < 0) {
+      brow_band.x = head.x - brow_band.w + head_radius / 2;
+    }
+    drawInsetRect(brow_band, gold, outline);
+    SDL_Rect cheek_guard{head.x + mirror * (head_radius / 3),
+                         head.y + std::max(1, head_radius / 8),
+                         std::max(5, dwarf_rect.w / 10),
+                         std::max(13, dwarf_rect.h / 7)};
+    if (mirror < 0) {
+      cheek_guard.x -= cheek_guard.w;
+    }
+    drawInsetRect(cheek_guard, steel, outline);
+    fillPoint(sidePoint(dwarf_rect.w * 0.07, -dwarf_rect.h * 0.17),
+              std::max(2, dwarf_rect.w / 25), eye);
+    fillPoint(sidePoint(dwarf_rect.w * 0.07, -dwarf_rect.h * 0.17), 1, eye_glow);
+    fillPoint(sidePoint(dwarf_rect.w * 0.10, -dwarf_rect.h * 0.14),
+              std::max(3, dwarf_rect.w / 22), skin);
+    const SDL_Point beard_root =
+        sidePoint(dwarf_rect.w * 0.05, -dwarf_rect.h * 0.08);
+    const SDL_Point beard_tip = sidePoint(dwarf_rect.w * 0.14 + braid_sway * 0.15,
+                                          dwarf_rect.h * 0.24);
+    const SDL_Point beard_back =
+        sidePoint(-dwarf_rect.w * 0.02, dwarf_rect.h * 0.09);
+    fillTriangle(beard_root, beard_back, beard_tip, outline);
+    fillTriangle(sidePoint(dwarf_rect.w * 0.05, -dwarf_rect.h * 0.07),
+                 sidePoint(-dwarf_rect.w * 0.01, dwarf_rect.h * 0.08), beard_tip,
+                 beard_dark);
+    fillTriangle(sidePoint(dwarf_rect.w * 0.06, -dwarf_rect.h * 0.06),
+                 sidePoint(0, dwarf_rect.h * 0.06),
+                 sidePoint(dwarf_rect.w * 0.13 + braid_sway * 0.12,
+                           dwarf_rect.h * 0.22),
+                 beard);
+    drawThickLine(sidePoint(dwarf_rect.w * 0.06, -dwarf_rect.h * 0.05),
+                  sidePoint(dwarf_rect.w * 0.11 + braid_sway * 0.08,
+                            dwarf_rect.h * 0.18),
+                  std::max(2, dwarf_rect.w / 18), beard_light, 210);
+
+    outlinePoint(head, head_radius + 1, rim_light, 124);
+    outlinePoint(torso, std::max(8, body_width / 2 - 2), rim_light, 86);
   }
 }
 
@@ -1880,7 +2387,7 @@ void Renderer::drawStaticPacman() {
   sdl_pacman_rect = SDL_Rect{pacman_px.x + int(element_size * 0.05),
                              pacman_px.y + int(element_size * 0.05),
                              int(element_size * 0.9), int(element_size * 0.9)};
-  SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, nullptr, &sdl_pacman_rect);
+  drawDwarf(sdl_pacman_rect, Directions::Down, 0.0, false);
 }
 
 void Renderer::drawStaticMonsters() {
@@ -1938,8 +2445,7 @@ void Renderer::drawLayoutEntities(const std::vector<std::string> &layout) {
                                    y + int(element_size * 0.05),
                                    int(element_size * 0.9),
                                    int(element_size * 0.9)};
-        SDL_RenderCopy(sdl_renderer, sdl_pacman_texture, nullptr,
-                       &sdl_pacman_rect);
+        drawDwarf(sdl_pacman_rect, Directions::Down, 0.0, false);
       } else if (entry == MONSTER_FEW || entry == MONSTER_MEDIUM ||
                  entry == MONSTER_MANY) {
         const int animation_seed =

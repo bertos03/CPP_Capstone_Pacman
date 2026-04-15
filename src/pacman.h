@@ -51,6 +51,7 @@ private:
   Map *map;
   Uint32 paralyzed_until_ticks;
   Uint32 invulnerable_until_ticks;
+  Directions facing_direction;
   bool teleport_animation_active;
   Uint32 teleport_animation_started_ticks;
   MapCoord teleport_animation_from_coord;
