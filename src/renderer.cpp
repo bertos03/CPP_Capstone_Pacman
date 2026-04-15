@@ -635,7 +635,7 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
   }
 
   const int band_gap = 2;
-  const int axis_gap = std::max(8, panel.h / 36);
+  const int axis_gap = 0;
   const int usable_height = panel.h - 24 - axis_gap -
                             band_gap * std::max(0, band_count - 1);
   const int band_height = std::max(4, usable_height / std::max(1, band_count));
@@ -751,7 +751,7 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
       return;
     }
     constexpr int kSegmentCount = 8;
-    const int segment_gap = 1;
+    const int segment_gap = 0;
     const int total_gap = (kSegmentCount - 1) * segment_gap;
     const int total_segment_width = bar_rect.w - total_gap;
     const int raw_segment_w = total_segment_width / kSegmentCount;
@@ -782,10 +782,10 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
         const SDL_Color edge = LerpColor(core, SDL_Color{255, 255, 255, 255}, 0.24f);
         draw_rounded_gradient_segment(segment_rect, core, edge, 220);
       } else {
-        const SDL_Color pale = LerpColor(core, SDL_Color{236, 242, 255, 255}, 0.72f);
+        const SDL_Color pale = LerpColor(core, SDL_Color{236, 242, 255, 255}, 0.84f);
         const SDL_Color pale_edge =
             LerpColor(pale, SDL_Color{255, 255, 255, 255}, 0.38f);
-        draw_rounded_gradient_segment(segment_rect, pale, pale_edge, 48);
+        draw_rounded_gradient_segment(segment_rect, pale, pale_edge, 26);
       }
       cursor_x += segment_w + segment_gap;
     }
