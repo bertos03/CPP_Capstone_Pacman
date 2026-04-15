@@ -1,0 +1,101 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Configure App Debug",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--preset", "macos-app-debug"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "hide": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Configure App Release",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--preset", "macos-app-release"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "hide": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Configure Executable Debug",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--preset", "macos-executable-debug"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "hide": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Configure Executable Release",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--preset", "macos-executable-release"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "hide": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Build App Debug",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--build", "--preset", "macos-app-debug"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": ["Configure App Debug"],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build App Release",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--build", "--preset", "macos-app-release"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": ["Configure App Release"],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build Executable Debug",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--build", "--preset", "macos-executable-debug"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": ["Configure Executable Debug"],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build Executable Release",
+      "type": "process",
+      "command": "cmake",
+      "args": ["--build", "--preset", "macos-executable-release"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": ["Configure Executable Release"],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}

@@ -17,7 +17,8 @@ CMakeUserPresets.json
 
 # Local IDE settings
 /.idea/
-/.vscode/
+/.vscode/*
+!/.vscode/tasks.json
 
 # macOS and debugger artifacts
 .DS_Store
