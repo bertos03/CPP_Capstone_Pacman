@@ -548,7 +548,7 @@ void Game::TrySpawnDynamite(Uint32 now) {
       (now % 997) + dynamite_pickup.coord.u * 19 + dynamite_pickup.coord.v * 37);
   dynamite_pickup.is_visible = true;
   dynamite_pickup.is_fading = false;
-  dynamite_pickup.next_spawn_ticks = 0;
+  ScheduleNextDynamiteSpawn(now);
 #ifdef AUDIO
   audio->PlayDynamiteSpawn();
 #endif
@@ -565,7 +565,6 @@ void Game::UpdateDynamitePickup(Uint32 now) {
     dynamite_pickup.is_visible = false;
     dynamite_pickup.is_fading = false;
     dynamite_pickup.fade_started_ticks = 0;
-    ScheduleNextDynamiteSpawn(now);
     return;
   }
 
@@ -580,7 +579,6 @@ void Game::UpdateDynamitePickup(Uint32 now) {
     dynamite_pickup.is_visible = false;
     dynamite_pickup.is_fading = false;
     dynamite_pickup.fade_started_ticks = 0;
-    ScheduleNextDynamiteSpawn(now);
   }
 }
 

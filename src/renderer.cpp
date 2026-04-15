@@ -603,7 +603,7 @@ void Renderer::drawStartMenuOverlay(int selected_item,
                                     const std::string &map_name,
                                     const std::string &status_message) {
   const int logo_top = screen_res_y / 18;
-  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+  renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
 
   const std::vector<std::string> menu_items{
@@ -661,7 +661,7 @@ void Renderer::drawStartMenuOverlay(int selected_item,
 void Renderer::drawConfigMenuOverlay(int selected_item,
                                      MonsterAmount monster_amount) {
   const int logo_top = screen_res_y / 18;
-  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+  renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
   renderSimpleText(sdl_font_menu, "Konfiguration", kHudTextColor,
                    screen_res_x / 2,
@@ -719,7 +719,7 @@ void Renderer::drawConfigMenuOverlay(int selected_item,
 void Renderer::drawMapSelectionOverlay(const std::vector<std::string> &map_names,
                                        int selected_index) {
   const int logo_top = screen_res_y / 18;
-  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+  renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
   renderSimpleText(sdl_font_menu, "Kartenauswahl", kHudTextColor,
                    screen_res_x / 2,
@@ -785,7 +785,7 @@ void Renderer::drawMapSelectionOverlay(const std::vector<std::string> &map_names
 void Renderer::drawEditorSelectionOverlay(const std::vector<std::string> &items,
                                           int selected_index) {
   const int logo_top = screen_res_y / 18;
-  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+  renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
   renderSimpleText(sdl_font_menu, "Map Editor", kHudTextColor, screen_res_x / 2,
                    logo_top + TTF_FontHeight(sdl_font_logo) - 4);
@@ -849,7 +849,7 @@ void Renderer::drawEditorSelectionOverlay(const std::vector<std::string> &items,
 
 void Renderer::drawEditorSizeSelectionOverlay(int selected_index) {
   const int logo_top = screen_res_y / 18;
-  renderBrickText(sdl_font_logo, "Bobman", screen_res_x / 2, logo_top,
+  renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
   renderSimpleText(sdl_font_menu, "Neue Karte", kHudTextColor,
                    screen_res_x / 2,

@@ -94,7 +94,7 @@ std::vector<fs::path> BuildDataDirectoryCandidates() {
     AppendUniquePath(candidates, executable_base / ".." / "Resources" / "data");
     AppendUniquePath(candidates, executable_base / ".." / "data");
     AppendUniquePath(candidates,
-                     executable_base / ".." / "share" / "pacman" / "data");
+                     executable_base / ".." / "share" / "bobman" / "data");
   }
 
   std::error_code current_dir_error;
@@ -139,7 +139,7 @@ const fs::path &ResolveWritableMapsDirectory() {
       maps_directory = source_root / "data" / "maps";
     } else {
       const std::string preference_root =
-          ConsumeSdlPath(SDL_GetPrefPath("BobMan", "Pacman"));
+          ConsumeSdlPath(SDL_GetPrefPath("BobMan", "BobMan"));
       if (!preference_root.empty()) {
         maps_directory = fs::path(preference_root) / "maps";
       } else {

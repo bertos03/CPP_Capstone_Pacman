@@ -71,7 +71,7 @@ mkdir -p build
 cd build
 cmake ..
 make -j$(nproc)
-./pacman
+./BobMan
 ```
 
 ## Controls

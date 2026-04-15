@@ -12,8 +12,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_definitions(-std=c++17)
 
-project(pacman VERSION 1.0.0 LANGUAGES CXX)
+project(BobMan VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread")
+
+set(APP_TARGET_NAME BobMan)
+set(APP_INSTALL_DATA_DIR "share/bobman")
 
 # Set default build type to Debug if not specified
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
@@ -49,28 +52,28 @@ file(GLOB project_SRCS src/*.cpp) #src/*.h
 
 # Add project executable
 if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
-    add_executable(pacman MACOSX_BUNDLE ${project_SRCS})
-    set_target_properties(pacman PROPERTIES
+    add_executable(${APP_TARGET_NAME} MACOSX_BUNDLE ${project_SRCS})
+    set_target_properties(${APP_TARGET_NAME} PROPERTIES
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.pacman"
-        MACOSX_BUNDLE_BUNDLE_NAME "Pacman"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.bobman"
+        MACOSX_BUNDLE_BUNDLE_NAME "BobMan"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/cmake/MacOSXBundleInfo.plist.in"
     )
-    add_custom_command(TARGET pacman POST_BUILD
+    add_custom_command(TARGET ${APP_TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/data
-        $<TARGET_BUNDLE_CONTENT_DIR:pacman>/Resources/data
+        $<TARGET_BUNDLE_CONTENT_DIR:${APP_TARGET_NAME}>/Resources/data
     )
 else()
-    add_executable(pacman ${project_SRCS})
+    add_executable(${APP_TARGET_NAME} ${project_SRCS})
 endif()
 
-target_compile_definitions(pacman PRIVATE PACMAN_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(${APP_TARGET_NAME} PRIVATE PACMAN_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 #string(STRIP ${SDL2_LIBRARIES} SDL2_LIBRARIES)
-target_link_libraries(pacman ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES} ${SDL2TTF_LIBRARY} ${SDL2_MIXER_LIBRARIES})
+target_link_libraries(${APP_TARGET_NAME} ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES} ${SDL2TTF_LIBRARY} ${SDL2_MIXER_LIBRARIES})
 
 message ([STATUS] "SDL2_INCLUDE_DIR" ${SDL2_INCLUDE_DIR})
 message ([STATUS] "SDL2_LIBRARY" ${SDL2_LIBRARY})
@@ -82,7 +85,7 @@ message ([STATUS] "SDL2_MIXER_INCLUDE_DIRS" ${SDL2_MIXER_INCLUDE_DIRS})
 message ([STATUS] "SDL2_MIXER_LIBRARIES" ${SDL2_MIXER_LIBRARIES})
 
 if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
-    install(TARGETS pacman BUNDLE DESTINATION .)
+    install(TARGETS ${APP_TARGET_NAME} BUNDLE DESTINATION .)
 
     set(PACMAN_BUNDLE_SEARCH_DIRS "")
     foreach(dep IN LISTS SDL2_LIBRARIES SDL2_IMAGE_LIBRARIES SDL2TTF_LIBRARY SDL2_MIXER_LIBRARIES)
@@ -100,20 +103,20 @@ if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
     )
     install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake")
 else()
-    install(TARGETS pacman RUNTIME DESTINATION bin)
-    install(DIRECTORY "${CMAKE_SOURCE_DIR}/data" DESTINATION share/pacman)
+    install(TARGETS ${APP_TARGET_NAME} RUNTIME DESTINATION bin)
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/data" DESTINATION "${APP_INSTALL_DATA_DIR}")
 endif()
 
 # CPack configuration for packaging
-set(CPACK_PACKAGE_NAME "Pacman")
+set(CPACK_PACKAGE_NAME "BobMan")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Pacman Game")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "BobMan Game")
 set(CPACK_PACKAGE_VENDOR "Your Name")
 set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
     set(CPACK_GENERATOR "DragNDrop")
-    set(CPACK_DMG_VOLUME_NAME "Pacman")
+    set(CPACK_DMG_VOLUME_NAME "BobMan")
     set(CPACK_DMG_FORMAT "UDZO")
 elseif(APPLE)
     set(CPACK_GENERATOR "ZIP")

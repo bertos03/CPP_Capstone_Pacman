@@ -29,7 +29,7 @@
 #define FONT_PATH "../data/font.ttf"
 #define LOGO_BRICK_TEXTURE_PATH "../data/brick.png"
 #define FONT_COLOR &white
-#define WINDOW_TITLE "Bobman"
+#define WINDOW_TITLE "BobMan"
 
 #define GAME_START_COUNTDOWN 3 // allowed values: 3..9 seconds
 #define MENU_MUSIC_FADE_OUT_MS 2000

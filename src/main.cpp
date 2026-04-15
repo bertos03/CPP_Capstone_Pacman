@@ -1002,7 +1002,7 @@ void processEndScreenEvents(bool &return_to_menu, bool &quit_requested) {
 } // namespace
 
 int main() {
-  std::cout << "Bobman starting up ...\n";
+  std::cout << "BobMan starting up ...\n";
 
   const int countdown_seconds = std::clamp(GAME_START_COUNTDOWN, 3, 9);
   const int menu_music_fade_ms = std::max(0, MENU_MUSIC_FADE_OUT_MS);
