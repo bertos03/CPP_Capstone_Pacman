@@ -18,11 +18,47 @@
 #include "paths.h"
 
 #include <array>
+#include <cctype>
 #include <filesystem>
 
 namespace {
 
 namespace fs = std::filesystem;
+
+std::string TrimWhitespace(const std::string &text) {
+  const auto first =
+      std::find_if_not(text.begin(), text.end(), [](unsigned char ch) {
+        return std::isspace(ch) != 0;
+      });
+  if (first == text.end()) {
+    return "";
+  }
+
+  const auto last =
+      std::find_if_not(text.rbegin(), text.rend(), [](unsigned char ch) {
+        return std::isspace(ch) != 0;
+      }).base();
+  return std::string(first, last);
+}
+
+std::string NormalizeMapIdentity(const std::string &display_name) {
+  std::string identity = TrimWhitespace(display_name);
+  std::transform(identity.begin(), identity.end(), identity.begin(),
+                 [](unsigned char ch) {
+                   return static_cast<char>(std::tolower(ch));
+                 });
+  return identity;
+}
+
+bool PreferMapCandidate(const MapDefinition &candidate,
+                        const MapDefinition &existing) {
+  const bool candidate_is_writable = Paths::IsWritableMapPath(candidate.file_path);
+  const bool existing_is_writable = Paths::IsWritableMapPath(existing.file_path);
+  if (candidate_is_writable != existing_is_writable) {
+    return candidate_is_writable;
+  }
+  return candidate.file_path < existing.file_path;
+}
 
 bool ReadMapFileContents(const std::string &map_path, MapFileData &map_file) {
   std::ifstream stream(map_path);
@@ -62,19 +98,34 @@ void DiscoverMapsInDirectory(const fs::path &map_directory,
     }
 
     const std::string file_path = entry.path().string();
-    const auto duplicate =
-        std::find_if(maps.begin(), maps.end(), [&](const MapDefinition &map) {
-          return map.file_path == file_path;
-        });
-    if (duplicate != maps.end()) {
-      continue;
-    }
-
     MapFileData map_file;
     const std::string display_name =
         ReadMapFileContents(file_path, map_file) ? map_file.display_name
                                                  : entry.path().stem().string();
-    maps.push_back({file_path, display_name});
+    const MapDefinition candidate{file_path, display_name};
+
+    const auto duplicate_path =
+        std::find_if(maps.begin(), maps.end(), [&](const MapDefinition &map) {
+          return map.file_path == file_path;
+        });
+    if (duplicate_path != maps.end()) {
+      continue;
+    }
+
+    const std::string candidate_identity =
+        NormalizeMapIdentity(candidate.display_name);
+    const auto duplicate_identity = std::find_if(
+        maps.begin(), maps.end(), [&](const MapDefinition &map) {
+          return NormalizeMapIdentity(map.display_name) == candidate_identity;
+        });
+    if (duplicate_identity != maps.end()) {
+      if (PreferMapCandidate(candidate, *duplicate_identity)) {
+        *duplicate_identity = candidate;
+      }
+      continue;
+    }
+
+    maps.push_back(candidate);
   }
 }
 
