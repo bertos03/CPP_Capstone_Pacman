@@ -625,6 +625,7 @@ void Renderer::drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
 
 void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
   const int band_count = Audio::kMenuSpectrumBandCount;
+  const int half_band_count = std::max(1, band_count / 2);
   const int menu_gap = std::max(18, screen_res_x / 80);
   const int outer_margin = std::max(24, screen_res_x / 40);
   const int left_inner = panel.x - menu_gap;
@@ -637,12 +638,18 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
     return;
   }
 
-  const int band_gap = 3;
-  const int usable_height = panel.h - 24 - band_gap * (band_count - 1);
+  const int band_gap = 2;
+  const int axis_gap = std::max(8, panel.h / 36);
+  const int usable_height = panel.h - 24 - axis_gap -
+                            band_gap * (std::max(0, half_band_count - 1) * 2);
   const int band_height = std::max(4, usable_height / std::max(1, band_count));
-  const int total_height =
-      band_count * band_height + (band_count - 1) * band_gap;
-  const int start_y = panel.y + (panel.h - total_height) / 2;
+  const int total_height = band_count * band_height +
+                           (std::max(0, half_band_count - 1) * 2) * band_gap +
+                           axis_gap;
+  const int top_start_y = panel.y + (panel.h - total_height) / 2;
+  const int top_half_height =
+      half_band_count * band_height + (std::max(0, half_band_count - 1)) * band_gap;
+  const int bottom_start_y = top_start_y + top_half_height + axis_gap;
   const Uint32 now = SDL_GetTicks();
   std::array<float, Audio::kMenuSpectrumBandCount> levels =
       Audio::GetMenuSpectrumLevels();
@@ -666,9 +673,17 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
     }
   }
 
-  auto draw_gradient_bar = [&](const SDL_Rect &rect, const SDL_Color &start_color,
-                               const SDL_Color &end_color, Uint8 alpha) {
+  auto draw_gradient_bar = [&](const SDL_Rect &rect,
+                               const SDL_Color &start_color,
+                               const SDL_Color &end_color, Uint8 alpha,
+                               int inset = 0) {
     if (rect.w <= 0 || rect.h <= 0) {
+      return;
+    }
+
+    const int y0 = rect.y + inset;
+    const int y1 = rect.y + rect.h - 1 - inset;
+    if (y1 < y0) {
       return;
     }
 
@@ -679,49 +694,105 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
               : 0.0f;
       const SDL_Color color = LerpColor(start_color, end_color, factor);
       SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, alpha);
-      SDL_RenderDrawLine(sdl_renderer, rect.x + offset, rect.y,
-                         rect.x + offset, rect.y + rect.h - 1);
+      SDL_RenderDrawLine(sdl_renderer, rect.x + offset, y0, rect.x + offset, y1);
     }
   };
 
-  for (int row = 0; row < band_count; ++row) {
-    const int band_index = band_count - 1 - row;
+  auto draw_rounded_gradient_segment = [&](const SDL_Rect &rect,
+                                           const SDL_Color &start_color,
+                                           const SDL_Color &end_color, Uint8 alpha) {
+    if (rect.w <= 1 || rect.h <= 1) {
+      return;
+    }
+    const int radius = std::min(3, std::max(1, std::min(rect.w, rect.h) / 3));
+    draw_gradient_bar(rect, start_color, end_color, alpha, radius);
+
+    const SDL_Color highlight_start{255, 255, 255, 60};
+    const SDL_Color highlight_end{255, 255, 255, 12};
+    SDL_Rect highlight_rect{rect.x + 1, rect.y + 1, std::max(1, rect.w - 2),
+                            std::max(1, rect.h / 2)};
+    draw_gradient_bar(highlight_rect, highlight_start, highlight_end,
+                      std::min<Uint8>(static_cast<Uint8>(alpha / 2 + 28), 110), radius);
+
+    const SDL_Color rim_color{255, 255, 255, 52};
+    SDL_SetRenderDrawColor(sdl_renderer, rim_color.r, rim_color.g, rim_color.b,
+                           rim_color.a);
+    SDL_RenderDrawLine(sdl_renderer, rect.x + radius, rect.y,
+                       rect.x + rect.w - 1 - radius, rect.y);
+    SDL_RenderDrawLine(sdl_renderer, rect.x + radius, rect.y + rect.h - 1,
+                       rect.x + rect.w - 1 - radius, rect.y + rect.h - 1);
+    SDL_RenderDrawLine(sdl_renderer, rect.x, rect.y + radius, rect.x,
+                       rect.y + rect.h - 1 - radius);
+    SDL_RenderDrawLine(sdl_renderer, rect.x + rect.w - 1, rect.y + radius,
+                       rect.x + rect.w - 1, rect.y + rect.h - 1 - radius);
+  };
+
+  auto spectrum_led_color = [&](float progress) {
+    progress = std::clamp(progress, 0.0f, 1.0f);
+    const std::array<SDL_Color, 6> gradient{
+        SDL_Color{60, 120, 255, 255}, SDL_Color{72, 220, 255, 255},
+        SDL_Color{80, 255, 128, 255}, SDL_Color{255, 246, 92, 255},
+        SDL_Color{255, 168, 68, 255}, SDL_Color{255, 70, 60, 255}};
+    const float scaled = progress * static_cast<float>(gradient.size() - 1);
+    const int left_index = std::clamp(static_cast<int>(std::floor(scaled)), 0,
+                                      static_cast<int>(gradient.size() - 1));
+    const int right_index =
+        std::min(left_index + 1, static_cast<int>(gradient.size() - 1));
+    const float local = scaled - static_cast<float>(left_index);
+    return LerpColor(gradient[static_cast<size_t>(left_index)],
+                     gradient[static_cast<size_t>(right_index)], local);
+  };
+
+  constexpr int kSegmentCount = 8;
+  const int segment_gap = 2;
+  const int left_segment_width =
+      std::max(3, (left_max_extent - (kSegmentCount - 1) * segment_gap) / kSegmentCount);
+  const int right_segment_width =
+      std::max(3, (right_max_extent - (kSegmentCount - 1) * segment_gap) / kSegmentCount);
+  auto draw_segmented_led_stack = [&](int y, int active_segments) {
+    if (active_segments <= 0) {
+      return;
+    }
+    active_segments = std::clamp(active_segments, 0, kSegmentCount);
+    const int right_start_x = right_inner;
+
+    for (int segment = 0; segment < active_segments; ++segment) {
+      const float progress = (kSegmentCount > 1)
+                                 ? static_cast<float>(segment) /
+                                       static_cast<float>(kSegmentCount - 1)
+                                 : 0.0f;
+      const SDL_Color base = spectrum_led_color(progress);
+      const SDL_Color brighter =
+          LerpColor(base, SDL_Color{255, 255, 255, 255}, 0.28f);
+
+      const int left_x = left_inner - (segment + 1) * left_segment_width -
+                         segment * segment_gap;
+      SDL_Rect left_led{left_x, y, left_segment_width, band_height};
+      draw_rounded_gradient_segment(left_led, brighter, base, 220);
+
+      const int right_x = right_start_x + segment * (right_segment_width + segment_gap);
+      SDL_Rect right_led{right_x, y, right_segment_width, band_height};
+      draw_rounded_gradient_segment(right_led, brighter, base, 220);
+    }
+  };
+
+  auto draw_spectrum_row = [&](int band_index, int y) {
     const float level =
         std::clamp(levels[static_cast<size_t>(band_index)], 0.0f, 1.0f);
     const float eased_level = std::pow(level, 0.82f);
     const float extended_level = std::clamp(eased_level * 1.30f, 0.0f, 1.0f);
-    const int y = start_y + row * (band_height + band_gap);
-    const SDL_Rect left_track{left_outer, y, left_max_extent, band_height};
-    const SDL_Rect right_track{right_inner, y, right_max_extent, band_height};
+    const int active_segments = static_cast<int>(
+        std::lround(extended_level * static_cast<float>(kSegmentCount)));
+    draw_segmented_led_stack(y, active_segments);
+  };
 
-    draw_gradient_bar(left_track, kSpectrumRed, kSpectrumBlue, 22);
-    draw_gradient_bar(right_track, kSpectrumBlue, kSpectrumRed, 22);
-
-    const int left_extent = static_cast<int>(
-        std::lround(left_max_extent * extended_level));
-    const int right_extent = static_cast<int>(
-        std::lround(right_max_extent * extended_level));
-    if (left_extent <= 0 || right_extent <= 0) {
-      continue;
-    }
-
-    const SDL_Rect left_glow{left_inner - left_extent - 2, y - 1, left_extent + 2,
-                             band_height + 2};
-    const SDL_Rect right_glow{right_inner, y - 1, right_extent + 2,
-                              band_height + 2};
-    draw_gradient_bar(left_glow, kSpectrumGlowRed, kSpectrumGlowBlue, 30);
-    draw_gradient_bar(right_glow, kSpectrumGlowBlue, kSpectrumGlowRed, 30);
-
-    const SDL_Rect left_bar{left_inner - left_extent, y, left_extent, band_height};
-    const SDL_Rect right_bar{right_inner, y, right_extent, band_height};
-    draw_gradient_bar(left_bar, kSpectrumRed, kSpectrumBlue, 200);
-    draw_gradient_bar(right_bar, kSpectrumBlue, kSpectrumRed, 200);
-
-    SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, 26);
-    SDL_RenderDrawLine(sdl_renderer, left_bar.x, left_bar.y, left_inner - 1,
-                       left_bar.y);
-    SDL_RenderDrawLine(sdl_renderer, right_inner, right_bar.y,
-                       right_bar.x + right_bar.w - 1, right_bar.y);
+  for (int row = 0; row < half_band_count; ++row) {
+    const int top_band_index = half_band_count - 1 - row;
+    const int bottom_band_index = half_band_count + row;
+    const int top_y = top_start_y + row * (band_height + band_gap);
+    const int bottom_y = bottom_start_y + row * (band_height + band_gap);
+    draw_spectrum_row(top_band_index, top_y);
+    draw_spectrum_row(bottom_band_index, bottom_y);
   }
 }
 
