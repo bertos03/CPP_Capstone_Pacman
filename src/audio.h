@@ -38,6 +38,10 @@ public:
   void PlayMenuSelect();
   void PlayCountdownTick();
   void PlayStartTrumpet();
+  bool StartMenuMusic();
+  bool FadeOutMenuMusic(int fade_out_ms);
+  void StopMenuMusic();
+  bool IsMenuMusicPlaying() const;
   void PlayMonsterShot();
   void PlayFireballWallHit();
   void PlayMonsterExplosion();
@@ -47,6 +51,8 @@ public:
   void PlayTeleporterArc();
   void PlayEditorBlocked();
   void PlayPotionSpawn();
+  void PlayDynamiteSpawn();
+  void PlayDynamiteExplosion();
   void StartInvulnerabilityLoop();
   void StopInvulnerabilityLoop();
 
@@ -64,6 +70,8 @@ private:
   Mix_Chunk *CreateTeleporterArcChunk();
   Mix_Chunk *CreateEditorBlockedChunk();
   Mix_Chunk *CreatePotionSpawnChunk();
+  Mix_Chunk *CreateDynamiteSpawnChunk();
+  Mix_Chunk *CreateDynamiteExplosionChunk();
   Mix_Chunk *CreateInvulnerabilityLoopChunk();
   void PlayChunk(Mix_Chunk *);
 
@@ -83,7 +91,10 @@ private:
   Mix_Chunk *SFX_teleporter_arc;
   Mix_Chunk *SFX_editor_blocked;
   Mix_Chunk *SFX_potion_spawn;
+  Mix_Chunk *SFX_dynamite_spawn;
+  Mix_Chunk *SFX_dynamite_explosion;
   Mix_Chunk *SFX_invulnerability_loop;
+  Mix_Music *menu_music;
   int invulnerability_loop_channel;
   bool audio_ready;
 #endif

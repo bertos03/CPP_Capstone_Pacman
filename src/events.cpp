@@ -25,6 +25,7 @@ Events::Events() {
   sdl_events = new SDL_Event;
   quit = false;
   current_direction = Directions::None;
+  place_dynamite_requested = false;
 }
 
 /**
@@ -40,6 +41,12 @@ Events::~Events() { delete sdl_events; }
 void Events::Keyreset() { current_direction = Directions::None; }
 
 void Events::RequestQuit() { quit = true; }
+
+bool Events::ConsumePlaceDynamiteRequest() {
+  const bool was_requested = place_dynamite_requested;
+  place_dynamite_requested = false;
+  return was_requested;
+}
 
 /**
  * @brief Updates the input buffer each cycle
@@ -67,6 +74,10 @@ void Events::update() {
       break;
     case SDLK_ESCAPE: // Quit the program with escape key
       quit = true;
+      break;
+    case SDLK_b:
+      place_dynamite_requested = true;
+      current_direction = Directions::None;
       break;
     default:
       current_direction = Directions::None;

@@ -94,7 +94,10 @@ Audio::Audio() {
   SFX_teleporter_arc = nullptr;
   SFX_editor_blocked = nullptr;
   SFX_potion_spawn = nullptr;
+  SFX_dynamite_spawn = nullptr;
+  SFX_dynamite_explosion = nullptr;
   SFX_invulnerability_loop = nullptr;
+  menu_music = nullptr;
   invulnerability_loop_channel = -1;
 
   if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0 &&
@@ -112,6 +115,14 @@ Audio::Audio() {
 
   const std::string coin_sound_path = Paths::GetDataFilePath("coin.wav");
   const std::string win_sound_path = Paths::GetDataFilePath("win.wav");
+  const std::string monster_shot_sound_path = Paths::GetDataFilePath("schuss.wav");
+  const std::string fireball_impact_sound_path =
+      Paths::GetDataFilePath("einschlag.wav");
+  const std::string monster_explosion_sound_path =
+      Paths::GetDataFilePath("monsterexplosion.wav");
+  const std::string dynamite_explosion_sound_path =
+      Paths::GetDataFilePath("dynamitexplosion.wav");
+  const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
 
   SFX_coin = Mix_LoadWAV(coin_sound_path.c_str());
   SFX_win = Mix_LoadWAV(win_sound_path.c_str());
@@ -120,16 +131,35 @@ Audio::Audio() {
   SFX_menu_select = CreateSynthChunk({784, 988, 1175}, 150, 0.42, 6.0, 90.0);
   SFX_countdown_tick = CreateSynthChunk({880, 1320}, 85, 0.25, 2.0, 48.0);
   SFX_start_trumpet = CreateTrumpetChunk();
-  SFX_monster_shot = CreateSynthChunk({698, 932, 1396}, 120, 0.30, 2.0, 56.0);
-  SFX_fireball_wall_hit = CreateSynthChunk({172, 118}, 90, 0.26, 1.0, 44.0);
-  SFX_monster_explosion = CreateMonsterExplosionChunk();
+  SFX_monster_shot = Mix_LoadWAV(monster_shot_sound_path.c_str());
+  if (SFX_monster_shot == nullptr) {
+    SFX_monster_shot = CreateSynthChunk({698, 932, 1396}, 120, 0.30, 2.0, 56.0);
+  }
+  SFX_fireball_wall_hit = Mix_LoadWAV(fireball_impact_sound_path.c_str());
+  if (SFX_fireball_wall_hit == nullptr) {
+    SFX_fireball_wall_hit = CreateSynthChunk({172, 118}, 90, 0.26, 1.0, 44.0);
+  }
+  SFX_monster_explosion = Mix_LoadWAV(monster_explosion_sound_path.c_str());
+  if (SFX_monster_explosion == nullptr) {
+    SFX_monster_explosion = CreateMonsterExplosionChunk();
+  }
   SFX_monster_fart = CreateMonsterFartChunk();
   SFX_pacman_gag = CreatePacmanGagChunk();
   SFX_teleporter_zap = CreateTeleporterZapChunk();
   SFX_teleporter_arc = CreateTeleporterArcChunk();
   SFX_editor_blocked = CreateEditorBlockedChunk();
   SFX_potion_spawn = CreatePotionSpawnChunk();
+  SFX_dynamite_spawn = CreateDynamiteSpawnChunk();
+  SFX_dynamite_explosion = Mix_LoadWAV(dynamite_explosion_sound_path.c_str());
+  if (SFX_dynamite_explosion == nullptr) {
+    SFX_dynamite_explosion = CreateDynamiteExplosionChunk();
+  }
   SFX_invulnerability_loop = CreateInvulnerabilityLoopChunk();
+  menu_music = Mix_LoadMUS(menu_music_path.c_str());
+  if (menu_music == nullptr) {
+    std::cerr << "Failed to load menu music " << menu_music_path << ": "
+              << Mix_GetError() << "\n";
+  }
 
   if (SFX_coin == nullptr || SFX_win == nullptr || SFX_gameover == nullptr ||
       SFX_menu_move == nullptr || SFX_menu_select == nullptr ||
@@ -138,7 +168,9 @@ Audio::Audio() {
       SFX_monster_explosion == nullptr || SFX_monster_fart == nullptr ||
       SFX_pacman_gag == nullptr || SFX_teleporter_zap == nullptr ||
       SFX_teleporter_arc == nullptr || SFX_editor_blocked == nullptr ||
-      SFX_potion_spawn == nullptr || SFX_invulnerability_loop == nullptr) {
+      SFX_potion_spawn == nullptr || SFX_dynamite_spawn == nullptr ||
+      SFX_dynamite_explosion == nullptr ||
+      SFX_invulnerability_loop == nullptr) {
     std::cerr << "Failed to load SFX: " << Mix_GetError() << "\n";
     return;
   }
@@ -156,6 +188,7 @@ Audio::~Audio() {
   StopInvulnerabilityLoop();
   if (audio_ready) {
     Mix_HaltChannel(-1);
+    Mix_HaltMusic();
   }
 
   if (SFX_coin != nullptr) {
@@ -206,8 +239,17 @@ Audio::~Audio() {
   if (SFX_potion_spawn != nullptr) {
     Mix_FreeChunk(SFX_potion_spawn);
   }
+  if (SFX_dynamite_spawn != nullptr) {
+    Mix_FreeChunk(SFX_dynamite_spawn);
+  }
+  if (SFX_dynamite_explosion != nullptr) {
+    Mix_FreeChunk(SFX_dynamite_explosion);
+  }
   if (SFX_invulnerability_loop != nullptr) {
     Mix_FreeChunk(SFX_invulnerability_loop);
+  }
+  if (menu_music != nullptr) {
+    Mix_FreeMusic(menu_music);
   }
 
   if (Mix_QuerySpec(nullptr, nullptr, nullptr) != 0) {
@@ -707,6 +749,111 @@ Mix_Chunk *Audio::CreatePotionSpawnChunk() {
   return Mix_LoadWAV_RW(wav_stream, 1);
 }
 
+Mix_Chunk *Audio::CreateDynamiteSpawnChunk() {
+  struct Note {
+    double frequency;
+    int duration_ms;
+    double volume;
+  };
+
+  const std::vector<Note> melody{
+      {392.0, 120, 0.18}, {523.25, 120, 0.19}, {659.25, 160, 0.21},
+      {784.0, 220, 0.22}, {659.25, 260, 0.18}};
+  std::vector<Sint16> pcm_samples;
+
+  double time_offset = 0.0;
+  for (const auto &note : melody) {
+    const int sample_count = std::max(1, note.duration_ms * kSampleRate / 1000);
+    const int attack_samples = std::max(1, sample_count / 12);
+    const int release_samples = std::max(1, sample_count / 4);
+
+    for (int i = 0; i < sample_count; i++) {
+      double envelope = 1.0;
+      if (i < attack_samples) {
+        envelope = static_cast<double>(i) / attack_samples;
+      } else if (i > sample_count - release_samples) {
+        envelope =
+            static_cast<double>(sample_count - i) / std::max(1, release_samples);
+      }
+      envelope = std::clamp(envelope, 0.0, 1.0);
+
+      const double time = static_cast<double>(i) / kSampleRate;
+      const double absolute_time = time_offset + time;
+      const double swell =
+          0.84 + 0.16 * std::sin(2.0 * kPi * 5.2 * absolute_time + 0.3);
+      const double fundamental =
+          std::sin(2.0 * kPi * note.frequency * time);
+      const double fifth =
+          0.46 * std::sin(2.0 * kPi * note.frequency * 1.5 * time + 0.2);
+      const double brass =
+          0.24 * std::sin(2.0 * kPi * note.frequency * 2.0 * time + 0.8);
+      const double tension =
+          0.10 * std::sin(2.0 * kPi * (note.frequency * 2.8 + 40.0) * time +
+                          1.1);
+      double sample_value =
+          (fundamental + fifth + brass + tension) * swell * envelope *
+          note.volume;
+
+      sample_value = std::clamp(sample_value, -1.0, 1.0);
+      const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+      pcm_samples.push_back(pcm);
+      pcm_samples.push_back(pcm);
+    }
+
+    time_offset += static_cast<double>(note.duration_ms) / 1000.0;
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
+Mix_Chunk *Audio::CreateDynamiteExplosionChunk() {
+  const int duration_ms = 440;
+  const int sample_count = std::max(1, duration_ms * kSampleRate / 1000);
+  std::vector<Sint16> pcm_samples;
+  pcm_samples.reserve(sample_count * kChannels);
+
+  for (int i = 0; i < sample_count; i++) {
+    const double time = static_cast<double>(i) / kSampleRate;
+    const double progress = static_cast<double>(i) / sample_count;
+    const double envelope =
+        std::pow(std::clamp(1.0 - progress, 0.0, 1.0), 0.38);
+    const double boom =
+        std::sin(2.0 * kPi * (72.0 - progress * 18.0) * time + 0.1);
+    const double body =
+        0.72 * std::sin(2.0 * kPi * (118.0 - progress * 22.0) * time + 0.4);
+    const double snap =
+        0.34 * std::sin(2.0 * kPi * (620.0 - progress * 240.0) * time + 1.3);
+    const double crackle =
+        0.18 * std::sin(2.0 * kPi * (1820.0 - progress * 960.0) * time + 0.9) +
+        0.08 * std::sin(2.0 * kPi * (2640.0 - progress * 1100.0) * time + 1.7);
+    const double rumble_gate =
+        0.70 + 0.30 * std::sin(2.0 * kPi * 7.0 * time + 0.2);
+    double sample_value =
+        (boom + body + snap + crackle) * rumble_gate * envelope * 0.36;
+
+    sample_value = std::clamp(sample_value, -1.0, 1.0);
+    const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+    pcm_samples.push_back(pcm);
+    pcm_samples.push_back(pcm);
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
 Mix_Chunk *Audio::CreateInvulnerabilityLoopChunk() {
   struct Note {
     double frequency;
@@ -804,6 +951,47 @@ void Audio::PlayCountdownTick() { PlayChunk(SFX_countdown_tick); };
 
 void Audio::PlayStartTrumpet() { PlayChunk(SFX_start_trumpet); };
 
+bool Audio::StartMenuMusic() {
+  if (!audio_ready || menu_music == nullptr) {
+    return false;
+  }
+
+  if (Mix_PlayingMusic() != 0) {
+    return true;
+  }
+
+  return Mix_PlayMusic(menu_music, -1) == 0;
+}
+
+bool Audio::FadeOutMenuMusic(int fade_out_ms) {
+  if (!audio_ready || menu_music == nullptr || Mix_PlayingMusic() == 0) {
+    return false;
+  }
+
+  if (fade_out_ms <= 0) {
+    Mix_HaltMusic();
+    return true;
+  }
+
+  return Mix_FadeOutMusic(fade_out_ms) == 1;
+}
+
+void Audio::StopMenuMusic() {
+  if (!audio_ready || Mix_PlayingMusic() == 0) {
+    return;
+  }
+
+  Mix_HaltMusic();
+}
+
+bool Audio::IsMenuMusicPlaying() const {
+  if (!audio_ready || menu_music == nullptr) {
+    return false;
+  }
+
+  return Mix_PlayingMusic() != 0;
+}
+
 void Audio::PlayMonsterShot() { PlayChunk(SFX_monster_shot); };
 
 void Audio::PlayFireballWallHit() { PlayChunk(SFX_fireball_wall_hit); };
@@ -821,6 +1009,10 @@ void Audio::PlayTeleporterArc() { PlayChunk(SFX_teleporter_arc); };
 void Audio::PlayEditorBlocked() { PlayChunk(SFX_editor_blocked); };
 
 void Audio::PlayPotionSpawn() { PlayChunk(SFX_potion_spawn); };
+
+void Audio::PlayDynamiteSpawn() { PlayChunk(SFX_dynamite_spawn); };
+
+void Audio::PlayDynamiteExplosion() { PlayChunk(SFX_dynamite_explosion); };
 
 void Audio::StartInvulnerabilityLoop() {
   if (!audio_ready || SFX_invulnerability_loop == nullptr) {

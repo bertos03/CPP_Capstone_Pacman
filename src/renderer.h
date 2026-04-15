@@ -72,9 +72,11 @@ private:
   void drawTeleporterGlyph(const SDL_Rect &teleporter_rect, char teleporter_digit,
                            int animation_seed);
   void drawbonusflask();
+  void drawdynamitepickup();
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
+  void drawplaceddynamites();
   void drawStaticPacman();
   void drawStaticMonsters();
   void drawStaticGoodies();
@@ -89,6 +91,8 @@ private:
                         double pulse_clock);
   void drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
                        int shimmer_seed);
+  void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
+                        double animation_clock, Uint8 alpha);
   void drawhud();
   void drawDimmer(Uint8 alpha);
   void drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
@@ -110,8 +114,13 @@ private:
   void drawCountdownOverlay(int seconds_left);
   void renderSimpleText(TTF_Font *font, const std::string &text,
                         const SDL_Color &color, int center_x, int top_y);
+  void renderTextLeft(TTF_Font *font, const std::string &text,
+                      const SDL_Color &color, int left_x, int top_y);
   void renderBrickText(TTF_Font *font, const std::string &text, int center_x,
                        int top_y, const SDL_Color &outline_color);
+  SDL_Texture *getPacmanTexture(Directions facing_direction,
+                                bool walking) const;
+  int getPacmanAnimationFrame(bool walking) const;
   SDL_Texture *getMonsterTexture(int animation_seed);
   int getMonsterAnimationFrame(int animation_seed) const;
   SDL_Surface *createBrickTextSurface(TTF_Font *font, const std::string &text,
@@ -147,8 +156,8 @@ private:
   std::vector<SDL_Texture *> sdl_monster_textures;
   SDL_Rect sdl_monster_rect;
 
-  SDL_Surface *sdl_pacman_surface;
-  SDL_Texture *sdl_pacman_texture;
+  std::vector<SDL_Surface *> sdl_pacman_surfaces;
+  std::vector<SDL_Texture *> sdl_pacman_textures;
   SDL_Rect sdl_pacman_rect;
 
   SDL_Surface *sdl_logo_brick_surface;
