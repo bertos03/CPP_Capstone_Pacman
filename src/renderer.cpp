@@ -15,6 +15,7 @@
  */
 
 #include "renderer.h"
+#include "audio.h"
 #include "paths.h"
 
 #include <algorithm>
@@ -45,6 +46,10 @@ const SDL_Color kStartLogoLightColor{124, 224, 255, 255};
 const SDL_Color kStartLogoMidColor{66, 150, 255, 255};
 const SDL_Color kStartLogoDeepColor{26, 68, 194, 255};
 const SDL_Color kStartLogoOutlineColor{8, 22, 92, 255};
+const SDL_Color kSpectrumBlue{48, 136, 255, 255};
+const SDL_Color kSpectrumRed{255, 92, 54, 255};
+const SDL_Color kSpectrumGlowBlue{84, 210, 255, 255};
+const SDL_Color kSpectrumGlowRed{255, 128, 84, 255};
 const SDL_Color kTeleporterBlue{78, 160, 255, 255};
 const SDL_Color kTeleporterRed{255, 104, 104, 255};
 const SDL_Color kTeleporterGreen{110, 205, 118, 255};
@@ -618,6 +623,108 @@ void Renderer::drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
   SDL_RenderDrawRect(sdl_renderer, &inner_panel);
 }
 
+void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
+  const int band_count = Audio::kMenuSpectrumBandCount;
+  const int menu_gap = std::max(18, screen_res_x / 80);
+  const int outer_margin = std::max(24, screen_res_x / 40);
+  const int left_inner = panel.x - menu_gap;
+  const int left_outer = outer_margin;
+  const int right_inner = panel.x + panel.w + menu_gap;
+  const int right_outer = screen_res_x - outer_margin;
+  const int left_max_extent = left_inner - left_outer;
+  const int right_max_extent = right_outer - right_inner;
+  if (left_max_extent < 24 || right_max_extent < 24) {
+    return;
+  }
+
+  const int band_gap = 3;
+  const int usable_height = panel.h - 24 - band_gap * (band_count - 1);
+  const int band_height = std::max(4, usable_height / std::max(1, band_count));
+  const int total_height =
+      band_count * band_height + (band_count - 1) * band_gap;
+  const int start_y = panel.y + (panel.h - total_height) / 2;
+  const Uint32 now = SDL_GetTicks();
+  std::array<float, Audio::kMenuSpectrumBandCount> levels =
+      Audio::GetMenuSpectrumLevels();
+
+  float peak_level = 0.0f;
+  for (float level : levels) {
+    peak_level = std::max(peak_level, level);
+  }
+
+  if (peak_level < 0.02f) {
+    const double clock = static_cast<double>(now);
+    for (int band = 0; band < band_count; ++band) {
+      const double progress =
+          static_cast<double>(band) / std::max(1, band_count - 1);
+      const double wave_a =
+          std::sin(clock / 410.0 + progress * 7.4) * 0.28 + 0.34;
+      const double wave_b =
+          std::sin(clock / 930.0 - progress * 11.8) * 0.18 + 0.18;
+      levels[static_cast<size_t>(band)] = static_cast<float>(
+          std::clamp(wave_a + wave_b, 0.06, 0.72));
+    }
+  }
+
+  auto draw_gradient_bar = [&](const SDL_Rect &rect, const SDL_Color &start_color,
+                               const SDL_Color &end_color, Uint8 alpha) {
+    if (rect.w <= 0 || rect.h <= 0) {
+      return;
+    }
+
+    for (int offset = 0; offset < rect.w; ++offset) {
+      const float factor =
+          (rect.w > 1)
+              ? static_cast<float>(offset) / static_cast<float>(rect.w - 1)
+              : 0.0f;
+      const SDL_Color color = LerpColor(start_color, end_color, factor);
+      SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, alpha);
+      SDL_RenderDrawLine(sdl_renderer, rect.x + offset, rect.y,
+                         rect.x + offset, rect.y + rect.h - 1);
+    }
+  };
+
+  for (int row = 0; row < band_count; ++row) {
+    const int band_index = band_count - 1 - row;
+    const float level =
+        std::clamp(levels[static_cast<size_t>(band_index)], 0.0f, 1.0f);
+    const float eased_level = std::pow(level, 0.82f);
+    const float extended_level = std::clamp(eased_level * 1.30f, 0.0f, 1.0f);
+    const int y = start_y + row * (band_height + band_gap);
+    const SDL_Rect left_track{left_outer, y, left_max_extent, band_height};
+    const SDL_Rect right_track{right_inner, y, right_max_extent, band_height};
+
+    draw_gradient_bar(left_track, kSpectrumRed, kSpectrumBlue, 22);
+    draw_gradient_bar(right_track, kSpectrumBlue, kSpectrumRed, 22);
+
+    const int left_extent = static_cast<int>(
+        std::lround(left_max_extent * extended_level));
+    const int right_extent = static_cast<int>(
+        std::lround(right_max_extent * extended_level));
+    if (left_extent <= 0 || right_extent <= 0) {
+      continue;
+    }
+
+    const SDL_Rect left_glow{left_inner - left_extent - 2, y - 1, left_extent + 2,
+                             band_height + 2};
+    const SDL_Rect right_glow{right_inner, y - 1, right_extent + 2,
+                              band_height + 2};
+    draw_gradient_bar(left_glow, kSpectrumGlowRed, kSpectrumGlowBlue, 30);
+    draw_gradient_bar(right_glow, kSpectrumGlowBlue, kSpectrumGlowRed, 30);
+
+    const SDL_Rect left_bar{left_inner - left_extent, y, left_extent, band_height};
+    const SDL_Rect right_bar{right_inner, y, right_extent, band_height};
+    draw_gradient_bar(left_bar, kSpectrumRed, kSpectrumBlue, 200);
+    draw_gradient_bar(right_bar, kSpectrumBlue, kSpectrumRed, 200);
+
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, 26);
+    SDL_RenderDrawLine(sdl_renderer, left_bar.x, left_bar.y, left_inner - 1,
+                       left_bar.y);
+    SDL_RenderDrawLine(sdl_renderer, right_inner, right_bar.y,
+                       right_bar.x + right_bar.w - 1, right_bar.y);
+  }
+}
+
 void Renderer::drawStartMenuOverlay(int selected_item,
                                     const std::string &map_name,
                                     const std::string &status_message) {
@@ -637,6 +744,7 @@ void Renderer::drawStartMenuOverlay(int selected_item,
   SDL_Rect panel{(screen_res_x - panel_width) / 2, panel_top, panel_width,
                  panel_height};
 
+  drawStartMenuSpectrum(panel);
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
 
   const int highlight_width = panel.w - 56;

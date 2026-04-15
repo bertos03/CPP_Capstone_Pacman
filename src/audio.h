@@ -19,6 +19,7 @@
 
 #include "definitions.h"
 #include <SDL.h>
+#include <array>
 #ifdef AUDIO
 #include <SDL_mixer.h>
 #endif
@@ -28,8 +29,10 @@
 class Audio {
 
 public:
+  static constexpr int kMenuSpectrumBandCount = 32;
   Audio();
   ~Audio();
+  static std::array<float, kMenuSpectrumBandCount> GetMenuSpectrumLevels();
 #ifdef AUDIO
   void PlayCoin();
   void PlayGameOver();

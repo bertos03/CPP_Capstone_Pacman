@@ -18,6 +18,8 @@
 #include "paths.h"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -27,6 +29,108 @@ namespace {
 constexpr int kSampleRate = 44100;
 constexpr int kChannels = 2;
 constexpr double kPi = 3.14159265358979323846;
+constexpr double kMenuSpectrumMinFrequency = 40.0;
+constexpr double kMenuSpectrumMaxFrequency = 12000.0;
+constexpr double kMenuSpectrumMinDb = -52.0;
+constexpr double kMenuSpectrumMaxDb = -8.0;
+constexpr int kMenuSpectrumMaxFrames = 4096;
+
+std::array<std::atomic<Uint8>, Audio::kMenuSpectrumBandCount>
+    g_menu_spectrum_levels{};
+std::array<float, Audio::kMenuSpectrumBandCount> g_menu_spectrum_smoothed{};
+
+const std::array<double, Audio::kMenuSpectrumBandCount>
+    g_menu_spectrum_frequencies = [] {
+      std::array<double, Audio::kMenuSpectrumBandCount> frequencies{};
+      const double ratio =
+          std::pow(kMenuSpectrumMaxFrequency / kMenuSpectrumMinFrequency,
+                   1.0 / std::max(1, Audio::kMenuSpectrumBandCount - 1));
+      double current_frequency = kMenuSpectrumMinFrequency;
+      for (int index = 0; index < Audio::kMenuSpectrumBandCount; ++index) {
+        frequencies[static_cast<size_t>(index)] = current_frequency;
+        current_frequency *= ratio;
+      }
+      return frequencies;
+    }();
+
+void ClearMenuSpectrumLevels() {
+  std::fill(g_menu_spectrum_smoothed.begin(), g_menu_spectrum_smoothed.end(),
+            0.0f);
+  for (auto &level : g_menu_spectrum_levels) {
+    level.store(0, std::memory_order_relaxed);
+  }
+}
+
+void UpdateMenuSpectrumLevels(const Uint8 *stream, int len) {
+  if (stream == nullptr || len <= 0) {
+    ClearMenuSpectrumLevels();
+    return;
+  }
+
+  const Sint16 *samples = reinterpret_cast<const Sint16 *>(stream);
+  const int sample_count = len / static_cast<int>(sizeof(Sint16));
+  const int frame_count =
+      std::clamp(sample_count / kChannels, 0, kMenuSpectrumMaxFrames);
+  if (frame_count <= 0) {
+    ClearMenuSpectrumLevels();
+    return;
+  }
+
+  std::array<double, kMenuSpectrumMaxFrames> mono_samples{};
+  double rms = 0.0;
+  for (int frame = 0; frame < frame_count; ++frame) {
+    const int sample_index = frame * kChannels;
+    const double left = static_cast<double>(samples[sample_index]) / 32768.0;
+    const double right =
+        static_cast<double>(samples[sample_index + 1]) / 32768.0;
+    const double mono_sample = (left + right) * 0.5;
+    mono_samples[static_cast<size_t>(frame)] = mono_sample;
+    rms += mono_sample * mono_sample;
+  }
+
+  rms = std::sqrt(rms / std::max(1, frame_count));
+  const double gate =
+      std::clamp((20.0 * std::log10(rms + 1.0e-6) + 68.0) / 42.0, 0.0, 1.0);
+
+  for (int band = 0; band < Audio::kMenuSpectrumBandCount; ++band) {
+    const double frequency = g_menu_spectrum_frequencies[static_cast<size_t>(band)];
+    const double omega = 2.0 * kPi * frequency / static_cast<double>(kSampleRate);
+    const double coeff = 2.0 * std::cos(omega);
+    double q0 = 0.0;
+    double q1 = 0.0;
+    double q2 = 0.0;
+
+    for (int frame = 0; frame < frame_count; ++frame) {
+      q0 = coeff * q1 - q2 + mono_samples[static_cast<size_t>(frame)];
+      q2 = q1;
+      q1 = q0;
+    }
+
+    const double power = std::max(0.0, q1 * q1 + q2 * q2 - coeff * q1 * q2);
+    double magnitude = std::sqrt(power) / std::max(1, frame_count);
+    magnitude *= 1.0 + 0.18 * std::log2(frequency / kMenuSpectrumMinFrequency + 1.0);
+
+    const double db = 20.0 * std::log10(magnitude + 1.0e-7);
+    double normalized =
+        (db - kMenuSpectrumMinDb) / (kMenuSpectrumMaxDb - kMenuSpectrumMinDb);
+    normalized = std::clamp(normalized * (0.48 + gate * 0.78), 0.0, 1.0);
+
+    const float previous = g_menu_spectrum_smoothed[static_cast<size_t>(band)];
+    const float blend = (normalized > previous) ? 0.44f : 0.16f;
+    const float smoothed =
+        std::clamp(previous + static_cast<float>(normalized - previous) * blend,
+                   0.0f, 1.0f);
+    g_menu_spectrum_smoothed[static_cast<size_t>(band)] = smoothed;
+    g_menu_spectrum_levels[static_cast<size_t>(band)].store(
+        static_cast<Uint8>(std::lround(smoothed * 255.0f)),
+        std::memory_order_relaxed);
+  }
+}
+
+void MenuSpectrumPostMix(void *userdata, Uint8 *stream, int len) {
+  (void)userdata;
+  UpdateMenuSpectrumLevels(stream, len);
+}
 
 void append_le16(std::vector<Uint8> &buffer, Uint16 value) {
   buffer.push_back(static_cast<Uint8>(value & 0xFF));
@@ -67,6 +171,17 @@ std::vector<Uint8> build_wav_buffer(const std::vector<Sint16> &pcm_samples) {
 }
 
 } // namespace
+
+std::array<float, Audio::kMenuSpectrumBandCount> Audio::GetMenuSpectrumLevels() {
+  std::array<float, Audio::kMenuSpectrumBandCount> levels{};
+  for (int index = 0; index < kMenuSpectrumBandCount; ++index) {
+    levels[static_cast<size_t>(index)] =
+        static_cast<float>(g_menu_spectrum_levels[static_cast<size_t>(index)].load(
+            std::memory_order_relaxed)) /
+        255.0f;
+  }
+  return levels;
+}
 
 /**
  * @brief Construct a new Audio:: Audio object
@@ -111,6 +226,8 @@ Audio::Audio() {
     return;
   }
 
+  ClearMenuSpectrumLevels();
+  Mix_SetPostMix(MenuSpectrumPostMix, nullptr);
   Mix_AllocateChannels(16);
 
   const std::string coin_sound_path = Paths::GetDataFilePath("coin.wav");
@@ -185,6 +302,8 @@ Audio::Audio() {
  */
 Audio::~Audio() {
 #ifdef AUDIO
+  Mix_SetPostMix(nullptr, nullptr);
+  ClearMenuSpectrumLevels();
   StopInvulnerabilityLoop();
   if (audio_ready) {
     Mix_HaltChannel(-1);
@@ -956,6 +1075,7 @@ bool Audio::StartMenuMusic() {
     return false;
   }
 
+  ClearMenuSpectrumLevels();
   if (Mix_PlayingMusic() != 0) {
     return true;
   }
@@ -970,6 +1090,7 @@ bool Audio::FadeOutMenuMusic(int fade_out_ms) {
 
   if (fade_out_ms <= 0) {
     Mix_HaltMusic();
+    ClearMenuSpectrumLevels();
     return true;
   }
 
@@ -977,11 +1098,14 @@ bool Audio::FadeOutMenuMusic(int fade_out_ms) {
 }
 
 void Audio::StopMenuMusic() {
-  if (!audio_ready || Mix_PlayingMusic() == 0) {
+  if (!audio_ready) {
     return;
   }
 
-  Mix_HaltMusic();
+  if (Mix_PlayingMusic() != 0) {
+    Mix_HaltMusic();
+  }
+  ClearMenuSpectrumLevels();
 }
 
 bool Audio::IsMenuMusicPlaying() const {

@@ -18,6 +18,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread")
 set(APP_TARGET_NAME BobMan)
 set(APP_INSTALL_DATA_DIR "share/bobman")
 
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH
+        "Local install path used by the IDE install target."
+        FORCE)
+endif()
+
 # Set default build type to Debug if not specified
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)

@@ -97,6 +97,7 @@ private:
   void drawDimmer(Uint8 alpha);
   void drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
                  const SDL_Color &border_color);
+  void drawStartMenuSpectrum(const SDL_Rect &panel);
   void drawStartMenuOverlay(int selected_item,
                             const std::string &map_name,
                             const std::string &status_message);
