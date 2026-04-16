@@ -63,6 +63,7 @@ public:
   void PlayPlasticExplosiveWallBreak();
   void PlayAirstrikeRadio();
   void PlayAirstrikeExplosion();
+  Uint32 GetAirstrikeRadioDurationMs() const;
   void StartInvulnerabilityLoop();
   void StopInvulnerabilityLoop();
 

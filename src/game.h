@@ -121,6 +121,8 @@ struct ScheduledMonsterBlast {
 
 struct AirstrikeBomb {
   MapCoord coord{0, 0};
+  SDL_FPoint release_position{0.0f, 0.0f};
+  double path_progress = 0.0;
   Uint32 release_ticks = 0;
   Uint32 explode_ticks = 0;
   bool exploded = false;
@@ -132,10 +134,14 @@ struct ActiveAirstrike {
   Directions flight_direction = Directions::Right;
   MapCoord target_coord{0, 0};
   Uint32 started_ticks = 0;
+  Uint32 plane_launch_ticks = 0;
   Uint32 overflight_ticks = 0;
   Uint32 plane_finished_ticks = 0;
   Uint32 finished_ticks = 0;
   int animation_seed = 0;
+  double target_progress = 0.5;
+  SDL_FPoint flight_start{0.0f, 0.0f};
+  SDL_FPoint flight_end{0.0f, 0.0f};
   std::vector<AirstrikeBomb> bombs;
 };
 

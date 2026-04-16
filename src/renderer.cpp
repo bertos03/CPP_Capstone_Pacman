@@ -207,6 +207,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
       sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
+      sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
@@ -225,6 +226,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
       sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
+      sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
@@ -445,6 +447,8 @@ void Renderer::initializeRenderer(size_t row_count_value,
       Paths::GetDataFilePath("win_screen_triumph.png"), sdl_win_screen_size);
   sdl_walkie_talkie_texture = loadTrimmedChromaKeyTexture(
       Paths::GetDataFilePath("walkie_talkie.png"), sdl_walkie_talkie_size, 26);
+  sdl_airstrike_plane_texture = loadTrimmedChromaKeyTexture(
+      Paths::GetDataFilePath("airstrike_plane.png"), sdl_airstrike_plane_size, 26);
   sdl_airstrike_explosion_texture = loadTrimmedChromaKeyTexture(
       Paths::GetDataFilePath("airstrike_explosion_sheet.png"),
       sdl_airstrike_explosion_size, 12);
@@ -480,6 +484,9 @@ Renderer::~Renderer() {
   }
   if (sdl_walkie_talkie_texture != nullptr) {
     SDL_DestroyTexture(sdl_walkie_talkie_texture);
+  }
+  if (sdl_airstrike_plane_texture != nullptr) {
+    SDL_DestroyTexture(sdl_airstrike_plane_texture);
   }
   if (sdl_airstrike_explosion_texture != nullptr) {
     SDL_DestroyTexture(sdl_airstrike_explosion_texture);
@@ -2844,70 +2851,61 @@ void Renderer::drawWalkieTalkieIcon(const SDL_Rect &icon_rect, Uint8 alpha,
   SDL_RenderFillRect(sdl_renderer, &fallback_rect);
 }
 
-void Renderer::drawAirstrikePlane(const SDL_Point &center,
-                                  Directions flight_direction, int body_size,
+void Renderer::drawAirstrikePlane(const SDL_FPoint &center,
+                                  double angle_degrees, int max_dimension,
                                   double wobble_phase) {
-  const bool horizontal =
-      flight_direction == Directions::Left || flight_direction == Directions::Right;
-  const int body_w = horizontal ? std::max(20, body_size) : std::max(12, body_size / 3);
-  const int body_h = horizontal ? std::max(12, body_size / 3) : std::max(20, body_size);
-  const int wing_w = horizontal ? std::max(12, body_size / 3) : std::max(22, body_size);
-  const int wing_h = horizontal ? std::max(22, body_size) : std::max(12, body_size / 3);
-  const int tail_w = horizontal ? std::max(8, body_size / 4) : std::max(10, body_size / 3);
-  const int tail_h = horizontal ? std::max(10, body_size / 3) : std::max(8, body_size / 4);
-  const int wobble_y = horizontal
-                           ? static_cast<int>(std::lround(std::sin(wobble_phase) * 4.0))
-                           : 0;
-  const int wobble_x = horizontal
-                           ? 0
-                           : static_cast<int>(std::lround(std::sin(wobble_phase) * 4.0));
-  const SDL_Rect body{center.x - body_w / 2 + wobble_x,
-                      center.y - body_h / 2 + wobble_y, body_w, body_h};
-  const SDL_Rect wing{center.x - wing_w / 2 + wobble_x,
-                      center.y - wing_h / 2 + wobble_y, wing_w, wing_h};
-  const int nose_offset = horizontal
-                              ? ((flight_direction == Directions::Right) ? body_w / 2
-                                                                         : -body_w / 2)
-                              : ((flight_direction == Directions::Down) ? body_h / 2
-                                                                        : -body_h / 2);
-  const int tail_offset = horizontal
-                              ? ((flight_direction == Directions::Right) ? -body_w / 2
-                                                                         : body_w / 2)
-                              : ((flight_direction == Directions::Down) ? -body_h / 2
-                                                                        : body_h / 2);
-  const SDL_Rect tail{
-      horizontal ? center.x + tail_offset - tail_w / 2 + wobble_x
-                 : center.x - tail_w / 2 + wobble_x,
-      horizontal ? center.y - tail_h / 2 + wobble_y
-                 : center.y + tail_offset - tail_h / 2 + wobble_y,
-      tail_w, tail_h};
-  const SDL_Rect canopy{
-      horizontal ? center.x + nose_offset / 4 - body_w / 6 + wobble_x
-                 : center.x - body_w / 4 + wobble_x,
-      horizontal ? center.y - body_h / 3 + wobble_y
-                 : center.y + nose_offset / 4 - body_h / 6 + wobble_y,
-      horizontal ? std::max(6, body_w / 3) : std::max(6, body_w),
-      horizontal ? std::max(5, body_h / 2) : std::max(5, body_h / 3)};
+  if (max_dimension <= 0) {
+    return;
+  }
 
-  SDL_SetRenderDrawColor(sdl_renderer, 10, 10, 18, 88);
-  SDL_Rect body_shadow{body.x + 4, body.y + 4, body.w, body.h};
-  SDL_Rect wing_shadow{wing.x + 4, wing.y + 4, wing.w, wing.h};
-  SDL_RenderFillRect(sdl_renderer, &body_shadow);
-  SDL_RenderFillRect(sdl_renderer, &wing_shadow);
+  const double travel_angle_radians =
+      (angle_degrees - 90.0) * 3.14159265358979323846 / 180.0;
+  const float wobble_distance =
+      static_cast<float>(std::sin(wobble_phase) * std::max(2.0, max_dimension * 0.035));
+  const SDL_FPoint wobble_offset{
+      static_cast<float>(-std::sin(travel_angle_radians) * wobble_distance),
+      static_cast<float>(std::cos(travel_angle_radians) * wobble_distance)};
+  const SDL_FPoint draw_center{center.x + wobble_offset.x,
+                               center.y + wobble_offset.y};
 
-  SDL_SetRenderDrawColor(sdl_renderer, 126, 134, 144, 255);
-  SDL_RenderFillRect(sdl_renderer, &wing);
-  SDL_SetRenderDrawColor(sdl_renderer, 158, 166, 176, 255);
-  SDL_RenderFillRect(sdl_renderer, &body);
-  SDL_SetRenderDrawColor(sdl_renderer, 112, 120, 132, 255);
-  SDL_RenderFillRect(sdl_renderer, &tail);
-  SDL_SetRenderDrawColor(sdl_renderer, 188, 220, 246, 255);
-  SDL_RenderFillRect(sdl_renderer, &canopy);
+  if (sdl_airstrike_plane_texture != nullptr && sdl_airstrike_plane_size.x > 0 &&
+      sdl_airstrike_plane_size.y > 0) {
+    const int dominant_dimension =
+        std::max(sdl_airstrike_plane_size.x, sdl_airstrike_plane_size.y);
+    const double scale =
+        static_cast<double>(max_dimension) / static_cast<double>(dominant_dimension);
+    const float draw_width = static_cast<float>(
+        std::max(1, static_cast<int>(std::lround(sdl_airstrike_plane_size.x * scale))));
+    const float draw_height = static_cast<float>(
+        std::max(1, static_cast<int>(std::lround(sdl_airstrike_plane_size.y * scale))));
 
-  SDL_SetRenderDrawColor(sdl_renderer, 64, 70, 80, 255);
-  SDL_RenderDrawRect(sdl_renderer, &wing);
-  SDL_RenderDrawRect(sdl_renderer, &body);
-  SDL_RenderDrawRect(sdl_renderer, &tail);
+    SDL_FRect shadow_rect{draw_center.x - draw_width / 2.0f + 7.0f,
+                          draw_center.y - draw_height / 2.0f + 9.0f, draw_width,
+                          draw_height};
+    SDL_SetTextureBlendMode(sdl_airstrike_plane_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureColorMod(sdl_airstrike_plane_texture, 0, 0, 0);
+    SDL_SetTextureAlphaMod(sdl_airstrike_plane_texture, 96);
+    SDL_RenderCopyExF(sdl_renderer, sdl_airstrike_plane_texture, nullptr,
+                      &shadow_rect, angle_degrees, nullptr, SDL_FLIP_NONE);
+
+    SDL_FRect plane_rect{draw_center.x - draw_width / 2.0f,
+                         draw_center.y - draw_height / 2.0f, draw_width,
+                         draw_height};
+    SDL_SetTextureColorMod(sdl_airstrike_plane_texture, 255, 255, 255);
+    SDL_SetTextureAlphaMod(sdl_airstrike_plane_texture, 255);
+    SDL_RenderCopyExF(sdl_renderer, sdl_airstrike_plane_texture, nullptr,
+                      &plane_rect, angle_degrees, nullptr, SDL_FLIP_NONE);
+    return;
+  }
+
+  const int body_length = std::max(18, max_dimension);
+  const int body_width = std::max(10, max_dimension / 3);
+  SDL_FRect fallback_rect{draw_center.x - body_width / 2.0f,
+                          draw_center.y - body_length / 2.0f,
+                          static_cast<float>(body_width),
+                          static_cast<float>(body_length)};
+  SDL_SetRenderDrawColor(sdl_renderer, 160, 170, 182, 240);
+  SDL_RenderFillRectF(sdl_renderer, &fallback_rect);
 }
 
 void Renderer::drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
@@ -3311,43 +3309,37 @@ void Renderer::drawactiveairstrike() {
 
   const Uint32 now = SDL_GetTicks();
   const auto &airstrike = game->active_airstrike;
-  const PixelCoord target_px = getPixelCoord(airstrike.target_coord, 0, 0);
-  const int target_center_x = target_px.x + element_size / 2;
-  const int target_center_y = target_px.y + element_size / 2;
+  auto world_to_screen = [&](const SDL_FPoint &point) {
+    return SDL_FPoint{static_cast<float>(offset_x) + point.x * element_size,
+                      static_cast<float>(offset_y) + point.y * element_size};
+  };
 
-  if (airstrike.plane_finished_ticks > airstrike.started_ticks &&
+  if (airstrike.plane_finished_ticks > airstrike.plane_launch_ticks &&
+      now >= airstrike.plane_launch_ticks &&
       now <= airstrike.plane_finished_ticks) {
     const double progress = std::clamp(
-        static_cast<double>(now - airstrike.started_ticks) /
+        static_cast<double>(now - airstrike.plane_launch_ticks) /
             static_cast<double>(airstrike.plane_finished_ticks -
-                                airstrike.started_ticks),
+                                airstrike.plane_launch_ticks),
         0.0, 1.0);
-    const int plane_size = std::max(26, static_cast<int>(element_size * 1.05));
-    SDL_Point plane_center{target_center_x, target_center_y};
-    if (airstrike.flight_direction == Directions::Right) {
-      plane_center.x = static_cast<int>(
-          std::lround((-plane_size * 2.0) +
-                      (screen_res_x + plane_size * 4.0) * progress));
-      plane_center.y = target_center_y - element_size / 3;
-    } else if (airstrike.flight_direction == Directions::Left) {
-      plane_center.x = static_cast<int>(
-          std::lround((screen_res_x + plane_size * 2.0) -
-                      (screen_res_x + plane_size * 4.0) * progress));
-      plane_center.y = target_center_y - element_size / 3;
-    } else if (airstrike.flight_direction == Directions::Down) {
-      plane_center.x = target_center_x;
-      plane_center.y = static_cast<int>(
-          std::lround((-plane_size * 2.0) +
-                      (screen_res_y + plane_size * 4.0) * progress));
-    } else {
-      plane_center.x = target_center_x;
-      plane_center.y = static_cast<int>(
-          std::lround((screen_res_y + plane_size * 2.0) -
-                      (screen_res_y + plane_size * 4.0) * progress));
-    }
-
+    const SDL_FPoint plane_world{
+        airstrike.flight_start.x +
+            static_cast<float>((airstrike.flight_end.x - airstrike.flight_start.x) *
+                               progress),
+        airstrike.flight_start.y +
+            static_cast<float>((airstrike.flight_end.y - airstrike.flight_start.y) *
+                               progress)};
+    const SDL_FPoint plane_center = world_to_screen(plane_world);
+    const double angle_degrees =
+        std::atan2(static_cast<double>(airstrike.flight_end.y -
+                                       airstrike.flight_start.y),
+                   static_cast<double>(airstrike.flight_end.x -
+                                       airstrike.flight_start.x)) *
+            180.0 / 3.14159265358979323846 +
+        90.0;
+    const int plane_size = std::max(40, element_size * 5);
     drawAirstrikePlane(
-        plane_center, airstrike.flight_direction, plane_size,
+        plane_center, angle_degrees, plane_size,
         static_cast<double>(now + airstrike.animation_seed * 19) / 140.0);
   }
 
@@ -3361,13 +3353,16 @@ void Renderer::drawactiveairstrike() {
             static_cast<double>(std::max<Uint32>(1, bomb.explode_ticks -
                                                         bomb.release_ticks)),
         0.0, 1.0);
+    const SDL_FPoint start_center = world_to_screen(bomb.release_position);
     const PixelCoord bomb_px = getPixelCoord(bomb.coord, 0, 0);
-    const int bomb_center_x = bomb_px.x + element_size / 2;
-    const int bomb_target_y = bomb_px.y + element_size / 2;
-    const int bomb_start_y = bomb_target_y - std::max(20, element_size * 2);
-    const int bomb_current_y =
-        bomb_start_y +
-        static_cast<int>(std::lround((bomb_target_y - bomb_start_y) * progress));
+    const SDL_FPoint target_center{
+        static_cast<float>(bomb_px.x + element_size / 2),
+        static_cast<float>(bomb_px.y + element_size / 2)};
+    const int bomb_center_x = static_cast<int>(std::lround(
+        start_center.x + (target_center.x - start_center.x) * progress));
+    const int bomb_center_y = static_cast<int>(std::lround(
+        start_center.y + (target_center.y - start_center.y) * progress));
+    const int bomb_target_y = static_cast<int>(std::lround(target_center.y));
     const int bomb_radius =
         std::max(3, static_cast<int>(element_size * (0.09 + 0.05 * (1.0 - progress))));
     const Uint8 shadow_alpha = static_cast<Uint8>(
@@ -3377,10 +3372,10 @@ void Renderer::drawactiveairstrike() {
     SDL_RenderFillCircle(sdl_renderer, bomb_center_x, bomb_target_y + element_size / 5,
                          std::max(4, bomb_radius + 1));
     SDL_SetRenderDrawColor(sdl_renderer, 48, 48, 54, 255);
-    SDL_RenderFillCircle(sdl_renderer, bomb_center_x, bomb_current_y, bomb_radius);
+    SDL_RenderFillCircle(sdl_renderer, bomb_center_x, bomb_center_y, bomb_radius);
     SDL_SetRenderDrawColor(sdl_renderer, 255, 90, 42, 220);
     SDL_RenderFillCircle(sdl_renderer, bomb_center_x,
-                         bomb_current_y - std::max(1, bomb_radius / 2),
+                         bomb_center_y - std::max(1, bomb_radius / 2),
                          std::max(1, bomb_radius / 2));
   }
 }

@@ -27,8 +27,14 @@ constexpr Uint32 kFireballCooldownMs = 10000;
 constexpr Uint32 kMonsterExplosionDurationMs = 900;
 constexpr Uint32 kWallImpactDurationMs = 180;
 constexpr Uint32 kDynamiteChainDelayMs = 140;
-constexpr std::array<int, AIRSTRIKE_BOMB_COUNT> kAirstrikeBombOffsets{
-    {-8, -7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7}};
+constexpr float kAirstrikePlaneMarginCells = 2.0f;
+constexpr float kAirstrikePathSamplesPerCell = 14.0f;
+
+struct AirstrikePathCandidate {
+  MapCoord coord{0, 0};
+  SDL_FPoint point{0.0f, 0.0f};
+  double progress = 0.0;
+};
 
 std::mt19937 &RandomGenerator() {
   static std::mt19937 generator(std::random_device{}());
@@ -56,35 +62,6 @@ MapCoord StepCoord(MapCoord coord, Directions direction) {
     break;
   default:
     break;
-  }
-  return coord;
-}
-
-Directions OppositeDirection(Directions direction) {
-  switch (direction) {
-  case Directions::Up:
-    return Directions::Down;
-  case Directions::Down:
-    return Directions::Up;
-  case Directions::Left:
-    return Directions::Right;
-  case Directions::Right:
-    return Directions::Left;
-  default:
-    return Directions::None;
-  }
-}
-
-MapCoord OffsetCoord(MapCoord coord, Directions direction, int steps) {
-  Directions effective_direction = direction;
-  int remaining_steps = steps;
-  if (remaining_steps < 0) {
-    effective_direction = OppositeDirection(direction);
-    remaining_steps = -remaining_steps;
-  }
-
-  for (int step = 0; step < remaining_steps; ++step) {
-    coord = StepCoord(coord, effective_direction);
   }
   return coord;
 }
@@ -147,19 +124,113 @@ bool HasLineOfSight(Map *map, MapCoord from, MapCoord to,
   return false;
 }
 
-Directions RandomAirstrikeDirection() {
+SDL_FPoint MakeCellCenter(MapCoord coord) {
+  return SDL_FPoint{static_cast<float>(coord.v) + 0.5f,
+                    static_cast<float>(coord.u) + 0.5f};
+}
+
+SDL_FPoint AddPoint(SDL_FPoint left, SDL_FPoint right) {
+  return SDL_FPoint{left.x + right.x, left.y + right.y};
+}
+
+SDL_FPoint SubtractPoint(SDL_FPoint left, SDL_FPoint right) {
+  return SDL_FPoint{left.x - right.x, left.y - right.y};
+}
+
+SDL_FPoint ScalePoint(SDL_FPoint point, float factor) {
+  return SDL_FPoint{point.x * factor, point.y * factor};
+}
+
+double PointDistance(SDL_FPoint left, SDL_FPoint right) {
+  return std::hypot(static_cast<double>(left.x - right.x),
+                    static_cast<double>(left.y - right.y));
+}
+
+SDL_FPoint LerpPoint(SDL_FPoint start, SDL_FPoint end, double progress) {
+  const float clamped_progress =
+      static_cast<float>(std::clamp(progress, 0.0, 1.0));
+  return SDL_FPoint{
+      start.x + (end.x - start.x) * clamped_progress,
+      start.y + (end.y - start.y) * clamped_progress};
+}
+
+Directions DominantDirection(SDL_FPoint vector) {
+  if (std::fabs(vector.x) >= std::fabs(vector.y)) {
+    return (vector.x >= 0.0f) ? Directions::Right : Directions::Left;
+  }
+
+  return (vector.y >= 0.0f) ? Directions::Down : Directions::Up;
+}
+
+SDL_FPoint RandomAirstrikeStart(Map *map) {
+  if (map == nullptr) {
+    return SDL_FPoint{0.0f, 0.0f};
+  }
+
+  const float rows = static_cast<float>(map->get_map_rows());
+  const float cols = static_cast<float>(map->get_map_cols());
+  const float min_x = 0.5f;
+  const float max_x = std::max(min_x, cols - 0.5f);
+  const float min_y = 0.5f;
+  const float max_y = std::max(min_y, rows - 0.5f);
+  std::uniform_real_distribution<float> x_distribution(min_x, max_x);
+  std::uniform_real_distribution<float> y_distribution(min_y, max_y);
   std::uniform_int_distribution<int> distribution(0, 3);
+
   switch (distribution(RandomGenerator())) {
   case 0:
-    return Directions::Up;
+    return SDL_FPoint{-kAirstrikePlaneMarginCells, y_distribution(RandomGenerator())};
   case 1:
-    return Directions::Down;
+    return SDL_FPoint{cols + kAirstrikePlaneMarginCells,
+                      y_distribution(RandomGenerator())};
   case 2:
-    return Directions::Left;
+    return SDL_FPoint{x_distribution(RandomGenerator()), -kAirstrikePlaneMarginCells};
   case 3:
   default:
-    return Directions::Right;
+    return SDL_FPoint{x_distribution(RandomGenerator()),
+                      rows + kAirstrikePlaneMarginCells};
   }
+}
+
+std::vector<AirstrikePathCandidate>
+CollectAirstrikePathCandidates(Map *map, SDL_FPoint start, SDL_FPoint end,
+                               MapCoord excluded_coord) {
+  std::vector<AirstrikePathCandidate> candidates;
+  if (map == nullptr) {
+    return candidates;
+  }
+
+  const int rows = static_cast<int>(map->get_map_rows());
+  const int cols = static_cast<int>(map->get_map_cols());
+  if (rows <= 0 || cols <= 0) {
+    return candidates;
+  }
+
+  std::vector<bool> visited(static_cast<size_t>(rows * cols), false);
+  const double path_length = PointDistance(start, end);
+  const int sample_count = std::max(
+      1, static_cast<int>(std::ceil(path_length * kAirstrikePathSamplesPerCell)));
+  for (int sample = 0; sample <= sample_count; ++sample) {
+    const double progress =
+        static_cast<double>(sample) / static_cast<double>(sample_count);
+    const SDL_FPoint point = LerpPoint(start, end, progress);
+    const MapCoord coord{static_cast<int>(std::floor(point.y)),
+                         static_cast<int>(std::floor(point.x))};
+    if (!IsInsideMapBounds(map, coord) || SameCoord(coord, excluded_coord)) {
+      continue;
+    }
+
+    const size_t visited_index =
+        static_cast<size_t>(coord.u * cols + coord.v);
+    if (visited[visited_index]) {
+      continue;
+    }
+
+    visited[visited_index] = true;
+    candidates.push_back({coord, point, progress});
+  }
+
+  return candidates;
 }
 
 } // namespace
@@ -1079,38 +1150,90 @@ void Game::TryUseAirstrike(Uint32 now) {
 
   active_airstrike = {};
   active_airstrike.is_active = true;
-  active_airstrike.flight_direction = RandomAirstrikeDirection();
   active_airstrike.target_coord = pacman->map_coord;
   active_airstrike.started_ticks = now;
-  active_airstrike.overflight_ticks = now + AIRSTRIKE_PLANE_LEAD_IN_MS;
   active_airstrike.animation_seed =
       static_cast<int>((now % 997) + pacman->map_coord.u * 53 +
                        pacman->map_coord.v * 71 + airstrike_inventory * 17);
+  active_airstrike.flight_start = RandomAirstrikeStart(map);
 
-  const Uint32 last_release_ticks =
-      active_airstrike.overflight_ticks +
-      static_cast<Uint32>((AIRSTRIKE_BOMB_COUNT - 1) * AIRSTRIKE_BOMB_INTERVAL_MS);
+  const SDL_FPoint target_point = MakeCellCenter(active_airstrike.target_coord);
+  const SDL_FPoint approach_vector =
+      SubtractPoint(target_point, active_airstrike.flight_start);
+  const double approach_length = PointDistance(active_airstrike.flight_start,
+                                               target_point);
+  if (approach_length <= 0.001) {
+    active_airstrike = {};
+    return;
+  }
+
+  const SDL_FPoint direction = ScalePoint(
+      approach_vector, static_cast<float>(1.0 / approach_length));
+  const double max_span =
+      std::hypot(static_cast<double>(map->get_map_rows()),
+                 static_cast<double>(map->get_map_cols())) +
+      kAirstrikePlaneMarginCells * 3.0;
+  active_airstrike.flight_end =
+      AddPoint(target_point, ScalePoint(direction, static_cast<float>(max_span)));
+  active_airstrike.flight_direction =
+      DominantDirection(SubtractPoint(active_airstrike.flight_end,
+                                      active_airstrike.flight_start));
+
+  const double total_path_length =
+      PointDistance(active_airstrike.flight_start, active_airstrike.flight_end);
+  if (total_path_length <= 0.001) {
+    active_airstrike = {};
+    return;
+  }
+
+  active_airstrike.target_progress =
+      std::clamp(approach_length / total_path_length, 0.0, 1.0);
+
+#ifdef AUDIO
+  const Uint32 radio_delay_ms =
+      (audio != nullptr) ? audio->GetAirstrikeRadioDurationMs()
+                         : AIRSTRIKE_RADIO_DELAY_MS;
+#else
+  const Uint32 radio_delay_ms = AIRSTRIKE_RADIO_DELAY_MS;
+#endif
+  const Uint32 plane_flight_ms = std::max<Uint32>(
+      AIRSTRIKE_PLANE_MIN_FLIGHT_MS,
+      static_cast<Uint32>(
+          std::lround(total_path_length * AIRSTRIKE_PLANE_CELL_TRAVEL_MS)));
+  active_airstrike.plane_launch_ticks = now + radio_delay_ms;
+  active_airstrike.overflight_ticks =
+      active_airstrike.plane_launch_ticks +
+      static_cast<Uint32>(std::lround(active_airstrike.target_progress *
+                                      static_cast<double>(plane_flight_ms)));
   active_airstrike.plane_finished_ticks =
-      last_release_ticks + AIRSTRIKE_PLANE_TRAIL_OUT_MS;
-  active_airstrike.finished_ticks =
-      last_release_ticks + AIRSTRIKE_BOMB_FALL_MS + AIRSTRIKE_EXPLOSION_DURATION_MS;
-  active_airstrike.bombs.reserve(AIRSTRIKE_BOMB_COUNT);
+      active_airstrike.plane_launch_ticks + plane_flight_ms;
 
-  for (size_t index = 0; index < kAirstrikeBombOffsets.size(); ++index) {
-    const int offset = kAirstrikeBombOffsets[index];
-    const MapCoord bomb_coord = OffsetCoord(active_airstrike.target_coord,
-                                            active_airstrike.flight_direction,
-                                            offset);
-    if (!IsInsideMapBounds(map, bomb_coord) ||
-        SameCoord(bomb_coord, active_airstrike.target_coord)) {
-      continue;
-    }
+  std::vector<AirstrikePathCandidate> bomb_candidates =
+      CollectAirstrikePathCandidates(map, active_airstrike.flight_start,
+                                     active_airstrike.flight_end,
+                                     active_airstrike.target_coord);
+  if (bomb_candidates.size() > AIRSTRIKE_BOMB_COUNT) {
+    std::shuffle(bomb_candidates.begin(), bomb_candidates.end(),
+                 RandomGenerator());
+    bomb_candidates.resize(AIRSTRIKE_BOMB_COUNT);
+  }
+  std::sort(bomb_candidates.begin(), bomb_candidates.end(),
+            [](const AirstrikePathCandidate &left,
+               const AirstrikePathCandidate &right) {
+              return left.progress < right.progress;
+            });
+  active_airstrike.bombs.reserve(bomb_candidates.size());
 
+  for (size_t index = 0; index < bomb_candidates.size(); ++index) {
+    const auto &candidate = bomb_candidates[index];
     const Uint32 release_ticks =
-        active_airstrike.overflight_ticks +
-        static_cast<Uint32>(index * AIRSTRIKE_BOMB_INTERVAL_MS);
+        active_airstrike.plane_launch_ticks +
+        static_cast<Uint32>(std::lround(candidate.progress *
+                                        static_cast<double>(plane_flight_ms)));
     active_airstrike.bombs.push_back(
-        {bomb_coord,
+        {candidate.coord,
+         candidate.point,
+         candidate.progress,
          release_ticks,
          release_ticks + AIRSTRIKE_BOMB_FALL_MS,
          false,
@@ -1121,6 +1244,11 @@ void Game::TryUseAirstrike(Uint32 now) {
     active_airstrike = {};
     return;
   }
+
+  active_airstrike.finished_ticks = std::max(
+      active_airstrike.plane_finished_ticks,
+      active_airstrike.bombs.back().explode_ticks +
+          static_cast<Uint32>(AIRSTRIKE_EXPLOSION_DURATION_MS));
 
   airstrike_inventory--;
 #ifdef AUDIO

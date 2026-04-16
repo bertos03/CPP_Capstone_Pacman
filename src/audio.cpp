@@ -1379,6 +1379,24 @@ void Audio::PlayAirstrikeRadio() { PlayChunk(SFX_airstrike_radio); };
 
 void Audio::PlayAirstrikeExplosion() { PlayChunk(SFX_airstrike_explosion); };
 
+Uint32 Audio::GetAirstrikeRadioDurationMs() const {
+  if (!audio_ready || SFX_airstrike_radio == nullptr) {
+    return AIRSTRIKE_RADIO_DELAY_MS;
+  }
+
+  const int bytes_per_frame = kChannels * static_cast<int>(sizeof(Sint16));
+  if (bytes_per_frame <= 0) {
+    return AIRSTRIKE_RADIO_DELAY_MS;
+  }
+
+  const double duration_ms =
+      static_cast<double>(SFX_airstrike_radio->alen) * 1000.0 /
+      static_cast<double>(kSampleRate * bytes_per_frame);
+  return std::max<Uint32>(
+      AIRSTRIKE_RADIO_DELAY_MS,
+      static_cast<Uint32>(std::lround(std::max(0.0, duration_ms))));
+};
+
 void Audio::StartInvulnerabilityLoop() {
   if (!audio_ready || SFX_invulnerability_loop == nullptr) {
     return;

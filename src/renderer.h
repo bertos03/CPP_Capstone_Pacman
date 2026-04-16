@@ -101,8 +101,8 @@ private:
                         double pulse_clock);
   void drawWalkieTalkieIcon(const SDL_Rect &icon_rect, Uint8 alpha,
                             double animation_clock);
-  void drawAirstrikePlane(const SDL_Point &center, Directions flight_direction,
-                          int body_size, double wobble_phase);
+  void drawAirstrikePlane(const SDL_FPoint &center, double angle_degrees,
+                          int max_dimension, double wobble_phase);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
                         double animation_clock, Uint8 alpha,
                         double fuse_burn_progress);
@@ -204,6 +204,8 @@ private:
   SDL_Point sdl_win_screen_size;
   SDL_Texture *sdl_walkie_talkie_texture;
   SDL_Point sdl_walkie_talkie_size;
+  SDL_Texture *sdl_airstrike_plane_texture;
+  SDL_Point sdl_airstrike_plane_size;
   SDL_Texture *sdl_airstrike_explosion_texture;
   SDL_Point sdl_airstrike_explosion_size;
 
