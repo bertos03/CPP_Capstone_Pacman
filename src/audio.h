@@ -55,6 +55,7 @@ public:
   void PlayEditorBlocked();
   void PlayPotionSpawn();
   void PlayDynamiteSpawn();
+  void PlayDynamiteIgnite();
   void PlayDynamiteExplosion();
   void PlayPlasticExplosiveSpawn();
   void PlayPlasticExplosivePlace();
@@ -77,6 +78,7 @@ private:
   Mix_Chunk *CreateEditorBlockedChunk();
   Mix_Chunk *CreatePotionSpawnChunk();
   Mix_Chunk *CreateDynamiteSpawnChunk();
+  Mix_Chunk *CreateDynamiteIgniteChunk();
   Mix_Chunk *CreateDynamiteExplosionChunk();
   Mix_Chunk *CreatePlasticExplosiveReadyChunk();
   Mix_Chunk *CreatePlasticExplosiveWallBreakChunk();
@@ -100,6 +102,7 @@ private:
   Mix_Chunk *SFX_editor_blocked;
   Mix_Chunk *SFX_potion_spawn;
   Mix_Chunk *SFX_dynamite_spawn;
+  Mix_Chunk *SFX_dynamite_ignite;
   Mix_Chunk *SFX_dynamite_explosion;
   Mix_Chunk *SFX_plastic_explosive_ready;
   Mix_Chunk *SFX_plastic_explosive_wall_break;

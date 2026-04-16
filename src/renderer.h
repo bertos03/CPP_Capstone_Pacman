@@ -99,7 +99,8 @@ private:
   void drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
                        int shimmer_seed);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
-                        double animation_clock, Uint8 alpha);
+                        double animation_clock, Uint8 alpha,
+                        double fuse_burn_progress);
   void drawPlasticExplosiveIcon(const SDL_Rect &icon_rect, double animation_clock,
                                 Uint8 alpha, bool armed);
   void drawhud();
@@ -183,6 +184,8 @@ private:
   SDL_Rect sdl_pacman_rect;
 
   SDL_Surface *sdl_logo_brick_surface;
+  SDL_Texture *sdl_dynamite_texture;
+  SDL_Point sdl_dynamite_size;
   SDL_Texture *sdl_start_menu_monster_texture;
   SDL_Point sdl_start_menu_monster_size;
   SDL_Texture *sdl_start_menu_hero_texture;

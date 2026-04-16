@@ -210,6 +210,7 @@ Audio::Audio() {
   SFX_editor_blocked = nullptr;
   SFX_potion_spawn = nullptr;
   SFX_dynamite_spawn = nullptr;
+  SFX_dynamite_ignite = nullptr;
   SFX_dynamite_explosion = nullptr;
   SFX_plastic_explosive_ready = nullptr;
   SFX_plastic_explosive_wall_break = nullptr;
@@ -241,6 +242,8 @@ Audio::Audio() {
       Paths::GetDataFilePath("monsterexplosion.wav");
   const std::string dynamite_explosion_sound_path =
       Paths::GetDataFilePath("dynamitexplosion.wav");
+  const std::string dynamite_ignite_sound_path =
+      Paths::GetDataFilePath("dynamite_ignite.mp3");
   const std::string plastic_explosive_wall_break_sound_path =
       Paths::GetDataFilePath("plastic_explosive_wall_break.mp3");
   const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
@@ -271,6 +274,10 @@ Audio::Audio() {
   SFX_editor_blocked = CreateEditorBlockedChunk();
   SFX_potion_spawn = CreatePotionSpawnChunk();
   SFX_dynamite_spawn = CreateDynamiteSpawnChunk();
+  SFX_dynamite_ignite = Mix_LoadWAV(dynamite_ignite_sound_path.c_str());
+  if (SFX_dynamite_ignite == nullptr) {
+    SFX_dynamite_ignite = CreateDynamiteIgniteChunk();
+  }
   SFX_dynamite_explosion = Mix_LoadWAV(dynamite_explosion_sound_path.c_str());
   if (SFX_dynamite_explosion == nullptr) {
     SFX_dynamite_explosion = CreateDynamiteExplosionChunk();
@@ -296,6 +303,7 @@ Audio::Audio() {
       SFX_pacman_gag == nullptr || SFX_teleporter_zap == nullptr ||
       SFX_teleporter_arc == nullptr || SFX_editor_blocked == nullptr ||
       SFX_potion_spawn == nullptr || SFX_dynamite_spawn == nullptr ||
+      SFX_dynamite_ignite == nullptr ||
       SFX_dynamite_explosion == nullptr ||
       SFX_plastic_explosive_ready == nullptr ||
       SFX_plastic_explosive_wall_break == nullptr ||
@@ -372,6 +380,9 @@ Audio::~Audio() {
   }
   if (SFX_dynamite_spawn != nullptr) {
     Mix_FreeChunk(SFX_dynamite_spawn);
+  }
+  if (SFX_dynamite_ignite != nullptr) {
+    Mix_FreeChunk(SFX_dynamite_ignite);
   }
   if (SFX_dynamite_explosion != nullptr) {
     Mix_FreeChunk(SFX_dynamite_explosion);
@@ -950,6 +961,43 @@ Mix_Chunk *Audio::CreateDynamiteSpawnChunk() {
   return Mix_LoadWAV_RW(wav_stream, 1);
 }
 
+Mix_Chunk *Audio::CreateDynamiteIgniteChunk() {
+  const int duration_ms = 360;
+  const int sample_count = std::max(1, duration_ms * kSampleRate / 1000);
+  std::vector<Sint16> pcm_samples;
+  pcm_samples.reserve(sample_count * kChannels);
+
+  for (int i = 0; i < sample_count; i++) {
+    const double time = static_cast<double>(i) / kSampleRate;
+    const double progress = static_cast<double>(i) / sample_count;
+    const double envelope =
+        std::pow(std::clamp(1.0 - progress, 0.0, 1.0), 0.58);
+    const double hiss =
+        0.30 * std::sin(2.0 * kPi * (1780.0 + progress * 880.0) * time);
+    const double crackle =
+        0.24 * std::sin(2.0 * kPi * (2860.0 - progress * 940.0) * time + 0.7);
+    const double flare =
+        0.18 * std::sin(2.0 * kPi * 620.0 * time + progress * 4.0);
+    const double ember =
+        0.12 * std::sin(2.0 * kPi * 210.0 * time + 0.3);
+    double sample_value = (hiss + crackle + flare + ember) * envelope * 0.26;
+
+    sample_value = std::clamp(sample_value, -1.0, 1.0);
+    const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+    pcm_samples.push_back(pcm);
+    pcm_samples.push_back(pcm);
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
 Mix_Chunk *Audio::CreateDynamiteExplosionChunk() {
   const int duration_ms = 440;
   const int sample_count = std::max(1, duration_ms * kSampleRate / 1000);
@@ -1250,6 +1298,8 @@ void Audio::PlayEditorBlocked() { PlayChunk(SFX_editor_blocked); };
 void Audio::PlayPotionSpawn() { PlayChunk(SFX_potion_spawn); };
 
 void Audio::PlayDynamiteSpawn() { PlayChunk(SFX_dynamite_spawn); };
+
+void Audio::PlayDynamiteIgnite() { PlayChunk(SFX_dynamite_ignite); };
 
 void Audio::PlayDynamiteExplosion() { PlayChunk(SFX_dynamite_explosion); };
 

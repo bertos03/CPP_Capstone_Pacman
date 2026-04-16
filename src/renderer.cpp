@@ -142,6 +142,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
+      sdl_dynamite_texture(nullptr), sdl_dynamite_size{0, 0},
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
@@ -156,6 +157,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
+      sdl_dynamite_texture(nullptr), sdl_dynamite_size{0, 0},
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
@@ -365,6 +367,8 @@ void Renderer::initializeRenderer(size_t row_count_value,
   sdl_start_menu_hero_texture = loadTrimmedTexture(
       Paths::GetDataFilePath("start_menu_spielfigur.png"),
       sdl_start_menu_hero_size);
+  sdl_dynamite_texture = loadTrimmedTexture(Paths::GetDataFilePath("dynamite.png"),
+                                            sdl_dynamite_size);
 }
 
 Renderer::~Renderer() {
@@ -389,6 +393,9 @@ Renderer::~Renderer() {
   }
   if (sdl_start_menu_hero_texture != nullptr) {
     SDL_DestroyTexture(sdl_start_menu_hero_texture);
+  }
+  if (sdl_dynamite_texture != nullptr) {
+    SDL_DestroyTexture(sdl_dynamite_texture);
   }
   if (sdl_renderer != nullptr) {
     SDL_DestroyRenderer(sdl_renderer);
@@ -618,8 +625,8 @@ void Renderer::drawhud() {
     const SDL_Rect icon_rect{
         cursor_x, line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
         icon_size, icon_size};
-    drawDynamiteIcon(icon_rect, true, static_cast<double>(SDL_GetTicks()) / 180.0,
-                     255);
+    drawDynamiteIcon(icon_rect, false, static_cast<double>(SDL_GetTicks()) / 180.0,
+                     255, 0.0);
     cursor_x += icon_rect.w + 10;
     renderTextLeft(sdl_font_hud, dynamite_text, sdl_font_color, cursor_x,
                    line_top);
@@ -2534,70 +2541,124 @@ void Renderer::drawbonusflask() {
 }
 
 void Renderer::drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
-                                double animation_clock, Uint8 alpha) {
+                                double animation_clock, Uint8 alpha,
+                                double fuse_burn_progress) {
   if (icon_rect.w <= 0 || icon_rect.h <= 0) {
     return;
   }
 
-  const int body_height = std::max(5, icon_rect.h / 3);
-  const int body_y = icon_rect.y + icon_rect.h / 2 - body_height / 2;
-  const SDL_Rect body_rect{icon_rect.x + std::max(1, icon_rect.w / 10), body_y,
-                           std::max(6, icon_rect.w - std::max(2, icon_rect.w / 5)),
-                           body_height};
-  const int cap_radius = std::max(2, body_rect.h / 2);
-  const int center_y = body_rect.y + body_rect.h / 2;
+  SDL_Rect draw_rect{icon_rect.x, icon_rect.y, icon_rect.w, icon_rect.h};
+  if (sdl_dynamite_texture != nullptr && sdl_dynamite_size.x > 0 &&
+      sdl_dynamite_size.y > 0) {
+    const double scale_by_width =
+        static_cast<double>(icon_rect.w) / static_cast<double>(sdl_dynamite_size.x);
+    const double scale_by_height =
+        static_cast<double>(icon_rect.h) / static_cast<double>(sdl_dynamite_size.y);
+    const double scale = std::min(scale_by_width, scale_by_height);
+    draw_rect.w = std::max(
+        1, static_cast<int>(std::lround(sdl_dynamite_size.x * scale)));
+    draw_rect.h = std::max(
+        1, static_cast<int>(std::lround(sdl_dynamite_size.y * scale)));
+    draw_rect.x = icon_rect.x + (icon_rect.w - draw_rect.w) / 2;
+    draw_rect.y = icon_rect.y + (icon_rect.h - draw_rect.h) / 2;
 
-  SDL_SetRenderDrawColor(sdl_renderer, 122, 18, 12, alpha);
-  SDL_RenderFillCircle(sdl_renderer, body_rect.x, center_y, cap_radius);
-  SDL_RenderFillCircle(sdl_renderer, body_rect.x + body_rect.w, center_y,
-                       cap_radius);
-  SDL_SetRenderDrawColor(sdl_renderer, 186, 40, 28, alpha);
-  SDL_RenderFillRect(sdl_renderer, &body_rect);
-  SDL_SetRenderDrawColor(sdl_renderer, 242, 130, 76, alpha);
-  SDL_RenderDrawLine(sdl_renderer, body_rect.x + 1, body_rect.y + 1,
-                     body_rect.x + body_rect.w - 1, body_rect.y + 1);
-  SDL_SetRenderDrawColor(sdl_renderer, 88, 10, 8, alpha);
-  SDL_RenderDrawRect(sdl_renderer, &body_rect);
+    SDL_SetTextureBlendMode(sdl_dynamite_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(sdl_dynamite_texture, alpha);
+    SDL_RenderCopy(sdl_renderer, sdl_dynamite_texture, nullptr, &draw_rect);
+    SDL_SetTextureAlphaMod(sdl_dynamite_texture, 255);
+  } else {
+    const int body_height = std::max(5, icon_rect.h / 3);
+    const int body_y = icon_rect.y + icon_rect.h / 2 - body_height / 2;
+    const SDL_Rect body_rect{
+        icon_rect.x + std::max(1, icon_rect.w / 10), body_y,
+        std::max(6, icon_rect.w - std::max(2, icon_rect.w / 5)), body_height};
+    const int cap_radius = std::max(2, body_rect.h / 2);
+    const int center_y = body_rect.y + body_rect.h / 2;
 
-  const int band_width = std::max(2, body_rect.w / 8);
-  for (int band = 0; band < 2; band++) {
-    const int band_x = body_rect.x + body_rect.w / 3 + band * body_rect.w / 4;
-    SDL_Rect band_rect{band_x, body_rect.y - 1, band_width, body_rect.h + 2};
-    SDL_SetRenderDrawColor(sdl_renderer, 236, 220, 174, alpha);
-    SDL_RenderFillRect(sdl_renderer, &band_rect);
+    SDL_SetRenderDrawColor(sdl_renderer, 122, 18, 12, alpha);
+    SDL_RenderFillCircle(sdl_renderer, body_rect.x, center_y, cap_radius);
+    SDL_RenderFillCircle(sdl_renderer, body_rect.x + body_rect.w, center_y,
+                         cap_radius);
+    SDL_SetRenderDrawColor(sdl_renderer, 186, 40, 28, alpha);
+    SDL_RenderFillRect(sdl_renderer, &body_rect);
+    SDL_SetRenderDrawColor(sdl_renderer, 242, 130, 76, alpha);
+    SDL_RenderDrawLine(sdl_renderer, body_rect.x + 1, body_rect.y + 1,
+                       body_rect.x + body_rect.w - 1, body_rect.y + 1);
+    SDL_SetRenderDrawColor(sdl_renderer, 88, 10, 8, alpha);
+    SDL_RenderDrawRect(sdl_renderer, &body_rect);
+
+    const int band_width = std::max(2, body_rect.w / 8);
+    for (int band = 0; band < 2; band++) {
+      const int band_x = body_rect.x + body_rect.w / 3 + band * body_rect.w / 4;
+      SDL_Rect band_rect{band_x, body_rect.y - 1, band_width, body_rect.h + 2};
+      SDL_SetRenderDrawColor(sdl_renderer, 236, 220, 174, alpha);
+      SDL_RenderFillRect(sdl_renderer, &band_rect);
+    }
   }
-
-  const int fuse_start_x = body_rect.x + body_rect.w - std::max(2, body_rect.w / 7);
-  const int fuse_start_y = body_rect.y;
-  const int fuse_tip_x = icon_rect.x + icon_rect.w - std::max(2, icon_rect.w / 10);
-  const int fuse_tip_y = icon_rect.y + std::max(2, icon_rect.h / 8);
-  SDL_SetRenderDrawColor(sdl_renderer, 86, 62, 28, alpha);
-  SDL_RenderDrawLine(sdl_renderer, fuse_start_x, fuse_start_y, fuse_tip_x,
-                     fuse_tip_y);
 
   if (!lit_fuse) {
     return;
   }
 
+  fuse_burn_progress = std::clamp(fuse_burn_progress, 0.0, 1.0);
+  constexpr std::array<SDL_FPoint, 6> kFusePath{{
+      {0.94f, 0.15f}, {0.89f, 0.13f}, {0.82f, 0.16f},
+      {0.76f, 0.09f}, {0.68f, 0.07f}, {0.60f, 0.24f},
+  }};
+
+  auto interpolate_fuse_point = [&](double path_progress) {
+    path_progress = std::clamp(path_progress, 0.0, 1.0);
+    const double scaled =
+        path_progress * static_cast<double>(kFusePath.size() - 1);
+    const size_t index = std::min(
+        static_cast<size_t>(std::floor(scaled)), kFusePath.size() - 2);
+    const double local = scaled - static_cast<double>(index);
+    const SDL_FPoint from = kFusePath[index];
+    const SDL_FPoint to = kFusePath[index + 1];
+    return SDL_FPoint{
+        static_cast<float>(from.x + (to.x - from.x) * local),
+        static_cast<float>(from.y + (to.y - from.y) * local)};
+  };
+
+  const SDL_FPoint burn_norm = interpolate_fuse_point(fuse_burn_progress);
+  const SDL_FPoint trail_norm =
+      interpolate_fuse_point(std::max(0.0, fuse_burn_progress - 0.10));
+  const int burn_x = draw_rect.x +
+                     static_cast<int>(std::lround(burn_norm.x * draw_rect.w));
+  const int burn_y = draw_rect.y +
+                     static_cast<int>(std::lround(burn_norm.y * draw_rect.h));
+  const int trail_x = draw_rect.x +
+                      static_cast<int>(std::lround(trail_norm.x * draw_rect.w));
+  const int trail_y = draw_rect.y +
+                      static_cast<int>(std::lround(trail_norm.y * draw_rect.h));
+
   const double spark_pulse = 0.55 + 0.45 * std::sin(animation_clock * 2.4);
   const int spark_radius =
-      std::max(2, static_cast<int>(std::max(icon_rect.w, icon_rect.h) * 0.10));
+      std::max(2, static_cast<int>(std::max(draw_rect.w, draw_rect.h) * 0.06));
   const Uint8 spark_alpha = static_cast<Uint8>(
       std::clamp(static_cast<double>(alpha) * (0.70 + 0.30 * spark_pulse), 0.0,
                  255.0));
-  SDL_SetRenderDrawColor(sdl_renderer, 255, 120, 32, spark_alpha);
-  SDL_RenderFillCircle(sdl_renderer, fuse_tip_x, fuse_tip_y, spark_radius + 1);
-  SDL_SetRenderDrawColor(sdl_renderer, 255, 224, 126, spark_alpha);
-  SDL_RenderFillCircle(sdl_renderer, fuse_tip_x, fuse_tip_y, spark_radius);
 
-  for (int spark = 0; spark < 4; spark++) {
-    const double angle = animation_clock * 1.8 + spark * (2.0 * 3.1415926535 / 4.0);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 156, 48, spark_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, burn_x, burn_y, spark_radius + 2);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 112, 32, spark_alpha);
+  SDL_RenderFillCircle(sdl_renderer, burn_x, burn_y, spark_radius + 1);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 232, 146, spark_alpha);
+  SDL_RenderFillCircle(sdl_renderer, burn_x, burn_y, spark_radius);
+
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 148, 40,
+                         static_cast<Uint8>(std::clamp(spark_alpha * 0.7, 0.0, 255.0)));
+  SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, burn_x, burn_y);
+
+  for (int spark = 0; spark < 5; spark++) {
+    const double angle =
+        animation_clock * 1.8 + spark * (2.0 * 3.1415926535 / 5.0);
     const int length =
-        std::max(3, static_cast<int>(icon_rect.w * (0.18 + 0.08 * spark_pulse)));
-    const int x2 = fuse_tip_x + static_cast<int>(std::cos(angle) * length);
-    const int y2 = fuse_tip_y + static_cast<int>(std::sin(angle) * length);
+        std::max(3, static_cast<int>(draw_rect.w * (0.10 + 0.06 * spark_pulse)));
+    const int x2 = burn_x + static_cast<int>(std::cos(angle) * length);
+    const int y2 = burn_y + static_cast<int>(std::sin(angle) * length);
     SDL_SetRenderDrawColor(sdl_renderer, 255, 236, 158, spark_alpha);
-    SDL_RenderDrawLine(sdl_renderer, fuse_tip_x, fuse_tip_y, x2, y2);
+    SDL_RenderDrawLine(sdl_renderer, burn_x, burn_y, x2, y2);
   }
 }
 
@@ -2705,7 +2766,7 @@ void Renderer::drawdynamitepickup() {
   const int icon_size = std::max(12, static_cast<int>(element_size * 0.74));
   const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
                            icon_size, icon_size};
-  drawDynamiteIcon(icon_rect, true, animation_clock, body_alpha);
+  drawDynamiteIcon(icon_rect, false, animation_clock, body_alpha, 0.0);
 }
 
 void Renderer::drawplasticexplosivepickup() {
@@ -2788,7 +2849,7 @@ void Renderer::drawplaceddynamites() {
     const SDL_Rect icon_rect{center_x - icon_size / 2,
                              center_y - icon_size / 2 - element_size / 10,
                              icon_size, icon_size};
-    drawDynamiteIcon(icon_rect, true, pulse_clock, 255);
+    drawDynamiteIcon(icon_rect, true, pulse_clock, 255, urgency);
 
     const int remaining_seconds =
         static_cast<int>((std::max<Uint32>(1, remaining_ms) + 999) / 1000);

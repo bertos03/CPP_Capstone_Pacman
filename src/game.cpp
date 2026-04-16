@@ -70,6 +70,17 @@ bool IsInsideMapBounds(Map *map, MapCoord coord) {
          coord.v < static_cast<int>(map->get_map_cols());
 }
 
+bool IsOuterWallCoord(Map *map, MapCoord coord) {
+  if (!IsInsideMapBounds(map, coord)) {
+    return false;
+  }
+
+  const int last_row = static_cast<int>(map->get_map_rows()) - 1;
+  const int last_col = static_cast<int>(map->get_map_cols()) - 1;
+  return coord.u == 0 || coord.v == 0 || coord.u == last_row ||
+         coord.v == last_col;
+}
+
 int DistanceSquared(MapCoord left, MapCoord right) {
   const int delta_u = left.u - right.u;
   const int delta_v = left.v - right.v;
@@ -795,6 +806,9 @@ void Game::TryPlaceDynamite(Uint32 now) {
        static_cast<int>((now % 997) + pacman->map_coord.u * 23 +
                         pacman->map_coord.v * 29 + dynamite_inventory * 17)});
   dynamite_inventory--;
+#ifdef AUDIO
+  audio->PlayDynamiteIgnite();
+#endif
 }
 
 void Game::TryUsePlasticExplosive(Uint32 now) {
@@ -892,12 +906,13 @@ void Game::DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
                                     Uint32 now) {
   effects.push_back({explosive.coord, now, EffectType::DynamiteExplosion, 1});
 
-  const bool destroys_wall =
+  const bool targets_breakable_wall =
       IsInsideMapBounds(map, explosive.coord) &&
       map->map_entry(static_cast<size_t>(explosive.coord.u),
                      static_cast<size_t>(explosive.coord.v)) ==
-          ElementType::TYPE_WALL;
-  if (destroys_wall) {
+          ElementType::TYPE_WALL &&
+      !IsOuterWallCoord(map, explosive.coord);
+  if (targets_breakable_wall) {
     map->SetEntry(explosive.coord, ElementType::TYPE_PATH);
 #ifdef AUDIO
     audio->PlayPlasticExplosiveWallBreak();
@@ -914,7 +929,7 @@ void Game::DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
     eliminated_monster = true;
   }
 
-  if (!destroys_wall && !eliminated_monster) {
+  if (!targets_breakable_wall && !eliminated_monster) {
 #ifdef AUDIO
     audio->PlayMonsterExplosion();
 #endif
