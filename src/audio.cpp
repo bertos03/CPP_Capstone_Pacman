@@ -218,6 +218,7 @@ Audio::Audio() {
   SFX_airstrike_explosion = nullptr;
   SFX_invulnerability_loop = nullptr;
   menu_music = nullptr;
+  win_music = nullptr;
   invulnerability_loop_channel = -1;
 
   if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0 &&
@@ -253,6 +254,7 @@ Audio::Audio() {
   const std::string airstrike_explosion_sound_path =
       Paths::GetDataFilePath("airstrike_explosion.wav");
   const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
+  const std::string win_music_path = Paths::GetDataFilePath("win_melody.mp3");
 
   SFX_coin = Mix_LoadWAV(coin_sound_path.c_str());
   SFX_win = Mix_LoadWAV(win_sound_path.c_str());
@@ -307,6 +309,11 @@ Audio::Audio() {
   menu_music = Mix_LoadMUS(menu_music_path.c_str());
   if (menu_music == nullptr) {
     std::cerr << "Failed to load menu music " << menu_music_path << ": "
+              << Mix_GetError() << "\n";
+  }
+  win_music = Mix_LoadMUS(win_music_path.c_str());
+  if (win_music == nullptr) {
+    std::cerr << "Failed to load win music " << win_music_path << ": "
               << Mix_GetError() << "\n";
   }
 
@@ -421,6 +428,9 @@ Audio::~Audio() {
   }
   if (menu_music != nullptr) {
     Mix_FreeMusic(menu_music);
+  }
+  if (win_music != nullptr) {
+    Mix_FreeMusic(win_music);
   }
 
   if (Mix_QuerySpec(nullptr, nullptr, nullptr) != 0) {
@@ -1246,7 +1256,23 @@ void Audio::PlayGameOver() { PlayChunk(SFX_gameover); };
  * @brief as the name says
  *
  */
-void Audio::PlayWin() { PlayChunk(SFX_win); };
+void Audio::PlayWin() {
+  if (!audio_ready) {
+    return;
+  }
+
+  if (win_music != nullptr) {
+    if (Mix_PlayingMusic() != 0) {
+      Mix_HaltMusic();
+    }
+    ClearMenuSpectrumLevels();
+    if (Mix_PlayMusic(win_music, 0) == 0) {
+      return;
+    }
+  }
+
+  PlayChunk(SFX_win);
+};
 
 void Audio::PlayMenuMove() { PlayChunk(SFX_menu_move); };
 
@@ -1263,7 +1289,7 @@ bool Audio::StartMenuMusic() {
 
   ClearMenuSpectrumLevels();
   if (Mix_PlayingMusic() != 0) {
-    return true;
+    Mix_HaltMusic();
   }
 
   return Mix_PlayMusic(menu_music, -1) == 0;
@@ -1284,6 +1310,17 @@ bool Audio::FadeOutMenuMusic(int fade_out_ms) {
 }
 
 void Audio::StopMenuMusic() {
+  if (!audio_ready) {
+    return;
+  }
+
+  if (Mix_PlayingMusic() != 0) {
+    Mix_HaltMusic();
+  }
+  ClearMenuSpectrumLevels();
+}
+
+void Audio::StopWinMusic() {
   if (!audio_ready) {
     return;
   }

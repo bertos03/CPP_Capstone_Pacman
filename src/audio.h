@@ -44,6 +44,7 @@ public:
   bool StartMenuMusic();
   bool FadeOutMenuMusic(int fade_out_ms);
   void StopMenuMusic();
+  void StopWinMusic();
   bool IsMenuMusicPlaying() const;
   void PlayMonsterShot();
   void PlayFireballWallHit();
@@ -112,6 +113,7 @@ private:
   Mix_Chunk *SFX_airstrike_explosion;
   Mix_Chunk *SFX_invulnerability_loop;
   Mix_Music *menu_music;
+  Mix_Music *win_music;
   int invulnerability_loop_channel;
   bool audio_ready;
 #endif

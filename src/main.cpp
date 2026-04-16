@@ -110,6 +110,7 @@ constexpr int kMediumMapRows = 17;
 constexpr int kMediumMapCols = 30;
 constexpr int kLargeMapRows = 21;
 constexpr int kLargeMapCols = 38;
+constexpr Uint32 kVictoryEndScreenMinimumMs = 3000;
 
 MonsterAmount NextMonsterAmount(MonsterAmount monster_amount) {
   switch (monster_amount) {
@@ -993,7 +994,8 @@ void processOverlayEvents(bool &quit_requested) {
   }
 }
 
-void processEndScreenEvents(bool &return_to_menu, bool &quit_requested) {
+void processEndScreenEvents(bool &return_to_menu, bool &quit_requested,
+                            bool allow_dismiss) {
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
@@ -1002,7 +1004,11 @@ void processEndScreenEvents(bool &return_to_menu, bool &quit_requested) {
       return;
     }
 
-    if (event.type == SDL_KEYDOWN || event.type == SDL_MOUSEBUTTONDOWN) {
+    if (!allow_dismiss) {
+      continue;
+    }
+
+    if (event.type == SDL_KEYDOWN) {
       return_to_menu = true;
       return;
     }
@@ -1206,6 +1212,7 @@ int main() {
 
     bool return_to_menu = false;
     bool frozen_end_screen = false;
+    Uint32 end_screen_started = 0;
     while ((!events->is_quit() || frozen_end_screen) && !return_to_menu &&
            !quit_application) {
       if (!game->is_lost() && !game->is_won()) {
@@ -1216,21 +1223,30 @@ int main() {
         if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
           frozen_end_screen = true;
+          end_screen_started = SDL_GetTicks();
         }
       } else {
         if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
           frozen_end_screen = true;
+          end_screen_started = SDL_GetTicks();
         }
         if (game->is_lost()) {
           game->Update();
         }
-        processEndScreenEvents(return_to_menu, quit_application);
+        const bool allow_end_screen_dismiss =
+            !game->is_won() ||
+            (end_screen_started != 0 &&
+             SDL_GetTicks() - end_screen_started >= kVictoryEndScreenMinimumMs);
+        processEndScreenEvents(return_to_menu, quit_application,
+                               allow_end_screen_dismiss);
       }
 
       renderer.Render();
       sleep(40);
     }
+
+    audio->StopWinMusic();
   }
 
   std::cout << "Quitting app.\n";
