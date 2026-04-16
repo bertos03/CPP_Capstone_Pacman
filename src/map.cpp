@@ -172,7 +172,8 @@ bool Map::SaveMapFile(const std::string &map_path, const MapFileData &map_file) 
 }
 
 bool Map::IsMonsterChar(char inp) {
-  return inp == MONSTER_FEW || inp == MONSTER_MEDIUM || inp == MONSTER_MANY;
+  return inp == MONSTER_FEW || inp == MONSTER_MEDIUM ||
+         inp == MONSTER_MANY || inp == MONSTER_EXTRA;
 }
 
 bool Map::IsTeleporterChar(char inp) {
@@ -186,9 +187,10 @@ bool Map::IsMonsterEnabled(char inp) {
 
   switch (monster_amount) {
   case MonsterAmount::Few:
-    return inp == MONSTER_FEW;
+    return inp == MONSTER_FEW || inp == MONSTER_EXTRA;
   case MonsterAmount::Medium:
-    return inp == MONSTER_FEW || inp == MONSTER_MEDIUM;
+    return inp == MONSTER_FEW || inp == MONSTER_MEDIUM ||
+           inp == MONSTER_EXTRA;
   case MonsterAmount::Many:
     return true;
   default:
@@ -221,6 +223,7 @@ ElementType Map::Char2Type(char inp) {
   case MONSTER_FEW:
   case MONSTER_MEDIUM:
   case MONSTER_MANY:
+  case MONSTER_EXTRA:
     return IsMonsterEnabled(inp) ? ElementType::TYPE_MONSTER
                                  : ElementType::TYPE_PATH;
   default:

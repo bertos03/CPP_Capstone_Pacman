@@ -700,6 +700,9 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
       case SDLK_o:
         PlaceEditorTile(editor_state, MONSTER_MANY);
         break;
+      case SDLK_k:
+        PlaceEditorTile(editor_state, MONSTER_EXTRA);
+        break;
       case SDLK_1:
       case SDLK_2:
       case SDLK_3:

@@ -96,8 +96,6 @@ private:
                  double gait_phase, bool walking);
   void drawPacmanShield(int center_x, int center_y, int base_radius,
                         double pulse_clock);
-  void drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
-                       int shimmer_seed);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
                         double animation_clock, Uint8 alpha,
                         double fuse_burn_progress);
@@ -144,7 +142,9 @@ private:
   SDL_Texture *getPacmanTexture(Directions facing_direction,
                                 bool walking) const;
   int getPacmanAnimationFrame(bool walking) const;
-  SDL_Texture *getMonsterTexture(int animation_seed);
+  SDL_Texture *getMonsterTexture(char monster_char,
+                                 Directions facing_direction,
+                                 int animation_seed);
   int getMonsterAnimationFrame(int animation_seed) const;
   SDL_Surface *createBrickTextSurface(TTF_Font *font, const std::string &text,
                                       const SDL_Color &outline_color);

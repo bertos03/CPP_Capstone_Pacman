@@ -19,6 +19,7 @@
 #include "paths.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "game.h"
@@ -40,9 +41,6 @@ const SDL_Color kStartMenuPanelFillColor{10, 6, 18, 118};
 const SDL_Color kStartMenuPanelBorderColor{196, 130, 92, 180};
 const SDL_Color kBrickOutlineColor{78, 20, 14, 255};
 const SDL_Color kShieldTextColor{116, 220, 255, 255};
-const SDL_Color kFewMonsterGlowColor{120, 210, 255, 255};
-const SDL_Color kMediumMonsterGlowColor{255, 170, 72, 255};
-const SDL_Color kManyMonsterGlowColor{255, 82, 82, 255};
 const SDL_Color kStartLogoHighlightColor{238, 252, 255, 255};
 const SDL_Color kStartLogoLightColor{88, 234, 255, 255};
 const SDL_Color kStartLogoMidColor{44, 156, 255, 255};
@@ -57,7 +55,21 @@ constexpr Uint8 kStartMenuLedFillAlpha = 148;
 constexpr Uint8 kStartMenuLedBorderAlpha = 132;
 constexpr double kLogoPi = 3.14159265358979323846;
 constexpr int kPacmanFramesPerDirection = 4;
+constexpr int kMonsterFramesPerDirection = 4;
 constexpr Uint32 kPacmanWalkFrameMs = 140;
+constexpr double kMonsterRenderScale = 1.19;
+
+struct MonsterSpriteDescriptor {
+  char monster_char;
+  const char *color_name;
+};
+
+constexpr std::array<MonsterSpriteDescriptor, 4> kMonsterSpriteDescriptors{{
+    {MONSTER_FEW, "purple"},
+    {MONSTER_MEDIUM, "blue"},
+    {MONSTER_MANY, "red"},
+    {MONSTER_EXTRA, "green"},
+}};
 
 const char *MonsterAmountLabel(MonsterAmount monster_amount) {
   switch (monster_amount) {
@@ -72,16 +84,63 @@ const char *MonsterAmountLabel(MonsterAmount monster_amount) {
   }
 }
 
-SDL_Color MonsterGlowColor(char monster_char) {
-  switch (monster_char) {
-  case MONSTER_FEW:
-    return kFewMonsterGlowColor;
-  case MONSTER_MEDIUM:
-    return kMediumMonsterGlowColor;
-  case MONSTER_MANY:
-  default:
-    return kManyMonsterGlowColor;
+int MonsterSpriteVariantIndex(char monster_char) {
+  for (size_t index = 0; index < kMonsterSpriteDescriptors.size(); ++index) {
+    if (kMonsterSpriteDescriptors[index].monster_char == monster_char) {
+      return static_cast<int>(index);
+    }
   }
+  return 0;
+}
+
+const char *MonsterDirectionName(Directions direction) {
+  switch (direction) {
+  case Directions::Up:
+    return "back";
+  case Directions::Left:
+    return "left";
+  case Directions::Right:
+    return "right";
+  case Directions::Down:
+  case Directions::None:
+  default:
+    return "front";
+  }
+}
+
+int MonsterDirectionIndex(Directions direction) {
+  switch (direction) {
+  case Directions::Up:
+    return 1;
+  case Directions::Left:
+    return 2;
+  case Directions::Right:
+    return 3;
+  case Directions::Down:
+  case Directions::None:
+  default:
+    return 0;
+  }
+}
+
+size_t MonsterTextureIndex(char monster_char, Directions direction,
+                           int frame_index) {
+  const int variant_index = MonsterSpriteVariantIndex(monster_char);
+  const int direction_index = MonsterDirectionIndex(direction);
+  const int normalized_frame =
+      ((frame_index % kMonsterFramesPerDirection) + kMonsterFramesPerDirection) %
+      kMonsterFramesPerDirection;
+  return static_cast<size_t>(variant_index * 4 * kMonsterFramesPerDirection +
+                             direction_index * kMonsterFramesPerDirection +
+                             normalized_frame);
+}
+
+SDL_Rect MonsterRenderRect(const PixelCoord &monster_px, int element_size) {
+  const int render_size = std::max(
+      1, static_cast<int>(std::lround(element_size * kMonsterRenderScale)));
+  const int offset = (element_size - render_size) / 2;
+  return SDL_Rect{monster_px.x + offset, monster_px.y + offset, render_size,
+                  render_size};
 }
 
 SDL_Color TeleporterColor(char teleporter_digit) {
@@ -270,19 +329,27 @@ void Renderer::initializeRenderer(size_t row_count_value,
   sdl_wall_surface = SDL_LoadBMP(wall_path.c_str());
   sdl_goodie_surface = SDL_LoadBMP(goodie_path.c_str());
 
-  const std::vector<std::string> monster_frame_paths{
-      Paths::GetDataFilePath("monster.bmp"),
-      Paths::GetDataFilePath("monster_1.bmp"),
-      Paths::GetDataFilePath("monster_2.bmp"),
-      Paths::GetDataFilePath("monster_3.bmp")};
-  for (const std::string &monster_frame_path : monster_frame_paths) {
-    SDL_Surface *monster_surface = SDL_LoadBMP(monster_frame_path.c_str());
-    if (monster_surface == nullptr) {
-      std::cerr << "Could not open monster sprite asset "
-                << monster_frame_path << ": " << SDL_GetError() << "\n";
-      exit(1);
+  for (const auto &monster_descriptor : kMonsterSpriteDescriptors) {
+    for (Directions direction :
+         {Directions::Down, Directions::Up, Directions::Left,
+          Directions::Right}) {
+      for (int frame = 1; frame <= kMonsterFramesPerDirection; ++frame) {
+        const std::string relative_path =
+            "monster_frames/monster_" +
+            std::string(monster_descriptor.color_name) + "_" +
+            MonsterDirectionName(direction) + "_f" + std::to_string(frame) +
+            "_256.png";
+        const std::string monster_frame_path =
+            Paths::GetDataFilePath(relative_path);
+        SDL_Surface *monster_surface = IMG_Load(monster_frame_path.c_str());
+        if (monster_surface == nullptr) {
+          std::cerr << "Could not open monster sprite asset "
+                    << monster_frame_path << ": " << IMG_GetError() << "\n";
+          exit(1);
+        }
+        sdl_monster_surfaces.push_back(monster_surface);
+      }
     }
-    sdl_monster_surfaces.push_back(monster_surface);
   }
 
   const std::vector<std::string> pacman_frame_paths{
@@ -1334,7 +1401,7 @@ void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
   const std::string line_two =
       "X/W=Mauer | Leer/Entf=Weg | G=Goodie | P=Spielfigur";
   const std::string line_three =
-      "M/N/O=Monster | 1-5=Teleportpaare";
+      "M/N/O/K=Monster | 1-5=Teleportpaare";
   const std::string line_four =
       "Belegte Felder blockieren den Klick | Esc oeffnet Dialog";
   renderSimpleText(sdl_font_hud, line_one, kHudTextColor, screen_res_x / 2,
@@ -1452,17 +1519,25 @@ int Renderer::getMonsterAnimationFrame(int animation_seed) const {
   const Uint32 total_offset =
       static_cast<Uint32>((animation_seed * 137) %
                           (MONSTER_ANIMATION_FRAME_MS *
-                           static_cast<int>(sdl_monster_textures.size())));
+                           kMonsterFramesPerDirection));
   const Uint32 frame_clock = SDL_GetTicks() + total_offset;
-  return static_cast<int>(
-      (frame_clock / MONSTER_ANIMATION_FRAME_MS) % sdl_monster_textures.size());
+  return static_cast<int>((frame_clock / MONSTER_ANIMATION_FRAME_MS) %
+                          kMonsterFramesPerDirection);
 }
 
-SDL_Texture *Renderer::getMonsterTexture(int animation_seed) {
+SDL_Texture *Renderer::getMonsterTexture(char monster_char,
+                                         Directions facing_direction,
+                                         int animation_seed) {
   if (sdl_monster_textures.empty()) {
     return nullptr;
   }
-  return sdl_monster_textures[getMonsterAnimationFrame(animation_seed)];
+
+  const size_t texture_index = MonsterTextureIndex(
+      monster_char, facing_direction, getMonsterAnimationFrame(animation_seed));
+  if (texture_index >= sdl_monster_textures.size()) {
+    return nullptr;
+  }
+  return sdl_monster_textures[texture_index];
 }
 
 void Renderer::renderSimpleText(TTF_Font *font, const std::string &text,
@@ -3540,7 +3615,8 @@ void Renderer::drawmonsters() {
       continue;
     }
 
-    SDL_Texture *monster_texture = getMonsterTexture(monster->id);
+    SDL_Texture *monster_texture = getMonsterTexture(
+        monster->monster_char, monster->facing_direction, monster->id);
     if (monster_texture == nullptr) {
       continue;
     }
@@ -3552,11 +3628,7 @@ void Renderer::drawmonsters() {
           monster->map_coord, element_size * monster->px_delta.x / 100.0,
           element_size * monster->px_delta.y / 100.0);
     }
-    sdl_monster_rect =
-        SDL_Rect{monster->px_coord.x + int(element_size * 0.05),
-                 monster->px_coord.y + int(element_size * 0.05),
-                 int(element_size * 0.9), int(element_size * 0.9)};
-    drawMonsterGlow(sdl_monster_rect, monster->monster_char, monster->id);
+    sdl_monster_rect = MonsterRenderRect(monster->px_coord, element_size);
     if (waiting_for_blast) {
       const Uint32 remaining_ticks = monster->scheduled_dynamite_blast_ticks - now;
       const double blink = std::sin(static_cast<double>(now) / 60.0);
@@ -4039,17 +4111,14 @@ void Renderer::drawStaticMonsters() {
   }
 
   for (int i = 0; i < map->get_number_monsters(); i++) {
-    SDL_Texture *monster_texture = getMonsterTexture(i);
+    SDL_Texture *monster_texture =
+        getMonsterTexture(map->get_char_monster(i), Directions::Down, i);
     if (monster_texture == nullptr) {
       continue;
     }
 
     const PixelCoord monster_px = getPixelCoord(map->get_coord_monster(i), 0, 0);
-    sdl_monster_rect =
-        SDL_Rect{monster_px.x + int(element_size * 0.05),
-                 monster_px.y + int(element_size * 0.05),
-                 int(element_size * 0.9), int(element_size * 0.9)};
-    drawMonsterGlow(sdl_monster_rect, map->get_char_monster(i), i);
+    sdl_monster_rect = MonsterRenderRect(monster_px, element_size);
     SDL_RenderCopy(sdl_renderer, monster_texture, nullptr, &sdl_monster_rect);
   }
 }
@@ -4093,50 +4162,21 @@ void Renderer::drawLayoutEntities(const std::vector<std::string> &layout) {
           SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr, &sdl_pacman_rect);
         }
       } else if (entry == MONSTER_FEW || entry == MONSTER_MEDIUM ||
-                 entry == MONSTER_MANY) {
+                 entry == MONSTER_MANY || entry == MONSTER_EXTRA) {
         const int animation_seed =
             static_cast<int>(row * layout[row].size() + col);
-        SDL_Texture *monster_texture = getMonsterTexture(animation_seed);
+        SDL_Texture *monster_texture =
+            getMonsterTexture(entry, Directions::Down, animation_seed);
         if (monster_texture == nullptr) {
           continue;
         }
-        sdl_monster_rect = SDL_Rect{x + int(element_size * 0.05),
-                                    y + int(element_size * 0.05),
-                                    int(element_size * 0.9),
-                                    int(element_size * 0.9)};
-        drawMonsterGlow(sdl_monster_rect, entry, animation_seed);
+        sdl_monster_rect =
+            MonsterRenderRect(PixelCoord{x, y}, element_size);
         SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
                        &sdl_monster_rect);
       }
     }
   }
-}
-
-void Renderer::drawMonsterGlow(const SDL_Rect &monster_rect, char monster_char,
-                               int shimmer_seed) {
-  const SDL_Color glow_color = MonsterGlowColor(monster_char);
-  const int cycle = 1800;
-  int pulse = static_cast<int>((SDL_GetTicks() + shimmer_seed * 137) % cycle);
-  if (pulse > cycle / 2) {
-    pulse = cycle - pulse;
-  }
-
-  const int alpha_base = 26 + (pulse * 28) / std::max(1, cycle / 2);
-  const int center_x = monster_rect.x + monster_rect.w / 2;
-  const int center_y = monster_rect.y + monster_rect.h / 2;
-  const int outer_radius = std::max(6, static_cast<int>(element_size * 0.82f));
-  const int middle_radius = std::max(4, static_cast<int>(element_size * 0.66f));
-  const int inner_radius = std::max(3, static_cast<int>(element_size * 0.5f));
-
-  SDL_SetRenderDrawColor(sdl_renderer, glow_color.r, glow_color.g, glow_color.b,
-                         std::min(255, alpha_base / 2));
-  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
-  SDL_SetRenderDrawColor(sdl_renderer, glow_color.r, glow_color.g, glow_color.b,
-                         std::min(255, alpha_base));
-  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, middle_radius);
-  SDL_SetRenderDrawColor(sdl_renderer, glow_color.r, glow_color.g, glow_color.b,
-                         std::min(255, alpha_base + 18));
-  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, inner_radius);
 }
 
 int Renderer::SDL_RenderDrawCircle(SDL_Renderer *renderer, int x, int y,

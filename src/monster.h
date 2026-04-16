@@ -41,18 +41,19 @@ public:
 
 protected:
 private:
-std::vector<Directions> options;
-char monster_char;
-bool is_alive;
-Uint32 last_fireball_ticks;
-Uint32 next_gas_cloud_ticks;
-Uint32 death_started_ticks;
-MapCoord death_coord;
-Uint32 scheduled_dynamite_blast_ticks;
-MapCoord scheduled_dynamite_blast_coord;
+  std::vector<Directions> options;
+  char monster_char;
+  bool is_alive;
+  Uint32 last_fireball_ticks;
+  Uint32 next_gas_cloud_ticks;
+  Uint32 death_started_ticks;
+  MapCoord death_coord;
+  Uint32 scheduled_dynamite_blast_ticks;
+  MapCoord scheduled_dynamite_blast_coord;
+  Directions facing_direction;
 
-friend class Renderer;
-friend class Game;
+  friend class Renderer;
+  friend class Game;
 };
 
 #endif

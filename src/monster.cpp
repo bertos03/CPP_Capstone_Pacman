@@ -22,7 +22,7 @@
  * 
  * @param _coord : the map coordinates for placing the monster
  * @param _id: A unique "monster ID" (currently not used)
- * @param _monster_char original monster tier marker from the map
+ * @param _monster_char original monster type marker from the map
  */
 Monster::Monster(MapCoord _coord, int _id, char _monster_char) {
   id = _id;
@@ -38,6 +38,7 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char) {
   scheduled_dynamite_blast_coord = _coord;
   px_delta.x = 0;
   px_delta.y = 0;
+  facing_direction = Directions::Down;
 }
 
 /**
@@ -63,6 +64,9 @@ void Monster::simulate(Events *events, Map *map) {
   while (!events->is_quit() && is_alive) {
     // carry out next monster move ... do it with a little dirty hack to enable
     // smooth moving
+    if (next_move != Directions::None) {
+      facing_direction = next_move;
+    }
     switch (next_move) {
     case Directions::Up:
       for (int i = 0; i > -100 && is_alive; i--) {

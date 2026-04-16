@@ -11,10 +11,13 @@ The current state includes the core game as well as a menu system, map managemen
   - Map editor
   - Configuration
 - **Difficulty based on monster count** (`Few`, `Medium`, `Many`).
+- **Animated monsters** with direction-based sprites (`front`, `back`, `left`, `right`)
+  and four animation frames per direction.
 - **Multiple monster types** with different abilities:
-  - few monsters: standard enemies
-  - medium monsters: gas clouds
-  - many monsters: fireballs with line-of-sight logic
+  - `M` (purple): standard enemies
+  - `N` (blue): gas clouds
+  - `O` (red): fireballs with line-of-sight logic
+  - `K` (green): additional standard enemy type
 - **Teleporter tiles** (`1` to `5`) as paired portals.
 - **Map library** from `data/maps/` with the map name in the first line.
 - **In-game map editor**:
@@ -44,7 +47,10 @@ Important characters:
 - `.` = path
 - `G` = goodie
 - `P` = Pacman start
-- `M` / `N` / `O` = monster depending on difficulty level (see `definitions.h`)
+- `M` = purple monster
+- `N` = blue monster
+- `O` = red monster
+- `K` = green monster
 - `1` to `5` = teleporter (each digit must appear exactly 0 or 2 times)
 
 ## Build
