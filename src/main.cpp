@@ -33,6 +33,7 @@
 #include "map.h"
 #include "renderer.h"
 #include "paths.h"
+#include "settings.h"
 
 namespace {
 
@@ -164,6 +165,12 @@ void RefreshSelectedMap(const std::vector<MapDefinition> &available_maps,
 
   selected_map_index = resolved_index;
   active_map_index = resolved_index;
+}
+
+void PersistAppSettings(MonsterAmount monster_amount,
+                        const std::string &selected_map_path) {
+  const AppSettings settings{monster_amount, selected_map_path};
+  SaveAppSettings(settings);
 }
 
 std::pair<int, int> GetDimensionsForSize(NewMapSize size) {
@@ -1013,18 +1020,27 @@ int main() {
     return 1;
   }
 
+  AppSettings app_settings = LoadAppSettings();
+
   bool quit_application = false;
   bool maps_need_reload = false;
-  MonsterAmount monster_amount = MonsterAmount::Many;
-  std::string preferred_selected_map_path = available_maps.front().file_path;
+  MonsterAmount monster_amount = app_settings.monster_amount;
+  std::string preferred_selected_map_path = app_settings.selected_map_path;
   int selected_map_index = 0;
-  int active_map_index = selected_map_index;
+  int active_map_index = 0;
   int main_selected_item = MENU_START;
   int config_selected_item = CONFIG_MONSTER_AMOUNT;
   int editor_selected_item = 0;
   int editor_size_selected_item = 0;
   MenuScreen next_menu_screen_after_rebuild = MenuScreen::Main;
   std::shared_ptr<Audio> audio(new Audio());
+
+  RefreshSelectedMap(available_maps, preferred_selected_map_path,
+                     selected_map_index, active_map_index);
+  preferred_selected_map_path = available_maps[selected_map_index].file_path;
+  if (app_settings.selected_map_path != preferred_selected_map_path) {
+    PersistAppSettings(monster_amount, preferred_selected_map_path);
+  }
 
   while (!quit_application) {
     if (maps_need_reload) {
@@ -1036,6 +1052,12 @@ int main() {
       }
       RefreshSelectedMap(available_maps, preferred_selected_map_path,
                          selected_map_index, active_map_index);
+      const std::string resolved_selected_map_path =
+          available_maps[selected_map_index].file_path;
+      if (preferred_selected_map_path != resolved_selected_map_path) {
+        preferred_selected_map_path = resolved_selected_map_path;
+        PersistAppSettings(monster_amount, preferred_selected_map_path);
+      }
       editor_selected_item =
           std::clamp(editor_selected_item, 0,
                      static_cast<int>(available_maps.size()));
@@ -1076,17 +1098,27 @@ int main() {
                                  available_maps[selected_map_index].display_name,
                                  "");
       } else if (menu_screen == MenuScreen::Config) {
+        const MonsterAmount previous_monster_amount = monster_amount;
         processConfigMenuEvents(config_selected_item, monster_amount,
                                 menu_screen, quit_application,
                                 rebuild_menu_session,
                                 next_menu_screen_after_rebuild, audio.get());
+        if (monster_amount != previous_monster_amount) {
+          PersistAppSettings(monster_amount, preferred_selected_map_path);
+        }
         renderer.RenderConfigMenu(config_selected_item, monster_amount);
       } else if (menu_screen == MenuScreen::MapSelection) {
+        const int previous_selected_map_index = selected_map_index;
         processMapSelectionEvents(active_map_index, selected_map_index,
                                   menu_screen, quit_application,
                                   rebuild_menu_session,
                                   next_menu_screen_after_rebuild, audio.get(),
                                   static_cast<int>(available_maps.size()));
+        if (selected_map_index != previous_selected_map_index) {
+          preferred_selected_map_path =
+              available_maps[selected_map_index].file_path;
+          PersistAppSettings(monster_amount, preferred_selected_map_path);
+        }
         renderer.RenderMapSelectionMenu(map_display_names, active_map_index);
       } else if (menu_screen == MenuScreen::EditorSelection) {
         processEditorSelectionEvents(editor_selected_item, menu_screen,
@@ -1120,6 +1152,7 @@ int main() {
       maps_need_reload = true;
       if (!editor_result.preferred_map_path.empty()) {
         preferred_selected_map_path = editor_result.preferred_map_path;
+        PersistAppSettings(monster_amount, preferred_selected_map_path);
       }
       next_menu_screen_after_rebuild = MenuScreen::Main;
       continue;

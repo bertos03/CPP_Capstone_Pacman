@@ -41,16 +41,17 @@ const SDL_Color kShieldTextColor{116, 220, 255, 255};
 const SDL_Color kFewMonsterGlowColor{120, 210, 255, 255};
 const SDL_Color kMediumMonsterGlowColor{255, 170, 72, 255};
 const SDL_Color kManyMonsterGlowColor{255, 82, 82, 255};
-const SDL_Color kStartLogoHighlightColor{226, 248, 255, 255};
-const SDL_Color kStartLogoLightColor{124, 224, 255, 255};
-const SDL_Color kStartLogoMidColor{66, 150, 255, 255};
-const SDL_Color kStartLogoDeepColor{26, 68, 194, 255};
-const SDL_Color kStartLogoOutlineColor{8, 22, 92, 255};
+const SDL_Color kStartLogoHighlightColor{238, 252, 255, 255};
+const SDL_Color kStartLogoLightColor{88, 234, 255, 255};
+const SDL_Color kStartLogoMidColor{44, 156, 255, 255};
+const SDL_Color kStartLogoDeepColor{18, 70, 222, 255};
+const SDL_Color kStartLogoOutlineColor{6, 18, 102, 255};
 const SDL_Color kTeleporterBlue{78, 160, 255, 255};
 const SDL_Color kTeleporterRed{255, 104, 104, 255};
 const SDL_Color kTeleporterGreen{110, 205, 118, 255};
 const SDL_Color kTeleporterGrey{172, 176, 186, 255};
 const SDL_Color kTeleporterYellow{244, 214, 88, 255};
+constexpr double kLogoPi = 3.14159265358979323846;
 constexpr int kPacmanFramesPerDirection = 4;
 constexpr Uint32 kPacmanWalkFrameMs = 140;
 
@@ -648,8 +649,11 @@ void Renderer::drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
 }
 
 void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
-  const int band_count = Audio::kMenuSpectrumBandCount;
-  const int half_band_count = std::max(1, band_count / 2);
+  const int available_band_count = Audio::kMenuSpectrumBandCount;
+  const int available_half_band_count = std::max(1, available_band_count / 2);
+  const int configured_half_band_count =
+      std::max(1, START_MENU_LED_HALF_BAR_COUNT);
+  const int band_count = configured_half_band_count * 2;
   constexpr int kSegmentCount = 8;
   const int segment_gap = std::max(0, START_MENU_LED_SEGMENT_GAP_X);
   const int band_gap = std::max(0, START_MENU_LED_SEGMENT_GAP_Y);
@@ -693,9 +697,9 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
 
   if (peak_level < 0.02f) {
     const double clock = static_cast<double>(now);
-    for (int band = 0; band < band_count; ++band) {
+    for (int band = 0; band < available_band_count; ++band) {
       const double progress =
-          static_cast<double>(band) / std::max(1, band_count - 1);
+          static_cast<double>(band) / std::max(1, available_band_count - 1);
       const double wave_a =
           std::sin(clock / 410.0 + progress * 7.4) * 0.28 + 0.34;
       const double wave_b =
@@ -785,12 +789,12 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
       SDL_Color color;
     };
     constexpr std::array<ColorStop, 6> kStops{{
-        {0.00f, SDL_Color{52, 122, 255, 255}},
-        {0.20f, SDL_Color{66, 218, 255, 255}},
-        {0.40f, SDL_Color{68, 232, 150, 255}},
-        {0.60f, SDL_Color{245, 232, 78, 255}},
-        {0.80f, SDL_Color{255, 166, 56, 255}},
-        {1.00f, SDL_Color{255, 76, 52, 255}},
+        {0.00f, SDL_Color{24, 132, 255, 255}},
+        {0.20f, SDL_Color{0, 232, 255, 255}},
+        {0.40f, SDL_Color{0, 255, 154, 255}},
+        {0.60f, SDL_Color{255, 238, 0, 255}},
+        {0.80f, SDL_Color{255, 136, 0, 255}},
+        {1.00f, SDL_Color{255, 24, 24, 255}},
     }};
 
     for (size_t index = 1; index < kStops.size(); ++index) {
@@ -843,16 +847,6 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
             LerpColor(edge, SDL_Color{22, 16, 26, 255}, 0.22f);
         draw_rounded_gradient_segment(segment_rect, core, edge, border_core,
                                       border_edge, 220, 214);
-      } else {
-        const SDL_Color pale = LerpColor(core, SDL_Color{236, 242, 255, 255}, 0.84f);
-        const SDL_Color pale_edge =
-            LerpColor(pale, SDL_Color{255, 255, 255, 255}, 0.38f);
-        const SDL_Color border_pale =
-            LerpColor(pale, SDL_Color{30, 34, 44, 255}, 0.32f);
-        const SDL_Color border_pale_edge =
-            LerpColor(pale_edge, SDL_Color{34, 38, 48, 255}, 0.36f);
-        draw_rounded_gradient_segment(segment_rect, pale, pale_edge, border_pale,
-                                      border_pale_edge, 34, 78);
       }
       cursor_x += segment_w + segment_gap;
     }
@@ -872,13 +866,23 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
   int current_y = top_start_y;
   for (int row = 0; row < band_count; ++row) {
     const int mirrored_index =
-        (row < half_band_count) ? (half_band_count - 1 - row) : (row - half_band_count);
-    const int band_index = std::clamp(mirrored_index, 0, half_band_count - 1);
+        (row < configured_half_band_count)
+            ? (configured_half_band_count - 1 - row)
+            : (row - configured_half_band_count);
+    const float row_progress =
+        (configured_half_band_count > 1)
+            ? static_cast<float>(mirrored_index) /
+                  static_cast<float>(configured_half_band_count - 1)
+            : 0.0f;
+    const int band_index = std::clamp(
+        static_cast<int>(std::lround(row_progress *
+                                     static_cast<float>(available_half_band_count - 1))),
+        0, available_half_band_count - 1);
     const int band_height =
         base_band_height + (row < band_height_remainder ? 1 : 0);
     draw_spectrum_row(band_index, current_y, band_height);
     current_y += band_height + band_gap;
-    if (row == half_band_count - 1) {
+    if (row == configured_half_band_count - 1) {
       current_y += axis_gap;
     }
   }
@@ -945,7 +949,7 @@ void Renderer::drawStartMenuOverlay(int selected_item,
   if (monster_size.x > 0 && monster_size.y > 0) {
     monster_rect = SDL_Rect{
         std::max(header_side_margin, logo_left - mascot_gap - monster_size.x),
-        std::max(8, logo_top + (logo_height - monster_size.y) / 2 - logo_height / 10),
+        std::max(8, logo_top + (logo_height - monster_size.y) / 2 + logo_height / 16),
         monster_size.x, monster_size.y};
   }
   if (hero_size.x > 0 && hero_size.y > 0) {
@@ -1535,6 +1539,15 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
   const int slice_height = std::max(4, logo_height / 18);
   const int slice_count =
       std::max(1, (logo_height + slice_height - 1) / slice_height);
+  struct SliceTransform {
+    int src_y;
+    int src_h;
+    int dest_x;
+    int dest_y;
+    int dest_width;
+  };
+  std::vector<SliceTransform> slice_transforms;
+  slice_transforms.reserve(static_cast<size_t>(slice_count));
 
   // Draw the logo in thin horizontal slices so each band can lag behind the
   // main sway and feel like stacked retro layers.
@@ -1575,6 +1588,158 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
     SDL_SetTextureAlphaMod(logo_texture, 255);
     const SDL_Rect dest_rect{dest_x, dest_y, dest_width, src_h + 1};
     SDL_RenderCopy(sdl_renderer, logo_texture, &src_rect, &dest_rect);
+    slice_transforms.push_back(
+        SliceTransform{src_y, src_h, dest_x, dest_y, dest_width});
+  }
+
+  const bool lock_logo_surface = SDL_MUSTLOCK(logo_surface);
+  if (lock_logo_surface) {
+    SDL_LockSurface(logo_surface);
+  }
+
+  auto logo_alpha = [&](int px, int py) -> Uint8 {
+    if (px < 0 || py < 0 || px >= logo_width || py >= logo_height) {
+      return 0;
+    }
+
+    Uint8 red = 0;
+    Uint8 green = 0;
+    Uint8 blue = 0;
+    Uint8 alpha = 0;
+    SDL_GetRGBA(readPixel(logo_surface, px, py), logo_surface->format, &red,
+                &green, &blue, &alpha);
+    return alpha;
+  };
+
+  auto find_logo_anchor = [&](float norm_x, float norm_y) -> SDL_Point {
+    const int candidate_x = std::clamp(
+        static_cast<int>(std::lround(norm_x * static_cast<float>(logo_width - 1))),
+        0, std::max(0, logo_width - 1));
+    const int candidate_y = std::clamp(
+        static_cast<int>(std::lround(norm_y * static_cast<float>(logo_height - 1))),
+        0, std::max(0, logo_height - 1));
+    if (logo_alpha(candidate_x, candidate_y) > 24) {
+      return SDL_Point{candidate_x, candidate_y};
+    }
+
+    constexpr int kSearchRadius = 26;
+    for (int radius = 1; radius <= kSearchRadius; ++radius) {
+      for (int dy = -radius; dy <= radius; ++dy) {
+        for (int dx = -radius; dx <= radius; ++dx) {
+          const int probe_x = candidate_x + dx;
+          const int probe_y = candidate_y + dy;
+          if (logo_alpha(probe_x, probe_y) > 24) {
+            return SDL_Point{probe_x, probe_y};
+          }
+        }
+      }
+    }
+
+    return SDL_Point{-1, -1};
+  };
+
+  struct SparkleSpec {
+    float norm_x;
+    float norm_y;
+    double phase_seconds;
+    double cycle_seconds;
+    double visible_fraction;
+    float scale;
+  };
+  constexpr std::array<SparkleSpec, 5> kSparkleSpecs{{
+      {0.13f, 0.20f, 0.55, 5.8, 0.14, 0.86f},
+      {0.30f, 0.34f, 2.10, 6.6, 0.12, 0.72f},
+      {0.49f, 0.18f, 3.25, 5.2, 0.16, 0.98f},
+      {0.67f, 0.30f, 1.45, 7.1, 0.13, 0.80f},
+      {0.84f, 0.19f, 4.30, 6.1, 0.15, 0.88f},
+  }};
+
+  for (const SparkleSpec &sparkle : kSparkleSpecs) {
+    const double cycle_clock = clock / 1000.0 + sparkle.phase_seconds;
+    const double cycle_index = std::floor(cycle_clock / sparkle.cycle_seconds);
+    const double cycle_position =
+        std::fmod(cycle_clock, sparkle.cycle_seconds) / sparkle.cycle_seconds;
+    if (cycle_position < 0.0 || cycle_position > sparkle.visible_fraction) {
+      continue;
+    }
+
+    const double local_progress = cycle_position / sparkle.visible_fraction;
+    const double pulse = std::sin(local_progress * kLogoPi);
+    if (pulse <= 0.01) {
+      continue;
+    }
+
+    const double raw_random =
+        std::sin((cycle_index + 1.0) * 127.1 + sparkle.phase_seconds * 39.7 +
+                 sparkle.norm_x * 181.3 + sparkle.norm_y * 91.1) *
+        43758.5453123;
+    double random_fraction = raw_random - std::floor(raw_random);
+    if (random_fraction < 0.0) {
+      random_fraction += 1.0;
+    }
+
+    const SDL_Point anchor = find_logo_anchor(sparkle.norm_x, sparkle.norm_y);
+    if (anchor.x < 0 || anchor.y < 0) {
+      continue;
+    }
+
+    const auto slice_it = std::find_if(
+        slice_transforms.begin(), slice_transforms.end(),
+        [&](const SliceTransform &slice) {
+          return anchor.y >= slice.src_y && anchor.y < slice.src_y + slice.src_h;
+        });
+    if (slice_it == slice_transforms.end()) {
+      continue;
+    }
+
+    const double x_ratio =
+        (logo_width > 1)
+            ? static_cast<double>(anchor.x) / static_cast<double>(logo_width - 1)
+            : 0.0;
+    const int sparkle_center_x = slice_it->dest_x +
+                                 static_cast<int>(std::lround(
+                                     x_ratio * static_cast<double>(slice_it->dest_width)));
+    const int sparkle_center_y = slice_it->dest_y + (anchor.y - slice_it->src_y);
+    const double randomized_scale =
+        sparkle.scale * (0.82 + random_fraction * 0.88);
+    const int major_arm = std::max(
+        4, static_cast<int>(std::lround(logo_height * 0.092 * randomized_scale * pulse)));
+    const int inner_arm = std::max(
+        2, static_cast<int>(std::lround(major_arm * (0.44 + random_fraction * 0.12))));
+    const int outer_thickness = std::max(
+        1, static_cast<int>(std::lround(1.0 + pulse * (1.3 + random_fraction * 1.0))));
+    const int inner_thickness = std::max(1, outer_thickness - 1);
+    const Uint8 outer_alpha = static_cast<Uint8>(
+        std::clamp(static_cast<int>(std::lround(180 * pulse)), 0, 255));
+    const Uint8 inner_alpha = static_cast<Uint8>(
+        std::clamp(static_cast<int>(std::lround(255 * pulse)), 0, 255));
+
+    auto draw_four_point_star = [&](const SDL_Color &color, Uint8 alpha,
+                                    int arm_length, int thickness) {
+      SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, alpha);
+      for (int offset = -thickness; offset <= thickness; ++offset) {
+        const int taper = std::abs(offset) * 2;
+        const int horizontal_length = std::max(1, arm_length - taper);
+        const int vertical_length = std::max(1, arm_length - taper);
+        SDL_RenderDrawLine(sdl_renderer, sparkle_center_x - horizontal_length,
+                           sparkle_center_y + offset,
+                           sparkle_center_x + horizontal_length,
+                           sparkle_center_y + offset);
+        SDL_RenderDrawLine(sdl_renderer, sparkle_center_x + offset,
+                           sparkle_center_y - vertical_length,
+                           sparkle_center_x + offset,
+                           sparkle_center_y + vertical_length);
+      }
+    };
+
+    draw_four_point_star(SDL_Color{88, 210, 255, 255}, outer_alpha, major_arm,
+                         outer_thickness);
+    draw_four_point_star(SDL_Color{255, 255, 255, 255}, inner_alpha, inner_arm,
+                         inner_thickness);
+  }
+
+  if (lock_logo_surface) {
+    SDL_UnlockSurface(logo_surface);
   }
 
   SDL_DestroyTexture(logo_texture);
@@ -1876,22 +2041,22 @@ SDL_Surface *Renderer::createStartLogoSurface(TTF_Font *font,
       float raster_boost = 1.0f;
       switch ((y / band_height) % 4) {
       case 0:
-        raster_boost = 1.20f;
+        raster_boost = 1.26f;
         break;
       case 1:
-        raster_boost = 1.08f;
+        raster_boost = 1.14f;
         break;
       case 2:
-        raster_boost = 0.94f;
+        raster_boost = 1.00f;
         break;
       default:
-        raster_boost = 0.82f;
+        raster_boost = 0.90f;
         break;
       }
       const float scanline_boost =
-          ((y + x / 5) % 2 == 0) ? 1.04f : 0.91f;
+          ((y + x / 5) % 2 == 0) ? 1.06f : 0.95f;
       const float shine_boost =
-          (progress < 0.34f && ((x + y / 2) % 9) < 3) ? 1.10f : 1.0f;
+          (progress < 0.34f && ((x + y / 2) % 9) < 3) ? 1.16f : 1.0f;
 
       int red =
           static_cast<int>(base_color.r * raster_boost * scanline_boost *
