@@ -121,6 +121,12 @@ private:
                        int top_y);
   void renderBrickText(TTF_Font *font, const std::string &text, int center_x,
                        int top_y, const SDL_Color &outline_color);
+  SDL_Texture *loadTrimmedTexture(const std::string &path,
+                                  SDL_Point &trimmed_size);
+  void renderDecorativeTexture(SDL_Texture *texture,
+                               const SDL_Rect &destination,
+                               const SDL_Color &glow_color,
+                               double sway_phase);
   SDL_Surface *createStartLogoSurface(TTF_Font *font, const std::string &text);
   SDL_Texture *getPacmanTexture(Directions facing_direction,
                                 bool walking) const;
@@ -165,6 +171,10 @@ private:
   SDL_Rect sdl_pacman_rect;
 
   SDL_Surface *sdl_logo_brick_surface;
+  SDL_Texture *sdl_start_menu_monster_texture;
+  SDL_Point sdl_start_menu_monster_size;
+  SDL_Texture *sdl_start_menu_hero_texture;
+  SDL_Point sdl_start_menu_hero_size;
 
   TTF_Font *sdl_font_hud;
   TTF_Font *sdl_font_menu;

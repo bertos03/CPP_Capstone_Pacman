@@ -34,6 +34,10 @@
 #define GAME_START_COUNTDOWN 3 // allowed values: 3..9 seconds
 #define MENU_MUSIC_FADE_OUT_MS 2000
 #define MENU_MUSIC_PATH "../data/menu_music.mp3"
+#define START_MENU_LED_SEGMENT_GAP_X 2
+#define START_MENU_LED_SEGMENT_GAP_Y 2
+#define START_MENU_LED_OUTER_MARGIN 10
+#define START_MENU_LED_MENU_MARGIN 10
 
 #define COIN_SOUND_PATH "../data/coin.wav"
 #define WIN_SOUND_PATH "../data/win.wav"

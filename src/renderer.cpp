@@ -137,6 +137,8 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
+      sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
+      sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -149,6 +151,8 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
+      sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
+      sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -207,6 +211,17 @@ void Renderer::initializeRenderer(size_t row_count_value,
     std::cerr << "Window could not be created.\n";
     std::cerr << "SDL_Error: " << SDL_GetError() << "\n";
     exit(1);
+  }
+
+  std::string app_icon_path = Paths::GetDataFilePath("app_icon_rgba.png");
+  SDL_Surface *app_icon_surface = IMG_Load(app_icon_path.c_str());
+  if (app_icon_surface == nullptr) {
+    app_icon_path = Paths::GetDataFilePath("app_icon.png");
+    app_icon_surface = IMG_Load(app_icon_path.c_str());
+  }
+  if (app_icon_surface != nullptr) {
+    SDL_SetWindowIcon(sdl_window, app_icon_surface);
+    SDL_FreeSurface(app_icon_surface);
   }
 
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
@@ -338,6 +353,13 @@ void Renderer::initializeRenderer(size_t row_count_value,
     std::cerr << "Could not convert brick texture: " << SDL_GetError() << "\n";
     exit(1);
   }
+
+  sdl_start_menu_monster_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath("start_menu_monster.png"),
+      sdl_start_menu_monster_size);
+  sdl_start_menu_hero_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath("start_menu_spielfigur.png"),
+      sdl_start_menu_hero_size);
 }
 
 Renderer::~Renderer() {
@@ -356,6 +378,12 @@ Renderer::~Renderer() {
     if (pacman_texture != nullptr) {
       SDL_DestroyTexture(pacman_texture);
     }
+  }
+  if (sdl_start_menu_monster_texture != nullptr) {
+    SDL_DestroyTexture(sdl_start_menu_monster_texture);
+  }
+  if (sdl_start_menu_hero_texture != nullptr) {
+    SDL_DestroyTexture(sdl_start_menu_hero_texture);
   }
   if (sdl_renderer != nullptr) {
     SDL_DestroyRenderer(sdl_renderer);
@@ -622,26 +650,38 @@ void Renderer::drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
 void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
   const int band_count = Audio::kMenuSpectrumBandCount;
   const int half_band_count = std::max(1, band_count / 2);
-  const int menu_gap = std::max(18, screen_res_x / 80);
-  const int outer_margin = std::max(24, screen_res_x / 40);
+  constexpr int kSegmentCount = 8;
+  const int segment_gap = std::max(0, START_MENU_LED_SEGMENT_GAP_X);
+  const int band_gap = std::max(0, START_MENU_LED_SEGMENT_GAP_Y);
+  const int menu_gap = std::max(0, START_MENU_LED_MENU_MARGIN);
+  const int outer_margin = std::max(0, START_MENU_LED_OUTER_MARGIN);
   const int left_inner = panel.x - menu_gap;
   const int left_outer = outer_margin;
   const int right_inner = panel.x + panel.w + menu_gap;
   const int right_outer = screen_res_x - outer_margin;
   const int left_max_extent = left_inner - left_outer;
   const int right_max_extent = right_outer - right_inner;
-  if (left_max_extent < 24 || right_max_extent < 24) {
+  const int minimum_bar_width =
+      kSegmentCount + (kSegmentCount - 1) * segment_gap;
+  if (left_max_extent < minimum_bar_width ||
+      right_max_extent < minimum_bar_width) {
     return;
   }
 
-  const int band_gap = 2;
   const int axis_gap = 0;
-  const int usable_height = panel.h - 24 - axis_gap -
+  const int usable_height = panel.h - outer_margin * 2 - axis_gap -
                             band_gap * std::max(0, band_count - 1);
-  const int band_height = std::max(4, usable_height / std::max(1, band_count));
-  const int total_height =
-      band_count * band_height + std::max(0, band_count - 1) * band_gap + axis_gap;
-  const int top_start_y = panel.y + (panel.h - total_height) / 2;
+  if (usable_height < band_count) {
+    return;
+  }
+
+  const int safe_band_count = std::max(1, band_count);
+  const int base_band_height = usable_height / safe_band_count;
+  if (base_band_height <= 0) {
+    return;
+  }
+  const int band_height_remainder = usable_height % safe_band_count;
+  const int top_start_y = panel.y + outer_margin;
   const Uint32 now = SDL_GetTicks();
   std::array<float, Audio::kMenuSpectrumBandCount> levels =
       Audio::GetMenuSpectrumLevels();
@@ -692,31 +732,50 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
 
   auto draw_rounded_gradient_segment = [&](const SDL_Rect &rect,
                                            const SDL_Color &start_color,
-                                           const SDL_Color &end_color, Uint8 alpha) {
+                                           const SDL_Color &end_color,
+                                           const SDL_Color &border_start_color,
+                                           const SDL_Color &border_end_color,
+                                           Uint8 fill_alpha,
+                                           Uint8 border_alpha) {
     if (rect.w <= 1 || rect.h <= 1) {
       return;
     }
-    const int radius = std::min(3, std::max(1, std::min(rect.w, rect.h) / 3));
-    draw_gradient_bar(rect, start_color, end_color, alpha, radius);
+    const int border_thickness = std::clamp(std::min(rect.w, rect.h) / 5, 1, 2);
+    draw_gradient_bar(rect, start_color, end_color, fill_alpha);
 
     const SDL_Color highlight_start{255, 255, 255, 60};
     const SDL_Color highlight_end{255, 255, 255, 12};
-    SDL_Rect highlight_rect{rect.x + 1, rect.y + 1, std::max(1, rect.w - 2),
-                            std::max(1, rect.h / 2)};
-    draw_gradient_bar(highlight_rect, highlight_start, highlight_end,
-                      std::min<Uint8>(static_cast<Uint8>(alpha / 2 + 28), 110), radius);
+    SDL_Rect highlight_rect{
+        rect.x + border_thickness,
+        rect.y + border_thickness,
+        std::max(1, rect.w - border_thickness * 2),
+        std::max(1, rect.h / 2 - std::max(0, border_thickness - 1))};
+    draw_gradient_bar(
+        highlight_rect, highlight_start, highlight_end,
+        std::min<Uint8>(static_cast<Uint8>(fill_alpha / 2 + 30), 118));
 
-    const SDL_Color rim_color{255, 255, 255, 52};
-    SDL_SetRenderDrawColor(sdl_renderer, rim_color.r, rim_color.g, rim_color.b,
-                           rim_color.a);
-    SDL_RenderDrawLine(sdl_renderer, rect.x + radius, rect.y,
-                       rect.x + rect.w - 1 - radius, rect.y);
-    SDL_RenderDrawLine(sdl_renderer, rect.x + radius, rect.y + rect.h - 1,
-                       rect.x + rect.w - 1 - radius, rect.y + rect.h - 1);
-    SDL_RenderDrawLine(sdl_renderer, rect.x, rect.y + radius, rect.x,
-                       rect.y + rect.h - 1 - radius);
-    SDL_RenderDrawLine(sdl_renderer, rect.x + rect.w - 1, rect.y + radius,
-                       rect.x + rect.w - 1, rect.y + rect.h - 1 - radius);
+    const SDL_Rect top_border{rect.x, rect.y, rect.w, border_thickness};
+    const SDL_Rect bottom_border{rect.x, rect.y + rect.h - border_thickness,
+                                 rect.w, border_thickness};
+    draw_gradient_bar(top_border, border_start_color, border_end_color,
+                      border_alpha);
+    draw_gradient_bar(
+        bottom_border,
+        LerpColor(border_start_color, SDL_Color{18, 16, 26, 255}, 0.12f),
+        LerpColor(border_end_color, SDL_Color{18, 16, 26, 255}, 0.18f),
+        static_cast<Uint8>(std::max(36, border_alpha - 12)));
+
+    SDL_Rect left_border{rect.x, rect.y, border_thickness, rect.h};
+    SDL_SetRenderDrawColor(sdl_renderer, border_start_color.r,
+                           border_start_color.g, border_start_color.b,
+                           border_alpha);
+    SDL_RenderFillRect(sdl_renderer, &left_border);
+
+    SDL_Rect right_border{rect.x + rect.w - border_thickness, rect.y,
+                          border_thickness, rect.h};
+    SDL_SetRenderDrawColor(sdl_renderer, border_end_color.r,
+                           border_end_color.g, border_end_color.b, border_alpha);
+    SDL_RenderFillRect(sdl_renderer, &right_border);
   };
 
   auto spectrum_color = [&](float factor) {
@@ -750,8 +809,6 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
     if (bar_rect.w <= 0 || bar_rect.h <= 0) {
       return;
     }
-    constexpr int kSegmentCount = 8;
-    const int segment_gap = 0;
     const int total_gap = (kSegmentCount - 1) * segment_gap;
     const int total_segment_width = bar_rect.w - total_gap;
     const int raw_segment_w = total_segment_width / kSegmentCount;
@@ -780,18 +837,28 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
       const SDL_Color core = spectrum_color(gradient);
       if (active) {
         const SDL_Color edge = LerpColor(core, SDL_Color{255, 255, 255, 255}, 0.24f);
-        draw_rounded_gradient_segment(segment_rect, core, edge, 220);
+        const SDL_Color border_core =
+            LerpColor(core, SDL_Color{18, 14, 24, 255}, 0.16f);
+        const SDL_Color border_edge =
+            LerpColor(edge, SDL_Color{22, 16, 26, 255}, 0.22f);
+        draw_rounded_gradient_segment(segment_rect, core, edge, border_core,
+                                      border_edge, 220, 214);
       } else {
         const SDL_Color pale = LerpColor(core, SDL_Color{236, 242, 255, 255}, 0.84f);
         const SDL_Color pale_edge =
             LerpColor(pale, SDL_Color{255, 255, 255, 255}, 0.38f);
-        draw_rounded_gradient_segment(segment_rect, pale, pale_edge, 26);
+        const SDL_Color border_pale =
+            LerpColor(pale, SDL_Color{30, 34, 44, 255}, 0.32f);
+        const SDL_Color border_pale_edge =
+            LerpColor(pale_edge, SDL_Color{34, 38, 48, 255}, 0.36f);
+        draw_rounded_gradient_segment(segment_rect, pale, pale_edge, border_pale,
+                                      border_pale_edge, 34, 78);
       }
       cursor_x += segment_w + segment_gap;
     }
   };
 
-  auto draw_spectrum_row = [&](int band_index, int y) {
+  auto draw_spectrum_row = [&](int band_index, int y, int band_height) {
     const float level =
         std::clamp(levels[static_cast<size_t>(band_index)], 0.0f, 1.0f);
     const float eased_level = std::pow(level, 0.82f);
@@ -802,13 +869,18 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
     draw_segmented_bar(right_bar, extended_level, false);
   };
 
+  int current_y = top_start_y;
   for (int row = 0; row < band_count; ++row) {
     const int mirrored_index =
         (row < half_band_count) ? (half_band_count - 1 - row) : (row - half_band_count);
     const int band_index = std::clamp(mirrored_index, 0, half_band_count - 1);
-    const int y = top_start_y + row * (band_height + band_gap) +
-                  (row >= half_band_count ? axis_gap : 0);
-    draw_spectrum_row(band_index, y);
+    const int band_height =
+        base_band_height + (row < band_height_remainder ? 1 : 0);
+    draw_spectrum_row(band_index, current_y, band_height);
+    current_y += band_height + band_gap;
+    if (row == half_band_count - 1) {
+      current_y += axis_gap;
+    }
   }
 }
 
@@ -816,7 +888,15 @@ void Renderer::drawStartMenuOverlay(int selected_item,
                                     const std::string &map_name,
                                     const std::string &status_message) {
   const int logo_top = screen_res_y / 18;
-  renderStartLogo(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top);
+  const int logo_center_x = screen_res_x / 2;
+  int logo_width = 0;
+  int logo_height = TTF_FontHeight(sdl_font_logo);
+  if (TTF_SizeUTF8(sdl_font_logo, "BobMan", &logo_width, &logo_height) != 0) {
+    logo_width = screen_res_x / 3;
+    logo_height = TTF_FontHeight(sdl_font_logo);
+  }
+  const int logo_left = logo_center_x - logo_width / 2;
+  const int logo_right = logo_center_x + logo_width / 2;
 
   const std::vector<std::string> menu_items{
       "Start Spiel", "Karte: " + map_name, "Map Editor", "Konfiguration",
@@ -825,11 +905,75 @@ void Renderer::drawStartMenuOverlay(int selected_item,
   const int panel_width = std::min(780, screen_res_x * 46 / 100);
   const int panel_height =
       std::max(360, 88 + static_cast<int>(menu_items.size()) * item_height);
+  const int header_side_margin = std::max(18, screen_res_x / 34);
+  const int mascot_gap = std::max(10, screen_res_x / 130);
+  const int available_mascot_width =
+      std::max(0, (screen_res_x - logo_width - header_side_margin * 2 -
+                   mascot_gap * 2) /
+                      2);
+  const int mascot_target_height =
+      std::clamp(static_cast<int>(logo_height * 1.42), 120, screen_res_y / 4);
+
+  auto scaled_mascot_size = [&](const SDL_Point &source_size) {
+    SDL_Point scaled_size{0, 0};
+    if (source_size.x <= 0 || source_size.y <= 0 || available_mascot_width < 96) {
+      return scaled_size;
+    }
+
+    const double scale_by_width =
+        static_cast<double>(available_mascot_width) /
+        static_cast<double>(source_size.x);
+    const double scale_by_height =
+        static_cast<double>(mascot_target_height) /
+        static_cast<double>(source_size.y);
+    const double scale = std::min(scale_by_width, scale_by_height);
+    if (scale <= 0.0) {
+      return scaled_size;
+    }
+
+    scaled_size.x =
+        std::max(1, static_cast<int>(std::lround(source_size.x * scale)));
+    scaled_size.y =
+        std::max(1, static_cast<int>(std::lround(source_size.y * scale)));
+    return scaled_size;
+  };
+
+  const SDL_Point monster_size = scaled_mascot_size(sdl_start_menu_monster_size);
+  const SDL_Point hero_size = scaled_mascot_size(sdl_start_menu_hero_size);
+  SDL_Rect monster_rect{0, 0, 0, 0};
+  SDL_Rect hero_rect{0, 0, 0, 0};
+  if (monster_size.x > 0 && monster_size.y > 0) {
+    monster_rect = SDL_Rect{
+        std::max(header_side_margin, logo_left - mascot_gap - monster_size.x),
+        std::max(8, logo_top + (logo_height - monster_size.y) / 2 - logo_height / 10),
+        monster_size.x, monster_size.y};
+  }
+  if (hero_size.x > 0 && hero_size.y > 0) {
+    hero_rect = SDL_Rect{
+        std::min(screen_res_x - header_side_margin - hero_size.x,
+                 logo_right + mascot_gap),
+        std::max(8, logo_top + (logo_height - hero_size.y) / 2 + logo_height / 10),
+        hero_size.x, hero_size.y};
+  }
+
+  int header_bottom = logo_top + logo_height;
+  if (monster_rect.w > 0 && monster_rect.h > 0) {
+    header_bottom = std::max(header_bottom, monster_rect.y + monster_rect.h);
+  }
+  if (hero_rect.w > 0 && hero_rect.h > 0) {
+    header_bottom = std::max(header_bottom, hero_rect.y + hero_rect.h);
+  }
   const int panel_top =
       std::min(screen_res_y - panel_height - 70,
-               logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 20);
+               header_bottom + screen_res_y / 28);
   SDL_Rect panel{(screen_res_x - panel_width) / 2, panel_top, panel_width,
                  panel_height};
+
+  renderDecorativeTexture(sdl_start_menu_monster_texture, monster_rect,
+                          SDL_Color{180, 96, 255, 255}, 0.25);
+  renderDecorativeTexture(sdl_start_menu_hero_texture, hero_rect,
+                          SDL_Color{88, 196, 255, 255}, 1.35);
+  renderStartLogo(sdl_font_logo, "BobMan", logo_center_x, logo_top);
 
   drawStartMenuSpectrum(panel);
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
@@ -1435,6 +1579,144 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
 
   SDL_DestroyTexture(logo_texture);
   SDL_FreeSurface(logo_surface);
+}
+
+SDL_Texture *Renderer::loadTrimmedTexture(const std::string &path,
+                                          SDL_Point &trimmed_size) {
+  trimmed_size = SDL_Point{0, 0};
+  SDL_Surface *raw_surface = IMG_Load(path.c_str());
+  if (raw_surface == nullptr) {
+    std::cerr << "Could not open decorative start menu art " << path << ": "
+              << IMG_GetError() << "\n";
+    return nullptr;
+  }
+
+  SDL_Surface *rgba_surface =
+      SDL_ConvertSurfaceFormat(raw_surface, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_FreeSurface(raw_surface);
+  if (rgba_surface == nullptr) {
+    std::cerr << "Could not convert decorative art " << path << ": "
+              << SDL_GetError() << "\n";
+    return nullptr;
+  }
+
+  const bool lock_surface = SDL_MUSTLOCK(rgba_surface);
+  if (lock_surface) {
+    SDL_LockSurface(rgba_surface);
+  }
+
+  int min_x = rgba_surface->w;
+  int min_y = rgba_surface->h;
+  int max_x = -1;
+  int max_y = -1;
+  for (int y = 0; y < rgba_surface->h; ++y) {
+    for (int x = 0; x < rgba_surface->w; ++x) {
+      Uint8 red = 0;
+      Uint8 green = 0;
+      Uint8 blue = 0;
+      Uint8 alpha = 0;
+      SDL_GetRGBA(readPixel(rgba_surface, x, y), rgba_surface->format, &red,
+                  &green, &blue, &alpha);
+      if (alpha <= 8) {
+        continue;
+      }
+      min_x = std::min(min_x, x);
+      min_y = std::min(min_y, y);
+      max_x = std::max(max_x, x);
+      max_y = std::max(max_y, y);
+    }
+  }
+
+  if (lock_surface) {
+    SDL_UnlockSurface(rgba_surface);
+  }
+
+  SDL_Rect trim_rect{0, 0, rgba_surface->w, rgba_surface->h};
+  if (max_x >= min_x && max_y >= min_y) {
+    trim_rect.x = min_x;
+    trim_rect.y = min_y;
+    trim_rect.w = max_x - min_x + 1;
+    trim_rect.h = max_y - min_y + 1;
+  }
+
+  SDL_Surface *trimmed_surface = SDL_CreateRGBSurfaceWithFormat(
+      0, trim_rect.w, trim_rect.h, 32, SDL_PIXELFORMAT_RGBA32);
+  if (trimmed_surface == nullptr) {
+    SDL_FreeSurface(rgba_surface);
+    std::cerr << "Could not allocate decorative art buffer for " << path
+              << ": " << SDL_GetError() << "\n";
+    return nullptr;
+  }
+
+  SDL_FillRect(trimmed_surface, nullptr,
+               SDL_MapRGBA(trimmed_surface->format, 0, 0, 0, 0));
+  if (SDL_BlitSurface(rgba_surface, &trim_rect, trimmed_surface, nullptr) != 0) {
+    std::cerr << "Could not trim decorative art " << path << ": "
+              << SDL_GetError() << "\n";
+    SDL_FreeSurface(trimmed_surface);
+    SDL_FreeSurface(rgba_surface);
+    return nullptr;
+  }
+
+  SDL_Texture *texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, trimmed_surface);
+  if (texture == nullptr) {
+    std::cerr << "Could not create decorative texture " << path << ": "
+              << SDL_GetError() << "\n";
+  } else {
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    trimmed_size = SDL_Point{trim_rect.w, trim_rect.h};
+  }
+
+  SDL_FreeSurface(trimmed_surface);
+  SDL_FreeSurface(rgba_surface);
+  return texture;
+}
+
+void Renderer::renderDecorativeTexture(SDL_Texture *texture,
+                                       const SDL_Rect &destination,
+                                       const SDL_Color &glow_color,
+                                       double sway_phase) {
+  if (texture == nullptr || destination.w <= 0 || destination.h <= 0) {
+    return;
+  }
+
+  const double clock = static_cast<double>(SDL_GetTicks());
+  const double sway_x =
+      std::sin(clock / 760.0 + sway_phase) * std::max(2.0, destination.w * 0.012);
+  const double sway_y =
+      std::cos(clock / 980.0 + sway_phase * 1.3) *
+      std::max(1.5, destination.h * 0.015);
+  SDL_Rect animated_rect{
+      destination.x + static_cast<int>(std::lround(sway_x)),
+      destination.y + static_cast<int>(std::lround(sway_y)), destination.w,
+      destination.h};
+
+  SDL_Rect shadow_rect{
+      animated_rect.x + std::max(5, destination.w / 34),
+      animated_rect.y + std::max(8, destination.h / 28), animated_rect.w,
+      animated_rect.h};
+  SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+  SDL_SetTextureColorMod(texture, 8, 8, 18);
+  SDL_SetTextureAlphaMod(texture, 116);
+  SDL_RenderCopy(sdl_renderer, texture, nullptr, &shadow_rect);
+
+  SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_ADD);
+  for (int pass = 0; pass < 2; ++pass) {
+    const int padding = std::max(6, destination.w / (18 - pass * 4));
+    SDL_Rect glow_rect{animated_rect.x - padding,
+                       animated_rect.y - padding / 2,
+                       animated_rect.w + padding * 2,
+                       animated_rect.h + padding};
+    SDL_SetTextureColorMod(texture, glow_color.r, glow_color.g, glow_color.b);
+    SDL_SetTextureAlphaMod(texture, static_cast<Uint8>(44 - pass * 18));
+    SDL_RenderCopy(sdl_renderer, texture, nullptr, &glow_rect);
+  }
+
+  SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+  SDL_SetTextureColorMod(texture, 255, 255, 255);
+  SDL_SetTextureAlphaMod(texture, 255);
+  SDL_RenderCopy(sdl_renderer, texture, nullptr, &animated_rect);
 }
 
 void Renderer::renderBrickText(TTF_Font *font, const std::string &text,

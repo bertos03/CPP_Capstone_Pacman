@@ -17,6 +17,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread")
 
 set(APP_TARGET_NAME BobMan)
 set(APP_INSTALL_DATA_DIR "share/bobman")
+set(APP_ICON_FILE "${CMAKE_SOURCE_DIR}/cmake/BobMan.icns")
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH
@@ -61,12 +62,15 @@ file(GLOB project_SRCS src/*.cpp) #src/*.h
 
 # Add project executable
 if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
-    add_executable(${APP_TARGET_NAME} MACOSX_BUNDLE ${project_SRCS})
+    set_source_files_properties(${APP_ICON_FILE} PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+    add_executable(${APP_TARGET_NAME} MACOSX_BUNDLE ${project_SRCS} ${APP_ICON_FILE})
     set_target_properties(${APP_TARGET_NAME} PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.bobman"
         MACOSX_BUNDLE_BUNDLE_NAME "BobMan"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_ICON_FILE "BobMan.icns"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/cmake/MacOSXBundleInfo.plist.in"
     )
