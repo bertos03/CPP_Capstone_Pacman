@@ -60,6 +60,8 @@ public:
   void PlayPlasticExplosiveSpawn();
   void PlayPlasticExplosivePlace();
   void PlayPlasticExplosiveWallBreak();
+  void PlayAirstrikeRadio();
+  void PlayAirstrikeExplosion();
   void StartInvulnerabilityLoop();
   void StopInvulnerabilityLoop();
 
@@ -106,6 +108,8 @@ private:
   Mix_Chunk *SFX_dynamite_explosion;
   Mix_Chunk *SFX_plastic_explosive_ready;
   Mix_Chunk *SFX_plastic_explosive_wall_break;
+  Mix_Chunk *SFX_airstrike_radio;
+  Mix_Chunk *SFX_airstrike_explosion;
   Mix_Chunk *SFX_invulnerability_loop;
   Mix_Music *menu_music;
   int invulnerability_loop_channel;

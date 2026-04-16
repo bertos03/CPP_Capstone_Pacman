@@ -89,6 +89,16 @@ struct PlasticExplosivePickup {
   bool is_fading = false;
 };
 
+struct WalkieTalkiePickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
 struct PlacedDynamite {
   MapCoord coord{0, 0};
   Uint32 placed_ticks = 0;
@@ -109,7 +119,32 @@ struct ScheduledMonsterBlast {
   Uint32 trigger_ticks = 0;
 };
 
-enum class EffectType { MonsterExplosion, WallImpact, DynamiteExplosion };
+struct AirstrikeBomb {
+  MapCoord coord{0, 0};
+  Uint32 release_ticks = 0;
+  Uint32 explode_ticks = 0;
+  bool exploded = false;
+  int animation_seed = 0;
+};
+
+struct ActiveAirstrike {
+  bool is_active = false;
+  Directions flight_direction = Directions::Right;
+  MapCoord target_coord{0, 0};
+  Uint32 started_ticks = 0;
+  Uint32 overflight_ticks = 0;
+  Uint32 plane_finished_ticks = 0;
+  Uint32 finished_ticks = 0;
+  int animation_seed = 0;
+  std::vector<AirstrikeBomb> bombs;
+};
+
+enum class EffectType {
+  MonsterExplosion,
+  WallImpact,
+  DynamiteExplosion,
+  AirstrikeExplosion
+};
 
 struct GameEffect {
   MapCoord coord;
@@ -146,14 +181,17 @@ private:
   InvulnerabilityPotion invulnerability_potion;
   DynamitePickup dynamite_pickup;
   PlasticExplosivePickup plastic_explosive_pickup;
+  WalkieTalkiePickup walkie_talkie_pickup;
   std::vector<PlacedDynamite> placed_dynamites;
   PlacedPlasticExplosive placed_plastic_explosive;
   bool plastic_explosive_is_armed;
+  ActiveAirstrike active_airstrike;
   std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
   Uint32 last_update_ticks;
   int dynamite_inventory;
   int plastic_explosive_inventory;
+  int airstrike_inventory;
   friend class Renderer;
   bool dead;
   bool win;
@@ -176,15 +214,23 @@ private:
   void TrySpawnPlasticExplosive(Uint32 now);
   void UpdatePlasticExplosivePickup(Uint32 now);
   void TryUsePlasticExplosive(Uint32 now);
+  void ScheduleNextWalkieTalkieSpawn(Uint32 now);
+  void TrySpawnWalkieTalkie(Uint32 now);
+  void UpdateWalkieTalkiePickup(Uint32 now);
+  void TryUseAirstrike(Uint32 now);
+  void UpdateAirstrike(Uint32 now);
   void UpdatePlacedDynamites(Uint32 now);
   void DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now);
   void DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
                                 Uint32 now);
+  void DetonateAirstrikeBomb(const AirstrikeBomb &bomb, Uint32 now);
   void UpdateScheduledMonsterBlasts(Uint32 now);
   void ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks);
   bool IsCellFreeForDynamitePickup(MapCoord coord) const;
   bool IsCellFreeForPlasticExplosivePickup(MapCoord coord) const;
+  bool IsCellFreeForWalkieTalkiePickup(MapCoord coord) const;
   bool CanPlacePlasticExplosiveAt(MapCoord coord) const;
+  bool IsWithinRadius(MapCoord center, MapCoord target, int radius_cells) const;
   bool IsWithinDynamiteRadius(MapCoord center, MapCoord target) const;
   bool IsCellFreeForInvulnerabilityPotion(MapCoord coord) const;
   bool IsPacmanInvulnerable(Uint32 now) const;

@@ -33,6 +33,7 @@ public:
   Directions get_next_move() { return current_direction; }
   bool ConsumePlaceDynamiteRequest();
   bool ConsumePlacePlasticExplosiveRequest();
+  bool ConsumeAirstrikeRequest();
 
 protected:
 private:
@@ -41,6 +42,7 @@ private:
   Directions current_direction;
   bool place_dynamite_requested;
   bool place_plastic_explosive_requested;
+  bool airstrike_requested;
 };
 
 #endif

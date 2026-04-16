@@ -56,6 +56,7 @@ constexpr Uint8 kStartMenuLedBorderAlpha = 132;
 constexpr double kLogoPi = 3.14159265358979323846;
 constexpr int kPacmanFramesPerDirection = 4;
 constexpr int kMonsterFramesPerDirection = 4;
+constexpr int kAirstrikeExplosionFrames = 5;
 constexpr Uint32 kPacmanWalkFrameMs = 140;
 constexpr double kMonsterRenderScale = 1.19;
 
@@ -205,6 +206,8 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
+      sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
+      sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -221,6 +224,8 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
+      sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
+      sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -438,6 +443,11 @@ void Renderer::initializeRenderer(size_t row_count_value,
       sdl_start_menu_hero_size);
   sdl_win_screen_texture = loadTrimmedTexture(
       Paths::GetDataFilePath("win_screen_triumph.png"), sdl_win_screen_size);
+  sdl_walkie_talkie_texture = loadTrimmedChromaKeyTexture(
+      Paths::GetDataFilePath("walkie_talkie.png"), sdl_walkie_talkie_size, 26);
+  sdl_airstrike_explosion_texture = loadTrimmedChromaKeyTexture(
+      Paths::GetDataFilePath("airstrike_explosion_sheet.png"),
+      sdl_airstrike_explosion_size, 12);
   sdl_dynamite_texture = loadTrimmedTexture(Paths::GetDataFilePath("dynamite.png"),
                                             sdl_dynamite_size);
 }
@@ -467,6 +477,12 @@ Renderer::~Renderer() {
   }
   if (sdl_win_screen_texture != nullptr) {
     SDL_DestroyTexture(sdl_win_screen_texture);
+  }
+  if (sdl_walkie_talkie_texture != nullptr) {
+    SDL_DestroyTexture(sdl_walkie_talkie_texture);
+  }
+  if (sdl_airstrike_explosion_texture != nullptr) {
+    SDL_DestroyTexture(sdl_airstrike_explosion_texture);
   }
   if (sdl_dynamite_texture != nullptr) {
     SDL_DestroyTexture(sdl_dynamite_texture);
@@ -620,12 +636,14 @@ void Renderer::renderFrame(bool show_hud) {
     drawbonusflask();
     drawdynamitepickup();
     drawplasticexplosivepickup();
+    drawwalkietalkiepickup();
     drawpacman();
     drawplaceddynamites();
     drawplacedplasticexplosive();
     drawmonsters();
     drawgasclouds();
     drawfireballs();
+    drawactiveairstrike();
     draweffects();
   } else {
     drawStaticGoodies();
@@ -667,10 +685,13 @@ void Renderer::drawhud() {
   const std::string dynamite_text = std::to_string(game->dynamite_inventory) + "x";
   const std::string plastic_explosive_text =
       std::to_string(game->plastic_explosive_inventory) + "x";
+  const std::string airstrike_text =
+      std::to_string(game->airstrike_inventory) + "x";
   int title_width = 0;
   int score_width = 0;
   int dynamite_text_width = 0;
   int plastic_explosive_text_width = 0;
+  int airstrike_text_width = 0;
   TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
   if (game->dynamite_inventory > 0) {
@@ -680,6 +701,10 @@ void Renderer::drawhud() {
   if (game->plastic_explosive_inventory > 0) {
     TTF_SizeUTF8(sdl_font_hud, plastic_explosive_text.c_str(),
                  &plastic_explosive_text_width, nullptr);
+  }
+  if (game->airstrike_inventory > 0) {
+    TTF_SizeUTF8(sdl_font_hud, airstrike_text.c_str(), &airstrike_text_width,
+                 nullptr);
   }
 
   const int line_top = 30;
@@ -691,6 +716,9 @@ void Renderer::drawhud() {
   }
   if (game->plastic_explosive_inventory > 0) {
     line_width += hud_gap + icon_size + 10 + plastic_explosive_text_width;
+  }
+  if (game->airstrike_inventory > 0) {
+    line_width += hud_gap + icon_size + 10 + airstrike_text_width;
   }
 
   int cursor_x = screen_res_x / 2 - line_width / 2;
@@ -721,6 +749,19 @@ void Renderer::drawhud() {
                              255, false);
     cursor_x += icon_rect.w + 10;
     renderTextLeft(sdl_font_hud, plastic_explosive_text, sdl_font_color, cursor_x,
+                   line_top);
+    cursor_x += plastic_explosive_text_width;
+  }
+
+  if (game->airstrike_inventory > 0) {
+    cursor_x += hud_gap;
+    const SDL_Rect icon_rect{
+        cursor_x, line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
+        icon_size, icon_size};
+    drawWalkieTalkieIcon(
+        icon_rect, 255, static_cast<double>(SDL_GetTicks()) / 220.0);
+    cursor_x += icon_rect.w + 10;
+    renderTextLeft(sdl_font_hud, airstrike_text, sdl_font_color, cursor_x,
                    line_top);
   }
 
@@ -1892,6 +1933,154 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
   SDL_FreeSurface(logo_surface);
 }
 
+SDL_Texture *Renderer::loadTrimmedChromaKeyTexture(const std::string &path,
+                                                   SDL_Point &trimmed_size,
+                                                   Uint8 tolerance) {
+  trimmed_size = SDL_Point{0, 0};
+  SDL_Surface *raw_surface = IMG_Load(path.c_str());
+  if (raw_surface == nullptr) {
+    std::cerr << "Could not open chroma-key art " << path << ": "
+              << IMG_GetError() << "\n";
+    return nullptr;
+  }
+
+  SDL_Surface *rgba_surface =
+      SDL_ConvertSurfaceFormat(raw_surface, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_FreeSurface(raw_surface);
+  if (rgba_surface == nullptr) {
+    std::cerr << "Could not convert chroma-key art " << path << ": "
+              << SDL_GetError() << "\n";
+    return nullptr;
+  }
+
+  const bool lock_surface = SDL_MUSTLOCK(rgba_surface);
+  if (lock_surface) {
+    SDL_LockSurface(rgba_surface);
+  }
+
+  const SDL_Point corner_points[4] = {
+      {0, 0},
+      {std::max(0, rgba_surface->w - 1), 0},
+      {0, std::max(0, rgba_surface->h - 1)},
+      {std::max(0, rgba_surface->w - 1), std::max(0, rgba_surface->h - 1)}};
+  SDL_Color corner_colors[4];
+  for (int index = 0; index < 4; ++index) {
+    Uint8 red = 0;
+    Uint8 green = 0;
+    Uint8 blue = 0;
+    Uint8 alpha = 0;
+    SDL_GetRGBA(readPixel(rgba_surface, corner_points[index].x,
+                          corner_points[index].y),
+                rgba_surface->format, &red, &green, &blue, &alpha);
+    corner_colors[index] = SDL_Color{red, green, blue, alpha};
+  }
+
+  const int tolerance_squared = std::max(1, static_cast<int>(tolerance)) *
+                                std::max(1, static_cast<int>(tolerance)) * 3;
+  for (int y = 0; y < rgba_surface->h; ++y) {
+    for (int x = 0; x < rgba_surface->w; ++x) {
+      Uint8 red = 0;
+      Uint8 green = 0;
+      Uint8 blue = 0;
+      Uint8 alpha = 0;
+      const Uint32 pixel = readPixel(rgba_surface, x, y);
+      SDL_GetRGBA(pixel, rgba_surface->format, &red, &green, &blue, &alpha);
+      if (alpha == 0) {
+        continue;
+      }
+
+      int min_distance_squared = tolerance_squared + 1;
+      for (const SDL_Color &corner_color : corner_colors) {
+        const int delta_r = static_cast<int>(red) - corner_color.r;
+        const int delta_g = static_cast<int>(green) - corner_color.g;
+        const int delta_b = static_cast<int>(blue) - corner_color.b;
+        const int distance_squared =
+            delta_r * delta_r + delta_g * delta_g + delta_b * delta_b;
+        min_distance_squared = std::min(min_distance_squared, distance_squared);
+      }
+
+      if (min_distance_squared <= tolerance_squared) {
+        writePixel(rgba_surface, x, y,
+                   SDL_MapRGBA(rgba_surface->format, red, green, blue, 0));
+      }
+    }
+  }
+
+  if (lock_surface) {
+    SDL_UnlockSurface(rgba_surface);
+  }
+
+  int min_x = rgba_surface->w;
+  int min_y = rgba_surface->h;
+  int max_x = -1;
+  int max_y = -1;
+  const bool relock_surface = SDL_MUSTLOCK(rgba_surface);
+  if (relock_surface) {
+    SDL_LockSurface(rgba_surface);
+  }
+  for (int y = 0; y < rgba_surface->h; ++y) {
+    for (int x = 0; x < rgba_surface->w; ++x) {
+      Uint8 red = 0;
+      Uint8 green = 0;
+      Uint8 blue = 0;
+      Uint8 alpha = 0;
+      SDL_GetRGBA(readPixel(rgba_surface, x, y), rgba_surface->format, &red,
+                  &green, &blue, &alpha);
+      if (alpha <= 8) {
+        continue;
+      }
+      min_x = std::min(min_x, x);
+      min_y = std::min(min_y, y);
+      max_x = std::max(max_x, x);
+      max_y = std::max(max_y, y);
+    }
+  }
+  if (relock_surface) {
+    SDL_UnlockSurface(rgba_surface);
+  }
+
+  SDL_Rect trim_rect{0, 0, rgba_surface->w, rgba_surface->h};
+  if (max_x >= min_x && max_y >= min_y) {
+    trim_rect.x = min_x;
+    trim_rect.y = min_y;
+    trim_rect.w = max_x - min_x + 1;
+    trim_rect.h = max_y - min_y + 1;
+  }
+
+  SDL_Surface *trimmed_surface = SDL_CreateRGBSurfaceWithFormat(
+      0, trim_rect.w, trim_rect.h, 32, SDL_PIXELFORMAT_RGBA32);
+  if (trimmed_surface == nullptr) {
+    SDL_FreeSurface(rgba_surface);
+    std::cerr << "Could not allocate chroma-key art buffer for " << path
+              << ": " << SDL_GetError() << "\n";
+    return nullptr;
+  }
+
+  SDL_FillRect(trimmed_surface, nullptr,
+               SDL_MapRGBA(trimmed_surface->format, 0, 0, 0, 0));
+  if (SDL_BlitSurface(rgba_surface, &trim_rect, trimmed_surface, nullptr) != 0) {
+    std::cerr << "Could not trim chroma-key art " << path << ": "
+              << SDL_GetError() << "\n";
+    SDL_FreeSurface(trimmed_surface);
+    SDL_FreeSurface(rgba_surface);
+    return nullptr;
+  }
+
+  SDL_Texture *texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, trimmed_surface);
+  if (texture == nullptr) {
+    std::cerr << "Could not create chroma-key texture " << path << ": "
+              << SDL_GetError() << "\n";
+  } else {
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    trimmed_size = SDL_Point{trim_rect.w, trim_rect.h};
+  }
+
+  SDL_FreeSurface(trimmed_surface);
+  SDL_FreeSurface(rgba_surface);
+  return texture;
+}
+
 SDL_Texture *Renderer::loadTrimmedTexture(const std::string &path,
                                           SDL_Point &trimmed_size) {
   trimmed_size = SDL_Point{0, 0};
@@ -2622,6 +2811,105 @@ void Renderer::drawbonusflask() {
                        std::max(5, flask_width / 2));
 }
 
+void Renderer::drawWalkieTalkieIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                                    double animation_clock) {
+  if (sdl_walkie_talkie_texture != nullptr && sdl_walkie_talkie_size.x > 0 &&
+      sdl_walkie_talkie_size.y > 0) {
+    const double scale_by_width = static_cast<double>(icon_rect.w) /
+                                  static_cast<double>(sdl_walkie_talkie_size.x);
+    const double scale_by_height =
+        static_cast<double>(icon_rect.h) /
+        static_cast<double>(sdl_walkie_talkie_size.y);
+    const double scale = std::min(scale_by_width, scale_by_height);
+    const int draw_width = std::max(
+        1, static_cast<int>(std::lround(sdl_walkie_talkie_size.x * scale)));
+    const int draw_height = std::max(
+        1, static_cast<int>(std::lround(sdl_walkie_talkie_size.y * scale)));
+    const int bob_offset =
+        static_cast<int>(std::lround(std::sin(animation_clock) * icon_rect.h * 0.04));
+    const SDL_Rect draw_rect{icon_rect.x + (icon_rect.w - draw_width) / 2,
+                             icon_rect.y + (icon_rect.h - draw_height) / 2 + bob_offset,
+                             draw_width, draw_height};
+    SDL_SetTextureBlendMode(sdl_walkie_talkie_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(sdl_walkie_talkie_texture, alpha);
+    SDL_RenderCopy(sdl_renderer, sdl_walkie_talkie_texture, nullptr, &draw_rect);
+    SDL_SetTextureAlphaMod(sdl_walkie_talkie_texture, 255);
+    return;
+  }
+
+  SDL_SetRenderDrawColor(sdl_renderer, 42, 46, 48, alpha);
+  SDL_Rect fallback_rect{icon_rect.x + icon_rect.w / 4,
+                         icon_rect.y + icon_rect.h / 5, icon_rect.w / 2,
+                         icon_rect.h * 3 / 5};
+  SDL_RenderFillRect(sdl_renderer, &fallback_rect);
+}
+
+void Renderer::drawAirstrikePlane(const SDL_Point &center,
+                                  Directions flight_direction, int body_size,
+                                  double wobble_phase) {
+  const bool horizontal =
+      flight_direction == Directions::Left || flight_direction == Directions::Right;
+  const int body_w = horizontal ? std::max(20, body_size) : std::max(12, body_size / 3);
+  const int body_h = horizontal ? std::max(12, body_size / 3) : std::max(20, body_size);
+  const int wing_w = horizontal ? std::max(12, body_size / 3) : std::max(22, body_size);
+  const int wing_h = horizontal ? std::max(22, body_size) : std::max(12, body_size / 3);
+  const int tail_w = horizontal ? std::max(8, body_size / 4) : std::max(10, body_size / 3);
+  const int tail_h = horizontal ? std::max(10, body_size / 3) : std::max(8, body_size / 4);
+  const int wobble_y = horizontal
+                           ? static_cast<int>(std::lround(std::sin(wobble_phase) * 4.0))
+                           : 0;
+  const int wobble_x = horizontal
+                           ? 0
+                           : static_cast<int>(std::lround(std::sin(wobble_phase) * 4.0));
+  const SDL_Rect body{center.x - body_w / 2 + wobble_x,
+                      center.y - body_h / 2 + wobble_y, body_w, body_h};
+  const SDL_Rect wing{center.x - wing_w / 2 + wobble_x,
+                      center.y - wing_h / 2 + wobble_y, wing_w, wing_h};
+  const int nose_offset = horizontal
+                              ? ((flight_direction == Directions::Right) ? body_w / 2
+                                                                         : -body_w / 2)
+                              : ((flight_direction == Directions::Down) ? body_h / 2
+                                                                        : -body_h / 2);
+  const int tail_offset = horizontal
+                              ? ((flight_direction == Directions::Right) ? -body_w / 2
+                                                                         : body_w / 2)
+                              : ((flight_direction == Directions::Down) ? -body_h / 2
+                                                                        : body_h / 2);
+  const SDL_Rect tail{
+      horizontal ? center.x + tail_offset - tail_w / 2 + wobble_x
+                 : center.x - tail_w / 2 + wobble_x,
+      horizontal ? center.y - tail_h / 2 + wobble_y
+                 : center.y + tail_offset - tail_h / 2 + wobble_y,
+      tail_w, tail_h};
+  const SDL_Rect canopy{
+      horizontal ? center.x + nose_offset / 4 - body_w / 6 + wobble_x
+                 : center.x - body_w / 4 + wobble_x,
+      horizontal ? center.y - body_h / 3 + wobble_y
+                 : center.y + nose_offset / 4 - body_h / 6 + wobble_y,
+      horizontal ? std::max(6, body_w / 3) : std::max(6, body_w),
+      horizontal ? std::max(5, body_h / 2) : std::max(5, body_h / 3)};
+
+  SDL_SetRenderDrawColor(sdl_renderer, 10, 10, 18, 88);
+  SDL_Rect body_shadow{body.x + 4, body.y + 4, body.w, body.h};
+  SDL_Rect wing_shadow{wing.x + 4, wing.y + 4, wing.w, wing.h};
+  SDL_RenderFillRect(sdl_renderer, &body_shadow);
+  SDL_RenderFillRect(sdl_renderer, &wing_shadow);
+
+  SDL_SetRenderDrawColor(sdl_renderer, 126, 134, 144, 255);
+  SDL_RenderFillRect(sdl_renderer, &wing);
+  SDL_SetRenderDrawColor(sdl_renderer, 158, 166, 176, 255);
+  SDL_RenderFillRect(sdl_renderer, &body);
+  SDL_SetRenderDrawColor(sdl_renderer, 112, 120, 132, 255);
+  SDL_RenderFillRect(sdl_renderer, &tail);
+  SDL_SetRenderDrawColor(sdl_renderer, 188, 220, 246, 255);
+  SDL_RenderFillRect(sdl_renderer, &canopy);
+
+  SDL_SetRenderDrawColor(sdl_renderer, 64, 70, 80, 255);
+  SDL_RenderDrawRect(sdl_renderer, &wing);
+  SDL_RenderDrawRect(sdl_renderer, &body);
+  SDL_RenderDrawRect(sdl_renderer, &tail);
+}
+
 void Renderer::drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
                                 double animation_clock, Uint8 alpha,
                                 double fuse_burn_progress) {
@@ -2897,6 +3185,52 @@ void Renderer::drawplasticexplosivepickup() {
   drawPlasticExplosiveIcon(icon_rect, animation_clock, body_alpha, false);
 }
 
+void Renderer::drawwalkietalkiepickup() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const auto &walkie = game->walkie_talkie_pickup;
+  if (!walkie.is_visible) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  double alpha_factor = 1.0;
+  if (walkie.is_fading) {
+    alpha_factor =
+        1.0 - std::clamp(static_cast<double>(now - walkie.fade_started_ticks) /
+                             static_cast<double>(WALKIE_TALKIE_FADE_MS),
+                         0.0, 1.0);
+  }
+  if (alpha_factor <= 0.0) {
+    return;
+  }
+
+  const PixelCoord pickup_px = getPixelCoord(walkie.coord, 0, 0);
+  const int center_x = pickup_px.x + element_size / 2;
+  const int center_y = pickup_px.y + element_size / 2;
+  const double animation_clock =
+      static_cast<double>(now + walkie.animation_seed * 29) / 210.0;
+  const double pulse = 0.82 + 0.18 * std::sin(animation_clock);
+  const Uint8 glow_alpha = static_cast<Uint8>(
+      std::clamp(104.0 * alpha_factor, 0.0, 150.0));
+  const Uint8 body_alpha = static_cast<Uint8>(
+      std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 80, 255, 116, glow_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(7, static_cast<int>(element_size * 0.28 * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 194, 255, 214, glow_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(10, static_cast<int>(element_size * 0.40 * pulse)));
+
+  const int icon_size = std::max(12, static_cast<int>(element_size * 0.76));
+  const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
+                           icon_size, icon_size};
+  drawWalkieTalkieIcon(icon_rect, body_alpha, animation_clock);
+}
+
 void Renderer::drawplaceddynamites() {
   if (game == nullptr) {
     return;
@@ -2968,6 +3302,87 @@ void Renderer::drawplacedplasticexplosive() {
                            center_y - icon_size / 2 - element_size / 12,
                            icon_size, icon_size};
   drawPlasticExplosiveIcon(icon_rect, pulse_clock, 255, true);
+}
+
+void Renderer::drawactiveairstrike() {
+  if (game == nullptr || !game->active_airstrike.is_active) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  const auto &airstrike = game->active_airstrike;
+  const PixelCoord target_px = getPixelCoord(airstrike.target_coord, 0, 0);
+  const int target_center_x = target_px.x + element_size / 2;
+  const int target_center_y = target_px.y + element_size / 2;
+
+  if (airstrike.plane_finished_ticks > airstrike.started_ticks &&
+      now <= airstrike.plane_finished_ticks) {
+    const double progress = std::clamp(
+        static_cast<double>(now - airstrike.started_ticks) /
+            static_cast<double>(airstrike.plane_finished_ticks -
+                                airstrike.started_ticks),
+        0.0, 1.0);
+    const int plane_size = std::max(26, static_cast<int>(element_size * 1.05));
+    SDL_Point plane_center{target_center_x, target_center_y};
+    if (airstrike.flight_direction == Directions::Right) {
+      plane_center.x = static_cast<int>(
+          std::lround((-plane_size * 2.0) +
+                      (screen_res_x + plane_size * 4.0) * progress));
+      plane_center.y = target_center_y - element_size / 3;
+    } else if (airstrike.flight_direction == Directions::Left) {
+      plane_center.x = static_cast<int>(
+          std::lround((screen_res_x + plane_size * 2.0) -
+                      (screen_res_x + plane_size * 4.0) * progress));
+      plane_center.y = target_center_y - element_size / 3;
+    } else if (airstrike.flight_direction == Directions::Down) {
+      plane_center.x = target_center_x;
+      plane_center.y = static_cast<int>(
+          std::lround((-plane_size * 2.0) +
+                      (screen_res_y + plane_size * 4.0) * progress));
+    } else {
+      plane_center.x = target_center_x;
+      plane_center.y = static_cast<int>(
+          std::lround((screen_res_y + plane_size * 2.0) -
+                      (screen_res_y + plane_size * 4.0) * progress));
+    }
+
+    drawAirstrikePlane(
+        plane_center, airstrike.flight_direction, plane_size,
+        static_cast<double>(now + airstrike.animation_seed * 19) / 140.0);
+  }
+
+  for (const auto &bomb : airstrike.bombs) {
+    if (bomb.exploded || now < bomb.release_ticks || now >= bomb.explode_ticks) {
+      continue;
+    }
+
+    const double progress = std::clamp(
+        static_cast<double>(now - bomb.release_ticks) /
+            static_cast<double>(std::max<Uint32>(1, bomb.explode_ticks -
+                                                        bomb.release_ticks)),
+        0.0, 1.0);
+    const PixelCoord bomb_px = getPixelCoord(bomb.coord, 0, 0);
+    const int bomb_center_x = bomb_px.x + element_size / 2;
+    const int bomb_target_y = bomb_px.y + element_size / 2;
+    const int bomb_start_y = bomb_target_y - std::max(20, element_size * 2);
+    const int bomb_current_y =
+        bomb_start_y +
+        static_cast<int>(std::lround((bomb_target_y - bomb_start_y) * progress));
+    const int bomb_radius =
+        std::max(3, static_cast<int>(element_size * (0.09 + 0.05 * (1.0 - progress))));
+    const Uint8 shadow_alpha = static_cast<Uint8>(
+        std::clamp(80.0 * (0.35 + progress * 0.65), 0.0, 120.0));
+
+    SDL_SetRenderDrawColor(sdl_renderer, 0, 0, 0, shadow_alpha);
+    SDL_RenderFillCircle(sdl_renderer, bomb_center_x, bomb_target_y + element_size / 5,
+                         std::max(4, bomb_radius + 1));
+    SDL_SetRenderDrawColor(sdl_renderer, 48, 48, 54, 255);
+    SDL_RenderFillCircle(sdl_renderer, bomb_center_x, bomb_current_y, bomb_radius);
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 90, 42, 220);
+    SDL_RenderFillCircle(sdl_renderer, bomb_center_x,
+                         bomb_current_y - std::max(1, bomb_radius / 2),
+                         std::max(1, bomb_radius / 2));
+  }
 }
 
 void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
@@ -3804,7 +4219,60 @@ void Renderer::draweffects() {
     const int center_y = effect_px.y + element_size / 2;
     const Uint32 elapsed = now - effect.started_ticks;
 
-    if (effect.type == EffectType::DynamiteExplosion) {
+    if (effect.type == EffectType::AirstrikeExplosion) {
+      const Uint32 total_duration = AIRSTRIKE_EXPLOSION_DURATION_MS;
+      const int frame_index = std::clamp(
+          static_cast<int>(elapsed / std::max<Uint32>(1, AIRSTRIKE_EXPLOSION_FRAME_MS)),
+          0, kAirstrikeExplosionFrames - 1);
+
+      if (sdl_airstrike_explosion_texture != nullptr &&
+          sdl_airstrike_explosion_size.x > 0 &&
+          sdl_airstrike_explosion_size.y > 0) {
+        const int src_x =
+            (frame_index * sdl_airstrike_explosion_size.x) /
+            kAirstrikeExplosionFrames;
+        const int src_x_next =
+            ((frame_index + 1) * sdl_airstrike_explosion_size.x) /
+            kAirstrikeExplosionFrames;
+        const SDL_Rect src_rect{src_x, 0, std::max(1, src_x_next - src_x),
+                                sdl_airstrike_explosion_size.y};
+        const double fade =
+            1.0 - std::clamp(static_cast<double>(elapsed) /
+                                 static_cast<double>(std::max<Uint32>(1, total_duration)),
+                             0.0, 1.0);
+        const int render_size = std::max(
+            element_size,
+            static_cast<int>(std::lround(
+                element_size * (1.25 + effect.radius_cells * 0.75))));
+        const SDL_Rect dest_rect{center_x - render_size / 2,
+                                 center_y - render_size / 2, render_size,
+                                 render_size};
+        SDL_SetRenderDrawColor(
+            sdl_renderer, 255, 176, 84,
+            static_cast<Uint8>(std::clamp(76.0 * fade, 0.0, 76.0)));
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                             std::max(8, render_size / 3));
+        SDL_SetTextureAlphaMod(
+            sdl_airstrike_explosion_texture,
+            static_cast<Uint8>(std::clamp(255.0 * fade, 0.0, 255.0)));
+        SDL_RenderCopy(sdl_renderer, sdl_airstrike_explosion_texture, &src_rect,
+                       &dest_rect);
+        SDL_SetTextureAlphaMod(sdl_airstrike_explosion_texture, 255);
+      } else {
+        const double progress =
+            std::clamp(static_cast<double>(elapsed) /
+                           static_cast<double>(std::max<Uint32>(1, total_duration)),
+                       0.0, 1.0);
+        const int radius = std::max(
+            6, static_cast<int>(element_size * (0.18 + 0.48 * progress)));
+        const Uint8 alpha =
+            static_cast<Uint8>(std::clamp(220.0 * (1.0 - progress), 0.0, 220.0));
+        SDL_SetRenderDrawColor(sdl_renderer, 255, 132, 36, alpha / 2);
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y, radius + 4);
+        SDL_SetRenderDrawColor(sdl_renderer, 255, 232, 140, alpha);
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y, radius);
+      }
+    } else if (effect.type == EffectType::DynamiteExplosion) {
       const double progress =
           std::clamp(static_cast<double>(elapsed) /
                          static_cast<double>(DYNAMITE_EXPLOSION_DURATION_MS),

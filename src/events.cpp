@@ -27,6 +27,7 @@ Events::Events() {
   current_direction = Directions::None;
   place_dynamite_requested = false;
   place_plastic_explosive_requested = false;
+  airstrike_requested = false;
 }
 
 /**
@@ -52,6 +53,12 @@ bool Events::ConsumePlaceDynamiteRequest() {
 bool Events::ConsumePlacePlasticExplosiveRequest() {
   const bool was_requested = place_plastic_explosive_requested;
   place_plastic_explosive_requested = false;
+  return was_requested;
+}
+
+bool Events::ConsumeAirstrikeRequest() {
+  const bool was_requested = airstrike_requested;
+  airstrike_requested = false;
   return was_requested;
 }
 
@@ -88,6 +95,10 @@ void Events::update() {
       break;
     case SDLK_p:
       place_plastic_explosive_requested = true;
+      current_direction = Directions::None;
+      break;
+    case SDLK_a:
+      airstrike_requested = true;
       current_direction = Directions::None;
       break;
     default:

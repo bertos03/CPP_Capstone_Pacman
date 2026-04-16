@@ -79,11 +79,13 @@ private:
   void drawbonusflask();
   void drawdynamitepickup();
   void drawplasticexplosivepickup();
+  void drawwalkietalkiepickup();
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
   void drawplaceddynamites();
   void drawplacedplasticexplosive();
+  void drawactiveairstrike();
   void drawStaticPacman();
   void drawStaticMonsters();
   void drawStaticGoodies();
@@ -97,6 +99,10 @@ private:
                  double gait_phase, bool walking);
   void drawPacmanShield(int center_x, int center_y, int base_radius,
                         double pulse_clock);
+  void drawWalkieTalkieIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                            double animation_clock);
+  void drawAirstrikePlane(const SDL_Point &center, Directions flight_direction,
+                          int body_size, double wobble_phase);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
                         double animation_clock, Uint8 alpha,
                         double fuse_burn_progress);
@@ -132,6 +138,9 @@ private:
                        int top_y, const SDL_Color &outline_color);
   SDL_Texture *loadTrimmedTexture(const std::string &path,
                                   SDL_Point &trimmed_size);
+  SDL_Texture *loadTrimmedChromaKeyTexture(const std::string &path,
+                                           SDL_Point &trimmed_size,
+                                           Uint8 tolerance);
   void renderDecorativeTexture(SDL_Texture *texture,
                                const SDL_Rect &destination,
                                const SDL_Color &glow_color,
@@ -193,6 +202,10 @@ private:
   SDL_Point sdl_start_menu_hero_size;
   SDL_Texture *sdl_win_screen_texture;
   SDL_Point sdl_win_screen_size;
+  SDL_Texture *sdl_walkie_talkie_texture;
+  SDL_Point sdl_walkie_talkie_size;
+  SDL_Texture *sdl_airstrike_explosion_texture;
+  SDL_Point sdl_airstrike_explosion_size;
 
   TTF_Font *sdl_font_hud;
   TTF_Font *sdl_font_menu;
