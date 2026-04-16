@@ -65,6 +65,11 @@ private:
   void initializeRenderer(size_t row_count, size_t col_count);
   void renderFrame(bool show_hud);
   void renderLayoutFrame(const std::vector<std::string> &layout);
+  void drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
+                    bool has_wall_right, bool has_wall_down,
+                    bool has_wall_left);
+  void carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
+                              bool align_left, bool align_top);
   void drawmap();
   void drawLayout(const std::vector<std::string> &layout);
   void drawteleporters();
@@ -126,7 +131,10 @@ private:
   void renderDecorativeTexture(SDL_Texture *texture,
                                const SDL_Rect &destination,
                                const SDL_Color &glow_color,
-                               double sway_phase);
+                               double sway_phase,
+                               double sway_strength_x,
+                               double sway_strength_y,
+                               double sway_speed);
   SDL_Surface *createStartLogoSurface(TTF_Font *font, const std::string &text);
   SDL_Texture *getPacmanTexture(Directions facing_direction,
                                 bool walking) const;

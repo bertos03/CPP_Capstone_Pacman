@@ -36,6 +36,8 @@ const SDL_Color kStatusTextColor{255, 189, 163, 255};
 const SDL_Color kWarningTextColor{255, 110, 110, 255};
 const SDL_Color kPanelFillColor{10, 6, 18, 205};
 const SDL_Color kPanelBorderColor{196, 130, 92, 255};
+const SDL_Color kStartMenuPanelFillColor{10, 6, 18, 118};
+const SDL_Color kStartMenuPanelBorderColor{196, 130, 92, 180};
 const SDL_Color kBrickOutlineColor{78, 20, 14, 255};
 const SDL_Color kShieldTextColor{116, 220, 255, 255};
 const SDL_Color kFewMonsterGlowColor{120, 210, 255, 255};
@@ -51,6 +53,8 @@ const SDL_Color kTeleporterRed{255, 104, 104, 255};
 const SDL_Color kTeleporterGreen{110, 205, 118, 255};
 const SDL_Color kTeleporterGrey{172, 176, 186, 255};
 const SDL_Color kTeleporterYellow{244, 214, 88, 255};
+constexpr Uint8 kStartMenuLedFillAlpha = 148;
+constexpr Uint8 kStartMenuLedBorderAlpha = 132;
 constexpr double kLogoPi = 3.14159265358979323846;
 constexpr int kPacmanFramesPerDirection = 4;
 constexpr Uint32 kPacmanWalkFrameMs = 140;
@@ -644,7 +648,7 @@ void Renderer::drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
 
   SDL_Rect inner_panel{panel.x + 6, panel.y + 6, panel.w - 12, panel.h - 12};
   SDL_SetRenderDrawColor(sdl_renderer, border_color.r, border_color.g,
-                         border_color.b, 100);
+                         border_color.b, std::min<Uint8>(100, border_color.a));
   SDL_RenderDrawRect(sdl_renderer, &inner_panel);
 }
 
@@ -846,7 +850,8 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
         const SDL_Color border_edge =
             LerpColor(edge, SDL_Color{22, 16, 26, 255}, 0.22f);
         draw_rounded_gradient_segment(segment_rect, core, edge, border_core,
-                                      border_edge, 220, 214);
+                                      border_edge, kStartMenuLedFillAlpha,
+                                      kStartMenuLedBorderAlpha);
       }
       cursor_x += segment_w + segment_gap;
     }
@@ -974,13 +979,13 @@ void Renderer::drawStartMenuOverlay(int selected_item,
                  panel_height};
 
   renderDecorativeTexture(sdl_start_menu_monster_texture, monster_rect,
-                          SDL_Color{180, 96, 255, 255}, 0.25);
+                          SDL_Color{180, 96, 255, 255}, 0.25, 0.055, 0.07, 0.62);
   renderDecorativeTexture(sdl_start_menu_hero_texture, hero_rect,
-                          SDL_Color{88, 196, 255, 255}, 1.35);
+                          SDL_Color{88, 196, 255, 255}, 1.35, 0.0, 0.0, 0.0);
   renderStartLogo(sdl_font_logo, "BobMan", logo_center_x, logo_top);
 
   drawStartMenuSpectrum(panel);
-  drawPanel(panel, kPanelFillColor, kPanelBorderColor);
+  drawPanel(panel, kStartMenuPanelFillColor, kStartMenuPanelBorderColor);
 
   const int highlight_width = panel.w - 56;
   const int item_start_y =
@@ -1638,23 +1643,27 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
     return SDL_Point{-1, -1};
   };
 
-  struct SparkleSpec {
-    float norm_x;
-    float norm_y;
+  struct SparkleLane {
     double phase_seconds;
     double cycle_seconds;
     double visible_fraction;
-    float scale;
+    float min_scale;
+    float max_scale;
   };
-  constexpr std::array<SparkleSpec, 5> kSparkleSpecs{{
-      {0.13f, 0.20f, 0.55, 5.8, 0.14, 0.86f},
-      {0.30f, 0.34f, 2.10, 6.6, 0.12, 0.72f},
-      {0.49f, 0.18f, 3.25, 5.2, 0.16, 0.98f},
-      {0.67f, 0.30f, 1.45, 7.1, 0.13, 0.80f},
-      {0.84f, 0.19f, 4.30, 6.1, 0.15, 0.88f},
+  constexpr std::array<SparkleLane, 8> kSparkleLanes{{
+      {0.20, 2.6, 0.26, 0.84f, 1.18f},
+      {0.58, 3.1, 0.22, 0.78f, 1.06f},
+      {1.02, 2.8, 0.28, 0.88f, 1.24f},
+      {1.46, 3.4, 0.24, 0.74f, 1.08f},
+      {1.88, 2.9, 0.25, 0.82f, 1.14f},
+      {2.32, 3.7, 0.21, 0.76f, 1.02f},
+      {2.74, 3.0, 0.27, 0.86f, 1.20f},
+      {3.18, 4.1, 0.23, 0.80f, 1.12f},
   }};
 
-  for (const SparkleSpec &sparkle : kSparkleSpecs) {
+  for (size_t sparkle_index = 0; sparkle_index < kSparkleLanes.size();
+       ++sparkle_index) {
+    const SparkleLane &sparkle = kSparkleLanes[sparkle_index];
     const double cycle_clock = clock / 1000.0 + sparkle.phase_seconds;
     const double cycle_index = std::floor(cycle_clock / sparkle.cycle_seconds);
     const double cycle_position =
@@ -1669,16 +1678,26 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
       continue;
     }
 
-    const double raw_random =
-        std::sin((cycle_index + 1.0) * 127.1 + sparkle.phase_seconds * 39.7 +
-                 sparkle.norm_x * 181.3 + sparkle.norm_y * 91.1) *
-        43758.5453123;
-    double random_fraction = raw_random - std::floor(raw_random);
-    if (random_fraction < 0.0) {
-      random_fraction += 1.0;
-    }
+    const auto random_fraction = [&](double salt) {
+      const double raw_random =
+          std::sin((cycle_index + 1.0) * (117.1 + salt * 0.9) +
+                   sparkle.phase_seconds * (39.7 + salt * 0.3) +
+                   static_cast<double>(sparkle_index + 1) * (61.3 + salt * 0.7)) *
+          43758.5453123;
+      double fraction = raw_random - std::floor(raw_random);
+      if (fraction < 0.0) {
+        fraction += 1.0;
+      }
+      return fraction;
+    };
 
-    const SDL_Point anchor = find_logo_anchor(sparkle.norm_x, sparkle.norm_y);
+    const float norm_x =
+        static_cast<float>(0.08 + random_fraction(11.0) * 0.84);
+    const float norm_y =
+        static_cast<float>(0.10 + random_fraction(23.0) * 0.72);
+    const double intensity = std::pow(pulse, 0.62);
+
+    const SDL_Point anchor = find_logo_anchor(norm_x, norm_y);
     if (anchor.x < 0 || anchor.y < 0) {
       continue;
     }
@@ -1701,18 +1720,28 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
                                      x_ratio * static_cast<double>(slice_it->dest_width)));
     const int sparkle_center_y = slice_it->dest_y + (anchor.y - slice_it->src_y);
     const double randomized_scale =
-        sparkle.scale * (0.82 + random_fraction * 0.88);
+        sparkle.min_scale +
+        random_fraction(31.0) * (sparkle.max_scale - sparkle.min_scale);
+    const int halo_arm = std::max(
+        5, static_cast<int>(std::lround(logo_height * 0.126 * randomized_scale *
+                                        (0.40 + intensity * 0.92))));
     const int major_arm = std::max(
-        4, static_cast<int>(std::lround(logo_height * 0.092 * randomized_scale * pulse)));
+        4, static_cast<int>(std::lround(logo_height * 0.104 * randomized_scale *
+                                        (0.50 + intensity * 0.86))));
     const int inner_arm = std::max(
-        2, static_cast<int>(std::lround(major_arm * (0.44 + random_fraction * 0.12))));
+        2, static_cast<int>(std::lround(major_arm *
+                                        (0.46 + random_fraction(41.0) * 0.16))));
     const int outer_thickness = std::max(
-        1, static_cast<int>(std::lround(1.0 + pulse * (1.3 + random_fraction * 1.0))));
+        1, static_cast<int>(std::lround(
+               1.0 + intensity * (1.8 + random_fraction(53.0) * 1.4))));
     const int inner_thickness = std::max(1, outer_thickness - 1);
+    const Uint8 halo_alpha = static_cast<Uint8>(
+        std::clamp(static_cast<int>(std::lround(150 * intensity + 24)), 0, 255));
     const Uint8 outer_alpha = static_cast<Uint8>(
-        std::clamp(static_cast<int>(std::lround(180 * pulse)), 0, 255));
+        std::clamp(static_cast<int>(std::lround(228 * intensity + 16)), 0, 255));
     const Uint8 inner_alpha = static_cast<Uint8>(
-        std::clamp(static_cast<int>(std::lround(255 * pulse)), 0, 255));
+        std::clamp(static_cast<int>(std::lround(255 * std::pow(intensity, 0.86))),
+                   0, 255));
 
     auto draw_four_point_star = [&](const SDL_Color &color, Uint8 alpha,
                                     int arm_length, int thickness) {
@@ -1732,7 +1761,9 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
       }
     };
 
-    draw_four_point_star(SDL_Color{88, 210, 255, 255}, outer_alpha, major_arm,
+    draw_four_point_star(SDL_Color{88, 214, 255, 255}, halo_alpha, halo_arm,
+                         outer_thickness + 1);
+    draw_four_point_star(SDL_Color{184, 240, 255, 255}, outer_alpha, major_arm,
                          outer_thickness);
     draw_four_point_star(SDL_Color{255, 255, 255, 255}, inner_alpha, inner_arm,
                          inner_thickness);
@@ -1841,47 +1872,63 @@ SDL_Texture *Renderer::loadTrimmedTexture(const std::string &path,
 void Renderer::renderDecorativeTexture(SDL_Texture *texture,
                                        const SDL_Rect &destination,
                                        const SDL_Color &glow_color,
-                                       double sway_phase) {
+                                       double sway_phase,
+                                       double sway_strength_x,
+                                       double sway_strength_y,
+                                       double sway_speed) {
   if (texture == nullptr || destination.w <= 0 || destination.h <= 0) {
     return;
   }
 
-  const double clock = static_cast<double>(SDL_GetTicks());
-  const double sway_x =
-      std::sin(clock / 760.0 + sway_phase) * std::max(2.0, destination.w * 0.012);
-  const double sway_y =
-      std::cos(clock / 980.0 + sway_phase * 1.3) *
-      std::max(1.5, destination.h * 0.015);
-  SDL_Rect animated_rect{
-      destination.x + static_cast<int>(std::lround(sway_x)),
-      destination.y + static_cast<int>(std::lround(sway_y)), destination.w,
-      destination.h};
+  SDL_FRect animated_rect{static_cast<float>(destination.x),
+                          static_cast<float>(destination.y),
+                          static_cast<float>(destination.w),
+                          static_cast<float>(destination.h)};
+  if (sway_strength_x > 0.0 || sway_strength_y > 0.0) {
+    const double clock = static_cast<double>(SDL_GetTicks());
+    const double speed = std::max(0.05, sway_speed);
+    const double horizontal_phase = clock * speed / 2100.0 + sway_phase;
+    const double vertical_phase = clock * speed / 2950.0 + sway_phase * 1.15;
+    const double drift_phase = clock * speed / 5200.0 + sway_phase * 0.75;
+    const double horizontal_amplitude =
+        std::max(6.0, destination.w * std::max(0.0, sway_strength_x));
+    const double vertical_amplitude =
+        std::max(5.0, destination.h * std::max(0.0, sway_strength_y));
+    const double sway_x =
+        std::sin(horizontal_phase) * horizontal_amplitude +
+        std::sin(drift_phase) * horizontal_amplitude * 0.18;
+    const double sway_y =
+        std::sin(vertical_phase) * vertical_amplitude +
+        std::cos(drift_phase * 0.82) * vertical_amplitude * 0.12;
+    animated_rect.x += static_cast<float>(sway_x);
+    animated_rect.y += static_cast<float>(sway_y);
+  }
 
-  SDL_Rect shadow_rect{
-      animated_rect.x + std::max(5, destination.w / 34),
-      animated_rect.y + std::max(8, destination.h / 28), animated_rect.w,
-      animated_rect.h};
+  SDL_FRect shadow_rect{
+      animated_rect.x + static_cast<float>(std::max(5, destination.w / 34)),
+      animated_rect.y + static_cast<float>(std::max(8, destination.h / 28)),
+      animated_rect.w, animated_rect.h};
   SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
   SDL_SetTextureColorMod(texture, 8, 8, 18);
   SDL_SetTextureAlphaMod(texture, 116);
-  SDL_RenderCopy(sdl_renderer, texture, nullptr, &shadow_rect);
+  SDL_RenderCopyF(sdl_renderer, texture, nullptr, &shadow_rect);
 
   SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_ADD);
   for (int pass = 0; pass < 2; ++pass) {
     const int padding = std::max(6, destination.w / (18 - pass * 4));
-    SDL_Rect glow_rect{animated_rect.x - padding,
-                       animated_rect.y - padding / 2,
-                       animated_rect.w + padding * 2,
-                       animated_rect.h + padding};
+    SDL_FRect glow_rect{animated_rect.x - static_cast<float>(padding),
+                        animated_rect.y - static_cast<float>(padding) / 2.0f,
+                        animated_rect.w + static_cast<float>(padding * 2),
+                        animated_rect.h + static_cast<float>(padding)};
     SDL_SetTextureColorMod(texture, glow_color.r, glow_color.g, glow_color.b);
     SDL_SetTextureAlphaMod(texture, static_cast<Uint8>(44 - pass * 18));
-    SDL_RenderCopy(sdl_renderer, texture, nullptr, &glow_rect);
+    SDL_RenderCopyF(sdl_renderer, texture, nullptr, &glow_rect);
   }
 
   SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
   SDL_SetTextureColorMod(texture, 255, 255, 255);
   SDL_SetTextureAlphaMod(texture, 255);
-  SDL_RenderCopy(sdl_renderer, texture, nullptr, &animated_rect);
+  SDL_RenderCopyF(sdl_renderer, texture, nullptr, &animated_rect);
 }
 
 void Renderer::renderBrickText(TTF_Font *font, const std::string &text,
@@ -3536,7 +3583,13 @@ void Renderer::drawmap() {
       switch (entry) {
       case ElementType::TYPE_WALL:
         sdl_wall_rect = SDL_Rect{x, y, element_size + 1, element_size + 1};
-        SDL_RenderCopy(sdl_renderer, sdl_wall_texture, nullptr, &sdl_wall_rect);
+        drawWallTile(
+            sdl_wall_rect, j > 0 && map->map_entry(j - 1, i) == ElementType::TYPE_WALL,
+            i + 1 < cols &&
+                map->map_entry(j, i + 1) == ElementType::TYPE_WALL,
+            j + 1 < rows &&
+                map->map_entry(j + 1, i) == ElementType::TYPE_WALL,
+            i > 0 && map->map_entry(j, i - 1) == ElementType::TYPE_WALL);
         break;
       case ElementType::TYPE_PATH:
       case ElementType::TYPE_TELEPORTER:
@@ -3551,6 +3604,64 @@ void Renderer::drawmap() {
         break;
       }
     }
+  }
+}
+
+void Renderer::carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
+                                      bool align_left, bool align_top) {
+  if (radius <= 0) {
+    return;
+  }
+
+  SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
+  const double radius_value = static_cast<double>(radius);
+  for (int row = 0; row < radius; ++row) {
+    const double dy = radius_value - (static_cast<double>(row) + 0.5);
+    const double inside_x = std::sqrt(std::max(
+        0.0, radius_value * radius_value - dy * dy));
+    const int cut_width = std::clamp(
+        static_cast<int>(std::ceil(radius_value - inside_x)), 0, radius);
+    if (cut_width <= 0) {
+      continue;
+    }
+
+    SDL_Rect cut_rect{
+        align_left ? wall_rect.x : wall_rect.x + wall_rect.w - cut_width,
+        align_top ? wall_rect.y + row : wall_rect.y + wall_rect.h - 1 - row,
+        cut_width, 1};
+    SDL_RenderFillRect(sdl_renderer, &cut_rect);
+  }
+}
+
+void Renderer::drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
+                            bool has_wall_right, bool has_wall_down,
+                            bool has_wall_left) {
+  if (sdl_wall_texture != nullptr) {
+    SDL_RenderCopy(sdl_renderer, sdl_wall_texture, nullptr, &wall_rect);
+  } else {
+    SDL_SetRenderDrawColor(sdl_renderer, 118, 84, 68, 0xFF);
+    SDL_RenderFillRect(sdl_renderer, &wall_rect);
+  }
+
+  const int max_radius = std::min(wall_rect.w, wall_rect.h) / 2;
+  const int corner_radius =
+      std::clamp(std::max(3, std::min(wall_rect.w, wall_rect.h) / 4), 0,
+                 max_radius);
+  if (corner_radius <= 1) {
+    return;
+  }
+
+  if (!has_wall_up && !has_wall_left) {
+    carveRoundedWallCorner(wall_rect, corner_radius, true, true);
+  }
+  if (!has_wall_up && !has_wall_right) {
+    carveRoundedWallCorner(wall_rect, corner_radius, false, true);
+  }
+  if (!has_wall_down && !has_wall_left) {
+    carveRoundedWallCorner(wall_rect, corner_radius, true, false);
+  }
+  if (!has_wall_down && !has_wall_right) {
+    carveRoundedWallCorner(wall_rect, corner_radius, false, false);
   }
 }
 
@@ -3588,8 +3699,21 @@ void Renderer::drawLayout(const std::vector<std::string> &layout) {
       const int x = offset_x + 1 + static_cast<int>(col) * (element_size + 1);
       const int y = offset_y + 1 + static_cast<int>(row) * (element_size + 1);
       if (layout[row][col] == BRICK) {
+        const auto has_layout_wall = [&](int probe_row, int probe_col) {
+          return probe_row >= 0 && probe_col >= 0 &&
+                 static_cast<size_t>(probe_row) < layout.size() &&
+                 static_cast<size_t>(probe_col) < layout[probe_row].size() &&
+                 layout[probe_row][probe_col] == BRICK;
+        };
         sdl_wall_rect = SDL_Rect{x, y, element_size + 1, element_size + 1};
-        SDL_RenderCopy(sdl_renderer, sdl_wall_texture, nullptr, &sdl_wall_rect);
+        drawWallTile(sdl_wall_rect, has_layout_wall(static_cast<int>(row) - 1,
+                                                    static_cast<int>(col)),
+                     has_layout_wall(static_cast<int>(row),
+                                     static_cast<int>(col) + 1),
+                     has_layout_wall(static_cast<int>(row) + 1,
+                                     static_cast<int>(col)),
+                     has_layout_wall(static_cast<int>(row),
+                                     static_cast<int>(col) - 1));
       } else {
         SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
         block.x = x;
