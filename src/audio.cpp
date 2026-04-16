@@ -211,6 +211,8 @@ Audio::Audio() {
   SFX_potion_spawn = nullptr;
   SFX_dynamite_spawn = nullptr;
   SFX_dynamite_explosion = nullptr;
+  SFX_plastic_explosive_ready = nullptr;
+  SFX_plastic_explosive_wall_break = nullptr;
   SFX_invulnerability_loop = nullptr;
   menu_music = nullptr;
   invulnerability_loop_channel = -1;
@@ -239,6 +241,8 @@ Audio::Audio() {
       Paths::GetDataFilePath("monsterexplosion.wav");
   const std::string dynamite_explosion_sound_path =
       Paths::GetDataFilePath("dynamitexplosion.wav");
+  const std::string plastic_explosive_wall_break_sound_path =
+      Paths::GetDataFilePath("plastic_explosive_wall_break.mp3");
   const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
 
   SFX_coin = Mix_LoadWAV(coin_sound_path.c_str());
@@ -271,6 +275,12 @@ Audio::Audio() {
   if (SFX_dynamite_explosion == nullptr) {
     SFX_dynamite_explosion = CreateDynamiteExplosionChunk();
   }
+  SFX_plastic_explosive_ready = CreatePlasticExplosiveReadyChunk();
+  SFX_plastic_explosive_wall_break =
+      Mix_LoadWAV(plastic_explosive_wall_break_sound_path.c_str());
+  if (SFX_plastic_explosive_wall_break == nullptr) {
+    SFX_plastic_explosive_wall_break = CreatePlasticExplosiveWallBreakChunk();
+  }
   SFX_invulnerability_loop = CreateInvulnerabilityLoopChunk();
   menu_music = Mix_LoadMUS(menu_music_path.c_str());
   if (menu_music == nullptr) {
@@ -287,6 +297,8 @@ Audio::Audio() {
       SFX_teleporter_arc == nullptr || SFX_editor_blocked == nullptr ||
       SFX_potion_spawn == nullptr || SFX_dynamite_spawn == nullptr ||
       SFX_dynamite_explosion == nullptr ||
+      SFX_plastic_explosive_ready == nullptr ||
+      SFX_plastic_explosive_wall_break == nullptr ||
       SFX_invulnerability_loop == nullptr) {
     std::cerr << "Failed to load SFX: " << Mix_GetError() << "\n";
     return;
@@ -363,6 +375,12 @@ Audio::~Audio() {
   }
   if (SFX_dynamite_explosion != nullptr) {
     Mix_FreeChunk(SFX_dynamite_explosion);
+  }
+  if (SFX_plastic_explosive_ready != nullptr) {
+    Mix_FreeChunk(SFX_plastic_explosive_ready);
+  }
+  if (SFX_plastic_explosive_wall_break != nullptr) {
+    Mix_FreeChunk(SFX_plastic_explosive_wall_break);
   }
   if (SFX_invulnerability_loop != nullptr) {
     Mix_FreeChunk(SFX_invulnerability_loop);
@@ -973,6 +991,103 @@ Mix_Chunk *Audio::CreateDynamiteExplosionChunk() {
   return Mix_LoadWAV_RW(wav_stream, 1);
 }
 
+Mix_Chunk *Audio::CreatePlasticExplosiveReadyChunk() {
+  struct Note {
+    double frequency;
+    int duration_ms;
+    double volume;
+  };
+
+  const std::vector<Note> melody{{1046.50, 72, 0.17},
+                                 {1318.51, 82, 0.18},
+                                 {987.77, 110, 0.16}};
+  std::vector<Sint16> pcm_samples;
+
+  double time_offset = 0.0;
+  for (const auto &note : melody) {
+    const int sample_count = std::max(1, note.duration_ms * kSampleRate / 1000);
+    const int attack_samples = std::max(1, sample_count / 10);
+    const int release_samples = std::max(1, sample_count / 3);
+
+    for (int i = 0; i < sample_count; i++) {
+      double envelope = 1.0;
+      if (i < attack_samples) {
+        envelope = static_cast<double>(i) / attack_samples;
+      } else if (i > sample_count - release_samples) {
+        envelope =
+            static_cast<double>(sample_count - i) / std::max(1, release_samples);
+      }
+      envelope = std::clamp(envelope, 0.0, 1.0);
+
+      const double time = static_cast<double>(i) / kSampleRate;
+      const double absolute_time = time_offset + time;
+      const double chirp =
+          1.0 + 0.020 * std::sin(2.0 * kPi * 12.0 * absolute_time + 0.5);
+      const double fundamental =
+          std::sin(2.0 * kPi * note.frequency * chirp * time);
+      const double upper =
+          0.44 * std::sin(2.0 * kPi * note.frequency * 2.0 * time + 0.2);
+      const double click =
+          0.16 * std::sin(2.0 * kPi * (note.frequency * 4.4) * time + 1.1);
+      double sample_value =
+          (fundamental + upper + click) * envelope * note.volume;
+
+      sample_value = std::clamp(sample_value, -1.0, 1.0);
+      const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+      pcm_samples.push_back(pcm);
+      pcm_samples.push_back(pcm);
+    }
+
+    time_offset += static_cast<double>(note.duration_ms) / 1000.0;
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
+Mix_Chunk *Audio::CreatePlasticExplosiveWallBreakChunk() {
+  const int duration_ms = 520;
+  const int sample_count = std::max(1, duration_ms * kSampleRate / 1000);
+  std::vector<Sint16> pcm_samples;
+  pcm_samples.reserve(sample_count * kChannels);
+
+  for (int i = 0; i < sample_count; i++) {
+    const double time = static_cast<double>(i) / kSampleRate;
+    const double progress = static_cast<double>(i) / sample_count;
+    const double envelope =
+        std::pow(std::clamp(1.0 - progress, 0.0, 1.0), 0.28);
+    const double low =
+        std::sin(2.0 * kPi * (82.0 - progress * 24.0) * time);
+    const double rumble =
+        0.62 * std::sin(2.0 * kPi * (134.0 - progress * 36.0) * time + 0.25);
+    const double crack =
+        0.28 * std::sin(2.0 * kPi * (1680.0 - progress * 780.0) * time + 0.9);
+    const double debris =
+        0.18 * std::sin(2.0 * kPi * (2440.0 - progress * 1200.0) * time + 1.8);
+    double sample_value = (low + rumble + crack + debris) * envelope * 0.30;
+
+    sample_value = std::clamp(sample_value, -1.0, 1.0);
+    const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+    pcm_samples.push_back(pcm);
+    pcm_samples.push_back(pcm);
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
 Mix_Chunk *Audio::CreateInvulnerabilityLoopChunk() {
   struct Note {
     double frequency;
@@ -1137,6 +1252,18 @@ void Audio::PlayPotionSpawn() { PlayChunk(SFX_potion_spawn); };
 void Audio::PlayDynamiteSpawn() { PlayChunk(SFX_dynamite_spawn); };
 
 void Audio::PlayDynamiteExplosion() { PlayChunk(SFX_dynamite_explosion); };
+
+void Audio::PlayPlasticExplosiveSpawn() {
+  PlayChunk(SFX_plastic_explosive_ready);
+};
+
+void Audio::PlayPlasticExplosivePlace() {
+  PlayChunk(SFX_plastic_explosive_ready);
+};
+
+void Audio::PlayPlasticExplosiveWallBreak() {
+  PlayChunk(SFX_plastic_explosive_wall_break);
+};
 
 void Audio::StartInvulnerabilityLoop() {
   if (!audio_ready || SFX_invulnerability_loop == nullptr) {

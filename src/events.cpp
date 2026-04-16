@@ -26,6 +26,7 @@ Events::Events() {
   quit = false;
   current_direction = Directions::None;
   place_dynamite_requested = false;
+  place_plastic_explosive_requested = false;
 }
 
 /**
@@ -45,6 +46,12 @@ void Events::RequestQuit() { quit = true; }
 bool Events::ConsumePlaceDynamiteRequest() {
   const bool was_requested = place_dynamite_requested;
   place_dynamite_requested = false;
+  return was_requested;
+}
+
+bool Events::ConsumePlacePlasticExplosiveRequest() {
+  const bool was_requested = place_plastic_explosive_requested;
+  place_plastic_explosive_requested = false;
   return was_requested;
 }
 
@@ -77,6 +84,10 @@ void Events::update() {
       break;
     case SDLK_b:
       place_dynamite_requested = true;
+      current_direction = Directions::None;
+      break;
+    case SDLK_p:
+      place_plastic_explosive_requested = true;
       current_direction = Directions::None;
       break;
     default:

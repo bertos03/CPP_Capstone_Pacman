@@ -2,14 +2,14 @@ argus
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxx3xG.xxx.NGxxxxxxGxxx..O4x
 xxGxx..x....x.x.M1x.x.x...xxxx
-x....O..xxx.M...x.......x.xG.x
+x....O..xxx.....x.......x.xG.x
 xxxx.x......xxx.xxxx..xMG..x.x
 xxGx.xGx.xx...x.x..xx..x.x..Nx
 x..xxxxN.xG.x.x5..Gxxxxxxxxxxx
-xx.......xxxx.xxxxxOxGxG....Mx
+xx.......xxxx.xxxxxOxGxG.....x
 x5O.x..x..xGx.PxGNx.x..xxxxx.x
 x.xxGxxxO.x.xxxxx.x..x...N2x.x
-x.x..1xGx.xM..Gx..xG...xxx...x
+x.x..1xGx.x...Gx..xG...xxx...x
 x.x...x...x.x..x.xxxxx.xG.xxGx
 x...xxx.x...x.xx.x...x..x..xxx
 x.xxxxx.x.x..NxxG..x.....x..Gx

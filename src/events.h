@@ -32,6 +32,7 @@ public:
   bool is_quit() { return quit; }
   Directions get_next_move() { return current_direction; }
   bool ConsumePlaceDynamiteRequest();
+  bool ConsumePlacePlasticExplosiveRequest();
 
 protected:
 private:
@@ -39,6 +40,7 @@ private:
   bool quit;
   Directions current_direction;
   bool place_dynamite_requested;
+  bool place_plastic_explosive_requested;
 };
 
 #endif

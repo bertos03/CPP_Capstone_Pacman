@@ -91,6 +91,7 @@ public:
   void get_options(MapCoord, std::vector<Directions>&);
   const std::vector<TeleporterPair> &get_teleporter_pairs() const;
   bool TryGetTeleporterDestination(MapCoord, MapCoord &, char &) const;
+  bool SetEntry(MapCoord coord, ElementType entry);
 
 protected:
 private:

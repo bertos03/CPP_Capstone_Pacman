@@ -538,8 +538,10 @@ void Renderer::renderFrame(bool show_hud) {
     drawgoodies();
     drawbonusflask();
     drawdynamitepickup();
+    drawplasticexplosivepickup();
     drawpacman();
     drawplaceddynamites();
+    drawplacedplasticexplosive();
     drawmonsters();
     drawgasclouds();
     drawfireballs();
@@ -577,14 +579,21 @@ void Renderer::drawhud() {
   const std::string title_text = "BOBMAN";
   const std::string score_text = "Score: " + std::to_string(game->score);
   const std::string dynamite_text = std::to_string(game->dynamite_inventory) + "x";
+  const std::string plastic_explosive_text =
+      std::to_string(game->plastic_explosive_inventory) + "x";
   int title_width = 0;
   int score_width = 0;
   int dynamite_text_width = 0;
+  int plastic_explosive_text_width = 0;
   TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
   if (game->dynamite_inventory > 0) {
     TTF_SizeUTF8(sdl_font_hud, dynamite_text.c_str(), &dynamite_text_width,
                  nullptr);
+  }
+  if (game->plastic_explosive_inventory > 0) {
+    TTF_SizeUTF8(sdl_font_hud, plastic_explosive_text.c_str(),
+                 &plastic_explosive_text_width, nullptr);
   }
 
   const int line_top = 30;
@@ -594,14 +603,18 @@ void Renderer::drawhud() {
   if (game->dynamite_inventory > 0) {
     line_width += hud_gap + icon_size + 10 + dynamite_text_width;
   }
+  if (game->plastic_explosive_inventory > 0) {
+    line_width += hud_gap + icon_size + 10 + plastic_explosive_text_width;
+  }
 
   int cursor_x = screen_res_x / 2 - line_width / 2;
   renderTextLeft(sdl_font_hud, title_text, sdl_font_color, cursor_x, line_top);
   cursor_x += title_width + hud_gap;
   renderTextLeft(sdl_font_hud, score_text, sdl_font_color, cursor_x, line_top);
+  cursor_x += score_width;
 
   if (game->dynamite_inventory > 0) {
-    cursor_x += score_width + hud_gap;
+    cursor_x += hud_gap;
     const SDL_Rect icon_rect{
         cursor_x, line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
         icon_size, icon_size};
@@ -609,6 +622,19 @@ void Renderer::drawhud() {
                      255);
     cursor_x += icon_rect.w + 10;
     renderTextLeft(sdl_font_hud, dynamite_text, sdl_font_color, cursor_x,
+                   line_top);
+    cursor_x += dynamite_text_width;
+  }
+
+  if (game->plastic_explosive_inventory > 0) {
+    cursor_x += hud_gap;
+    const SDL_Rect icon_rect{
+        cursor_x, line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
+        icon_size, icon_size};
+    drawPlasticExplosiveIcon(icon_rect, static_cast<double>(SDL_GetTicks()) / 170.0,
+                             255, false);
+    cursor_x += icon_rect.w + 10;
+    renderTextLeft(sdl_font_hud, plastic_explosive_text, sdl_font_color, cursor_x,
                    line_top);
   }
 
@@ -2575,6 +2601,67 @@ void Renderer::drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
   }
 }
 
+void Renderer::drawPlasticExplosiveIcon(const SDL_Rect &icon_rect,
+                                        double animation_clock, Uint8 alpha,
+                                        bool armed) {
+  if (icon_rect.w <= 0 || icon_rect.h <= 0) {
+    return;
+  }
+
+  const SDL_Color body_color =
+      armed ? SDL_Color{204, 56, 44, alpha} : SDL_Color{178, 64, 44, alpha};
+  const SDL_Color band_color =
+      armed ? SDL_Color{46, 42, 40, alpha} : SDL_Color{56, 52, 48, alpha};
+  const SDL_Color cap_color =
+      armed ? SDL_Color{255, 238, 194, alpha} : SDL_Color{230, 222, 184, alpha};
+  const SDL_Color led_color =
+      armed ? SDL_Color{255, 86, 66, alpha} : SDL_Color{84, 220, 255, alpha};
+  const double pulse = 0.64 + 0.36 * std::sin(animation_clock * (armed ? 2.6 : 1.7));
+
+  SDL_Rect body_rect{icon_rect.x + std::max(1, icon_rect.w / 8),
+                     icon_rect.y + std::max(2, icon_rect.h / 4),
+                     std::max(6, icon_rect.w * 3 / 4),
+                     std::max(6, icon_rect.h / 2)};
+  SDL_SetRenderDrawColor(sdl_renderer, body_color.r, body_color.g, body_color.b,
+                         static_cast<Uint8>(alpha));
+  SDL_RenderFillRect(sdl_renderer, &body_rect);
+
+  SDL_SetRenderDrawColor(sdl_renderer, cap_color.r, cap_color.g, cap_color.b,
+                         alpha);
+  SDL_RenderDrawRect(sdl_renderer, &body_rect);
+
+  const int strap_width = std::max(2, body_rect.w / 6);
+  SDL_Rect left_strap{body_rect.x + strap_width, body_rect.y, strap_width,
+                      body_rect.h};
+  SDL_Rect right_strap{body_rect.x + body_rect.w - strap_width * 2, body_rect.y,
+                       strap_width, body_rect.h};
+  SDL_SetRenderDrawColor(sdl_renderer, band_color.r, band_color.g, band_color.b,
+                         static_cast<Uint8>(alpha));
+  SDL_RenderFillRect(sdl_renderer, &left_strap);
+  SDL_RenderFillRect(sdl_renderer, &right_strap);
+
+  const int wire_start_x = body_rect.x + body_rect.w - 1;
+  const int wire_start_y = body_rect.y + std::max(2, body_rect.h / 4);
+  const int wire_mid_x = icon_rect.x + icon_rect.w - std::max(2, icon_rect.w / 7);
+  const int wire_mid_y = icon_rect.y + std::max(2, icon_rect.h / 5);
+  SDL_SetRenderDrawColor(sdl_renderer, 226, 216, 184, alpha);
+  SDL_RenderDrawLine(sdl_renderer, wire_start_x, wire_start_y, wire_mid_x,
+                     wire_mid_y);
+  SDL_RenderDrawLine(sdl_renderer, wire_mid_x, wire_mid_y,
+                     wire_mid_x + std::max(1, icon_rect.w / 10),
+                     wire_mid_y - std::max(2, icon_rect.h / 7));
+
+  const int led_radius = std::max(2, icon_rect.w / 8);
+  const int led_center_x = body_rect.x + body_rect.w / 2;
+  const int led_center_y = body_rect.y + body_rect.h / 2;
+  SDL_SetRenderDrawColor(
+      sdl_renderer, led_color.r, led_color.g, led_color.b,
+      static_cast<Uint8>(std::clamp(static_cast<double>(alpha) *
+                                        (armed ? (0.72 + pulse * 0.28) : 0.84),
+                                    0.0, 255.0)));
+  SDL_RenderFillCircle(sdl_renderer, led_center_x, led_center_y, led_radius);
+}
+
 void Renderer::drawdynamitepickup() {
   if (game == nullptr || game->dead) {
     return;
@@ -2621,6 +2708,52 @@ void Renderer::drawdynamitepickup() {
   drawDynamiteIcon(icon_rect, true, animation_clock, body_alpha);
 }
 
+void Renderer::drawplasticexplosivepickup() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const auto &plastic_explosive = game->plastic_explosive_pickup;
+  if (!plastic_explosive.is_visible) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  double alpha_factor = 1.0;
+  if (plastic_explosive.is_fading) {
+    alpha_factor =
+        1.0 - std::clamp(static_cast<double>(now - plastic_explosive.fade_started_ticks) /
+                             static_cast<double>(PLASTIC_EXPLOSIVE_FADE_MS),
+                         0.0, 1.0);
+  }
+  if (alpha_factor <= 0.0) {
+    return;
+  }
+
+  const PixelCoord pickup_px = getPixelCoord(plastic_explosive.coord, 0, 0);
+  const int center_x = pickup_px.x + element_size / 2;
+  const int center_y = pickup_px.y + element_size / 2;
+  const double animation_clock =
+      static_cast<double>(now + plastic_explosive.animation_seed * 37) / 170.0;
+  const double pulse = 0.78 + 0.22 * std::sin(animation_clock);
+  const Uint8 glow_alpha = static_cast<Uint8>(
+      std::clamp(88.0 * alpha_factor, 0.0, 136.0));
+  const Uint8 body_alpha = static_cast<Uint8>(
+      std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 84, 214, 255, glow_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(7, static_cast<int>(element_size * 0.26 * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 190, 244, 255, glow_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(9, static_cast<int>(element_size * 0.36 * pulse)));
+
+  const int icon_size = std::max(12, static_cast<int>(element_size * 0.74));
+  const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
+                           icon_size, icon_size};
+  drawPlasticExplosiveIcon(icon_rect, animation_clock, body_alpha, false);
+}
+
 void Renderer::drawplaceddynamites() {
   if (game == nullptr) {
     return;
@@ -2663,6 +2796,35 @@ void Renderer::drawplaceddynamites() {
                      SDL_Color{255, 238, 206, 255}, center_x,
                      placed_px.y - TTF_FontHeight(sdl_font_hud) / 3);
   }
+}
+
+void Renderer::drawplacedplasticexplosive() {
+  if (game == nullptr || !game->plastic_explosive_is_armed) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  const auto &placed_plastic_explosive = game->placed_plastic_explosive;
+  const PixelCoord placed_px = getPixelCoord(placed_plastic_explosive.coord, 0, 0);
+  const int center_x = placed_px.x + element_size / 2;
+  const int center_y = placed_px.y + element_size / 2;
+  const double pulse_clock =
+      static_cast<double>(now + placed_plastic_explosive.animation_seed * 31) /
+      130.0;
+  const double pulse = 0.84 + 0.28 * std::sin(pulse_clock);
+
+  SDL_SetRenderDrawColor(
+      sdl_renderer, 255, 72, 52,
+      static_cast<Uint8>(std::clamp(92.0 + pulse * 72.0, 0.0, 188.0)));
+  SDL_RenderFillCircle(
+      sdl_renderer, center_x, center_y + element_size / 8,
+      std::max(6, static_cast<int>(element_size * 0.22 * pulse)));
+
+  const int icon_size = std::max(12, static_cast<int>(element_size * 0.76));
+  const SDL_Rect icon_rect{center_x - icon_size / 2,
+                           center_y - icon_size / 2 - element_size / 12,
+                           icon_size, icon_size};
+  drawPlasticExplosiveIcon(icon_rect, pulse_clock, 255, true);
 }
 
 void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,

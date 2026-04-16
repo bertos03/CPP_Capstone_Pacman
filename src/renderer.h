@@ -78,10 +78,12 @@ private:
                            int animation_seed);
   void drawbonusflask();
   void drawdynamitepickup();
+  void drawplasticexplosivepickup();
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
   void drawplaceddynamites();
+  void drawplacedplasticexplosive();
   void drawStaticPacman();
   void drawStaticMonsters();
   void drawStaticGoodies();
@@ -98,6 +100,8 @@ private:
                        int shimmer_seed);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
                         double animation_clock, Uint8 alpha);
+  void drawPlasticExplosiveIcon(const SDL_Rect &icon_rect, double animation_clock,
+                                Uint8 alpha, bool armed);
   void drawhud();
   void drawDimmer(Uint8 alpha);
   void drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,

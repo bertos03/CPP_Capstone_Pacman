@@ -61,6 +61,15 @@ bool SameCoord(MapCoord left, MapCoord right) {
   return left.u == right.u && left.v == right.v;
 }
 
+bool IsInsideMapBounds(Map *map, MapCoord coord) {
+  if (map == nullptr || coord.u < 0 || coord.v < 0) {
+    return false;
+  }
+
+  return coord.u < static_cast<int>(map->get_map_rows()) &&
+         coord.v < static_cast<int>(map->get_map_cols());
+}
+
 int DistanceSquared(MapCoord left, MapCoord right) {
   const int delta_u = left.u - right.u;
   const int delta_v = left.v - right.v;
@@ -110,6 +119,8 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   dead = false;
   score = 0;
   dynamite_inventory = 0;
+  plastic_explosive_inventory = 0;
+  plastic_explosive_is_armed = false;
   simulation_started = false;
   death_started_ticks = 0;
   last_update_ticks = SDL_GetTicks();
@@ -118,6 +129,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
   death_coord = pacman->map_coord;
   ScheduleNextInvulnerabilityPotionSpawn(last_update_ticks);
   ScheduleNextDynamiteSpawn(last_update_ticks);
+  ScheduleNextPlasticExplosiveSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -185,7 +197,9 @@ void Game::Update() {
   ApplyTeleporters();
   UpdateInvulnerabilityPotion(now);
   UpdateDynamitePickup(now);
+  UpdatePlasticExplosivePickup(now);
   TryPlaceDynamite(now);
+  TryUsePlasticExplosive(now);
   UpdatePlacedDynamites(now);
   if (dead) {
     return;
@@ -383,6 +397,12 @@ void Game::ScheduleNextDynamiteSpawn(Uint32 now) {
                            DYNAMITE_SPAWN_MAX_INTERVAL_MS);
 }
 
+void Game::ScheduleNextPlasticExplosiveSpawn(Uint32 now) {
+  plastic_explosive_pickup.next_spawn_ticks =
+      now + RandomInterval(PLASTIC_EXPLOSIVE_SPAWN_MIN_INTERVAL_MS,
+                           PLASTIC_EXPLOSIVE_SPAWN_MAX_INTERVAL_MS);
+}
+
 bool Game::IsWithinDynamiteRadius(MapCoord center, MapCoord target) const {
   return DistanceSquared(center, target) <=
          DYNAMITE_EXPLOSION_RADIUS_CELLS * DYNAMITE_EXPLOSION_RADIUS_CELLS;
@@ -401,6 +421,11 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
 
   if (invulnerability_potion.is_visible &&
       SameCoord(coord, invulnerability_potion.coord)) {
+    return false;
+  }
+
+  if (plastic_explosive_pickup.is_visible &&
+      SameCoord(coord, plastic_explosive_pickup.coord)) {
     return false;
   }
 
@@ -428,6 +453,11 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
     if (SameCoord(coord, dynamite.coord)) {
       return false;
     }
+  }
+
+  if (plastic_explosive_is_armed &&
+      SameCoord(coord, placed_plastic_explosive.coord)) {
+    return false;
   }
 
   return true;
@@ -466,6 +496,101 @@ bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
     return false;
   }
 
+  if (plastic_explosive_pickup.is_visible &&
+      SameCoord(coord, plastic_explosive_pickup.coord)) {
+    return false;
+  }
+
+  for (const auto &dynamite : placed_dynamites) {
+    if (SameCoord(coord, dynamite.coord)) {
+      return false;
+    }
+  }
+
+  if (plastic_explosive_is_armed &&
+      SameCoord(coord, placed_plastic_explosive.coord)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
+  if (map == nullptr ||
+      map->map_entry(static_cast<size_t>(coord.u), static_cast<size_t>(coord.v)) !=
+          ElementType::TYPE_PATH) {
+    return false;
+  }
+
+  if (SameCoord(coord, pacman->map_coord)) {
+    return false;
+  }
+
+  if (invulnerability_potion.is_visible &&
+      SameCoord(coord, invulnerability_potion.coord)) {
+    return false;
+  }
+
+  if (dynamite_pickup.is_visible && SameCoord(coord, dynamite_pickup.coord)) {
+    return false;
+  }
+
+  for (const auto *monster : monsters) {
+    if ((monster->is_alive ||
+         monster->scheduled_dynamite_blast_ticks != 0) &&
+        SameCoord(coord, monster->map_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &fireball : fireballs) {
+    if (SameCoord(coord, fireball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &cloud : gas_clouds) {
+    if (SameCoord(coord, cloud.coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &dynamite : placed_dynamites) {
+    if (SameCoord(coord, dynamite.coord)) {
+      return false;
+    }
+  }
+
+  if (plastic_explosive_is_armed &&
+      SameCoord(coord, placed_plastic_explosive.coord)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
+  if (!IsInsideMapBounds(map, coord)) {
+    return false;
+  }
+
+  const ElementType entry =
+      map->map_entry(static_cast<size_t>(coord.u), static_cast<size_t>(coord.v));
+  if (entry == ElementType::TYPE_TELEPORTER) {
+    return false;
+  }
+
+  if (dynamite_pickup.is_visible && SameCoord(coord, dynamite_pickup.coord)) {
+    return false;
+  }
+  if (invulnerability_potion.is_visible &&
+      SameCoord(coord, invulnerability_potion.coord)) {
+    return false;
+  }
+  if (plastic_explosive_pickup.is_visible &&
+      SameCoord(coord, plastic_explosive_pickup.coord)) {
+    return false;
+  }
   for (const auto &dynamite : placed_dynamites) {
     if (SameCoord(coord, dynamite.coord)) {
       return false;
@@ -582,6 +707,73 @@ void Game::UpdateDynamitePickup(Uint32 now) {
   }
 }
 
+void Game::TrySpawnPlasticExplosive(Uint32 now) {
+  if (plastic_explosive_pickup.is_visible ||
+      now < plastic_explosive_pickup.next_spawn_ticks) {
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForPlasticExplosivePickup(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    plastic_explosive_pickup.next_spawn_ticks = now + 1000;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  plastic_explosive_pickup.coord = candidates[distribution(RandomGenerator())];
+  plastic_explosive_pickup.appeared_ticks = now;
+  plastic_explosive_pickup.fade_started_ticks = 0;
+  plastic_explosive_pickup.animation_seed = static_cast<int>(
+      (now % 997) + plastic_explosive_pickup.coord.u * 41 +
+      plastic_explosive_pickup.coord.v * 23);
+  plastic_explosive_pickup.is_visible = true;
+  plastic_explosive_pickup.is_fading = false;
+  ScheduleNextPlasticExplosiveSpawn(now);
+#ifdef AUDIO
+  audio->PlayPlasticExplosiveSpawn();
+#endif
+}
+
+void Game::UpdatePlasticExplosivePickup(Uint32 now) {
+  TrySpawnPlasticExplosive(now);
+  if (!plastic_explosive_pickup.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, plastic_explosive_pickup.coord)) {
+    plastic_explosive_inventory++;
+    plastic_explosive_pickup.is_visible = false;
+    plastic_explosive_pickup.is_fading = false;
+    plastic_explosive_pickup.fade_started_ticks = 0;
+    return;
+  }
+
+  if (!plastic_explosive_pickup.is_fading &&
+      now - plastic_explosive_pickup.appeared_ticks >=
+          PLASTIC_EXPLOSIVE_VISIBLE_MS) {
+    plastic_explosive_pickup.is_fading = true;
+    plastic_explosive_pickup.fade_started_ticks = now;
+  }
+
+  if (plastic_explosive_pickup.is_fading &&
+      now - plastic_explosive_pickup.fade_started_ticks >=
+          PLASTIC_EXPLOSIVE_FADE_MS) {
+    plastic_explosive_pickup.is_visible = false;
+    plastic_explosive_pickup.is_fading = false;
+    plastic_explosive_pickup.fade_started_ticks = 0;
+  }
+}
+
 void Game::TryPlaceDynamite(Uint32 now) {
   if (events == nullptr || pacman == nullptr) {
     return;
@@ -603,6 +795,53 @@ void Game::TryPlaceDynamite(Uint32 now) {
        static_cast<int>((now % 997) + pacman->map_coord.u * 23 +
                         pacman->map_coord.v * 29 + dynamite_inventory * 17)});
   dynamite_inventory--;
+}
+
+void Game::TryUsePlasticExplosive(Uint32 now) {
+  if (events == nullptr || pacman == nullptr) {
+    return;
+  }
+
+  const bool use_requested = events->ConsumePlacePlasticExplosiveRequest();
+  if (!use_requested) {
+    return;
+  }
+
+  if (plastic_explosive_is_armed) {
+    const PlacedPlasticExplosive detonated_charge = placed_plastic_explosive;
+    plastic_explosive_is_armed = false;
+    DetonatePlasticExplosive(detonated_charge, now);
+    return;
+  }
+
+  if (plastic_explosive_inventory <= 0) {
+    return;
+  }
+
+  Directions facing_direction = pacman->facing_direction;
+  if (facing_direction == Directions::None) {
+    facing_direction = Directions::Down;
+  }
+
+  const MapCoord target_coord = StepCoord(pacman->map_coord, facing_direction);
+  if (!CanPlacePlasticExplosiveAt(target_coord)) {
+    return;
+  }
+
+  const ElementType target_entry =
+      map->map_entry(static_cast<size_t>(target_coord.u),
+                     static_cast<size_t>(target_coord.v));
+  placed_plastic_explosive = {
+      target_coord,
+      now,
+      static_cast<int>((now % 997) + target_coord.u * 47 + target_coord.v * 31 +
+                       plastic_explosive_inventory * 19),
+      target_entry == ElementType::TYPE_WALL};
+  plastic_explosive_is_armed = true;
+  plastic_explosive_inventory--;
+#ifdef AUDIO
+  audio->PlayPlasticExplosivePlace();
+#endif
 }
 
 void Game::ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks) {
@@ -645,6 +884,44 @@ void Game::DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now) {
 
   if (!IsPacmanInvulnerable(now) &&
       IsWithinDynamiteRadius(dynamite.coord, pacman->map_coord)) {
+    TriggerLoss(pacman->map_coord, now);
+  }
+}
+
+void Game::DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
+                                    Uint32 now) {
+  effects.push_back({explosive.coord, now, EffectType::DynamiteExplosion, 1});
+
+  const bool destroys_wall =
+      IsInsideMapBounds(map, explosive.coord) &&
+      map->map_entry(static_cast<size_t>(explosive.coord.u),
+                     static_cast<size_t>(explosive.coord.v)) ==
+          ElementType::TYPE_WALL;
+  if (destroys_wall) {
+    map->SetEntry(explosive.coord, ElementType::TYPE_PATH);
+#ifdef AUDIO
+    audio->PlayPlasticExplosiveWallBreak();
+#endif
+  }
+
+  bool eliminated_monster = false;
+  for (auto *monster : monsters) {
+    if (!monster->is_alive || !SameCoord(monster->map_coord, explosive.coord)) {
+      continue;
+    }
+
+    EliminateMonster(monster, now);
+    eliminated_monster = true;
+  }
+
+  if (!destroys_wall && !eliminated_monster) {
+#ifdef AUDIO
+    audio->PlayMonsterExplosion();
+#endif
+  }
+
+  if (!IsPacmanInvulnerable(now) &&
+      SameCoord(pacman->map_coord, explosive.coord)) {
     TriggerLoss(pacman->map_coord, now);
   }
 }

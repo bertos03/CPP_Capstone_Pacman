@@ -438,6 +438,15 @@ bool Map::TryGetTeleporterDestination(MapCoord origin, MapCoord &destination,
   return false;
 }
 
+bool Map::SetEntry(MapCoord coord, ElementType entry) {
+  if (!IsInsideBounds(coord)) {
+    return false;
+  }
+
+  (*map)[static_cast<size_t>(coord.u)][static_cast<size_t>(coord.v)] = entry;
+  return true;
+}
+
 bool Map::IsInsideBounds(MapCoord coord) const {
   if (coord.u < 0 || coord.v < 0 || map == nullptr) {
     return false;

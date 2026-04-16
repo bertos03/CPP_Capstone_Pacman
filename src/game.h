@@ -79,11 +79,28 @@ struct DynamitePickup {
   bool is_fading = false;
 };
 
+struct PlasticExplosivePickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
 struct PlacedDynamite {
   MapCoord coord{0, 0};
   Uint32 placed_ticks = 0;
   Uint32 explode_at_ticks = 0;
   int animation_seed = 0;
+};
+
+struct PlacedPlasticExplosive {
+  MapCoord coord{0, 0};
+  Uint32 placed_ticks = 0;
+  int animation_seed = 0;
+  bool embedded_in_wall = false;
 };
 
 struct ScheduledMonsterBlast {
@@ -128,11 +145,15 @@ private:
   std::vector<GasCloud> gas_clouds;
   InvulnerabilityPotion invulnerability_potion;
   DynamitePickup dynamite_pickup;
+  PlasticExplosivePickup plastic_explosive_pickup;
   std::vector<PlacedDynamite> placed_dynamites;
+  PlacedPlasticExplosive placed_plastic_explosive;
+  bool plastic_explosive_is_armed;
   std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
   Uint32 last_update_ticks;
   int dynamite_inventory;
+  int plastic_explosive_inventory;
   friend class Renderer;
   bool dead;
   bool win;
@@ -151,11 +172,19 @@ private:
   void TrySpawnDynamite(Uint32 now);
   void UpdateDynamitePickup(Uint32 now);
   void TryPlaceDynamite(Uint32 now);
+  void ScheduleNextPlasticExplosiveSpawn(Uint32 now);
+  void TrySpawnPlasticExplosive(Uint32 now);
+  void UpdatePlasticExplosivePickup(Uint32 now);
+  void TryUsePlasticExplosive(Uint32 now);
   void UpdatePlacedDynamites(Uint32 now);
   void DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now);
+  void DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
+                                Uint32 now);
   void UpdateScheduledMonsterBlasts(Uint32 now);
   void ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks);
   bool IsCellFreeForDynamitePickup(MapCoord coord) const;
+  bool IsCellFreeForPlasticExplosivePickup(MapCoord coord) const;
+  bool CanPlacePlasticExplosiveAt(MapCoord coord) const;
   bool IsWithinDynamiteRadius(MapCoord center, MapCoord target) const;
   bool IsCellFreeForInvulnerabilityPotion(MapCoord coord) const;
   bool IsPacmanInvulnerable(Uint32 now) const;
