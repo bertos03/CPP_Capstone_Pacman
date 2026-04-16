@@ -204,6 +204,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_dynamite_texture(nullptr), sdl_dynamite_size{0, 0},
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
+      sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -219,6 +220,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_dynamite_texture(nullptr), sdl_dynamite_size{0, 0},
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
+      sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -434,6 +436,8 @@ void Renderer::initializeRenderer(size_t row_count_value,
   sdl_start_menu_hero_texture = loadTrimmedTexture(
       Paths::GetDataFilePath("start_menu_spielfigur.png"),
       sdl_start_menu_hero_size);
+  sdl_win_screen_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath("win_screen_triumph.png"), sdl_win_screen_size);
   sdl_dynamite_texture = loadTrimmedTexture(Paths::GetDataFilePath("dynamite.png"),
                                             sdl_dynamite_size);
 }
@@ -460,6 +464,9 @@ Renderer::~Renderer() {
   }
   if (sdl_start_menu_hero_texture != nullptr) {
     SDL_DestroyTexture(sdl_start_menu_hero_texture);
+  }
+  if (sdl_win_screen_texture != nullptr) {
+    SDL_DestroyTexture(sdl_win_screen_texture);
   }
   if (sdl_dynamite_texture != nullptr) {
     SDL_DestroyTexture(sdl_dynamite_texture);
@@ -650,6 +657,11 @@ void Renderer::drawhud() {
     return;
   }
 
+  if (game->win) {
+    drawVictoryOverlay();
+    return;
+  }
+
   const std::string title_text = "BOBMAN";
   const std::string score_text = "Score: " + std::to_string(game->score);
   const std::string dynamite_text = std::to_string(game->dynamite_inventory) + "x";
@@ -723,11 +735,6 @@ void Renderer::drawhud() {
                      30 + TTF_FontHeight(sdl_font_hud) + 6);
   }
 
-  if (game->win) {
-    renderBrickText(sdl_font_display, "You Won", screen_res_x / 2,
-                    (screen_res_y - TTF_FontHeight(sdl_font_display)) / 2,
-                    kBrickOutlineColor);
-  }
 }
 
 void Renderer::drawDimmer(Uint8 alpha) {
@@ -3577,6 +3584,42 @@ void Renderer::drawDefeatEffect() {
     SDL_RenderDrawLine(sdl_renderer, tooth_x, center_y + 1, tooth_x,
                        center_y + jaw_rect.h - 2);
   }
+}
+
+void Renderer::drawVictoryOverlay() {
+  drawDimmer(118);
+
+  const std::string title_text = "Gewonnen!";
+  const int title_top = std::max(26, screen_res_y / 10);
+  renderBrickText(sdl_font_display, title_text, screen_res_x / 2, title_top,
+                  kBrickOutlineColor);
+
+  if (sdl_win_screen_texture == nullptr || sdl_win_screen_size.x <= 0 ||
+      sdl_win_screen_size.y <= 0) {
+    return;
+  }
+
+  const int max_width = std::min(screen_res_x * 38 / 100, screen_res_x - 120);
+  const int max_height = std::min(screen_res_y * 60 / 100, screen_res_y - 220);
+  const double width_scale =
+      static_cast<double>(max_width) /
+      static_cast<double>(sdl_win_screen_size.x);
+  const double height_scale =
+      static_cast<double>(max_height) /
+      static_cast<double>(sdl_win_screen_size.y);
+  const double scale = std::max(0.05, std::min(width_scale, height_scale));
+  const int image_width = std::max(
+      1, static_cast<int>(std::lround(sdl_win_screen_size.x * scale)));
+  const int image_height = std::max(
+      1, static_cast<int>(std::lround(sdl_win_screen_size.y * scale)));
+  const int center_x = screen_res_x / 2;
+  const int center_y = screen_res_y / 2 + screen_res_y / 12;
+  const SDL_Rect image_rect{center_x - image_width / 2,
+                            center_y - image_height / 2, image_width,
+                            image_height};
+
+  renderDecorativeTexture(sdl_win_screen_texture, image_rect,
+                          SDL_Color{138, 224, 255, 255}, 0.0, 0.0, 0.0, 1.0);
 }
 
 void Renderer::drawgoodies() {

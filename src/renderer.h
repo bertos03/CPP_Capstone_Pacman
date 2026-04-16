@@ -92,6 +92,7 @@ private:
   void drawfireballs();
   void draweffects();
   void drawDefeatEffect();
+  void drawVictoryOverlay();
   void drawDwarf(const SDL_Rect &dwarf_rect, Directions facing_direction,
                  double gait_phase, bool walking);
   void drawPacmanShield(int center_x, int center_y, int base_radius,
@@ -190,6 +191,8 @@ private:
   SDL_Point sdl_start_menu_monster_size;
   SDL_Texture *sdl_start_menu_hero_texture;
   SDL_Point sdl_start_menu_hero_size;
+  SDL_Texture *sdl_win_screen_texture;
+  SDL_Point sdl_win_screen_size;
 
   TTF_Font *sdl_font_hud;
   TTF_Font *sdl_font_menu;
