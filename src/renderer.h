@@ -217,6 +217,8 @@ private:
   SDL_Point sdl_airstrike_plane_size;
   SDL_Texture *sdl_airstrike_explosion_texture;
   SDL_Point sdl_airstrike_explosion_size;
+  SDL_Texture *sdl_fart_cloud_texture;
+  SDL_Point sdl_fart_cloud_size;
 
   TTF_Font *sdl_font_hud;
   TTF_Font *sdl_font_menu;

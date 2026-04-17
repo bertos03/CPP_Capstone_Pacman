@@ -57,8 +57,16 @@ constexpr double kLogoPi = 3.14159265358979323846;
 constexpr int kPacmanFramesPerDirection = 4;
 constexpr int kMonsterFramesPerDirection = 4;
 constexpr int kAirstrikeExplosionFrames = 5;
+constexpr int kFartCloudFrames = 4;
 constexpr Uint32 kPacmanWalkFrameMs = 140;
+constexpr Uint32 kFartCloudOpenDurationMs = 320;
+constexpr Uint32 kFartCloudFrameMs =
+    kFartCloudOpenDurationMs / kFartCloudFrames;
 constexpr double kMonsterRenderScale = 1.19;
+constexpr double kFartCloudRenderScale = 1.20;
+constexpr double kFartCloudDriftXFactor = 0.06;
+constexpr double kFartCloudDriftYFactor = 0.05;
+constexpr double kFartCloudScalePulseAmplitude = 0.04;
 
 struct MonsterSpriteDescriptor {
   char monster_char;
@@ -210,6 +218,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
+      sdl_fart_cloud_texture(nullptr), sdl_fart_cloud_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -230,6 +239,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
+      sdl_fart_cloud_texture(nullptr), sdl_fart_cloud_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -440,6 +450,8 @@ void Renderer::initializeRenderer(size_t row_count_value,
   sdl_airstrike_explosion_texture = loadTrimmedChromaKeyTexture(
       Paths::GetDataFilePath("airstrike_explosion_sheet.png"),
       sdl_airstrike_explosion_size, 12);
+  sdl_fart_cloud_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath("fart_cloud_sheet.png"), sdl_fart_cloud_size);
   sdl_dynamite_texture = loadTrimmedTexture(Paths::GetDataFilePath("dynamite.png"),
                                             sdl_dynamite_size);
 }
@@ -481,6 +493,9 @@ Renderer::~Renderer() {
   }
   if (sdl_airstrike_explosion_texture != nullptr) {
     SDL_DestroyTexture(sdl_airstrike_explosion_texture);
+  }
+  if (sdl_fart_cloud_texture != nullptr) {
+    SDL_DestroyTexture(sdl_fart_cloud_texture);
   }
   if (sdl_dynamite_texture != nullptr) {
     SDL_DestroyTexture(sdl_dynamite_texture);
@@ -4194,38 +4209,102 @@ void Renderer::drawgasclouds() {
     const PixelCoord cloud_px = getPixelCoord(cloud.coord, 0, 0);
     const int center_x = cloud_px.x + element_size / 2;
     const int center_y = cloud_px.y + element_size / 2;
-    const double wobble_clock =
-        (static_cast<double>(now + cloud.animation_seed * 67) / 210.0);
-    const int base_radius = std::max(5, static_cast<int>(element_size * 0.23));
-    const Uint8 base_alpha =
-        static_cast<Uint8>(std::clamp(145.0 * alpha_factor, 0.0, 190.0));
+    const auto draw_procedural_cloud = [&]() {
+      const double wobble_clock =
+          static_cast<double>(now + cloud.animation_seed * 67) / 210.0;
+      const int base_radius =
+          std::max(5, static_cast<int>(element_size * 0.23));
+      const Uint8 base_alpha =
+          static_cast<Uint8>(std::clamp(145.0 * alpha_factor, 0.0, 190.0));
 
-    for (int puff = 0; puff < 5; puff++) {
-      const double puff_phase = wobble_clock + puff * 1.17;
-      const int offset_x =
-          static_cast<int>(std::cos(puff_phase) * element_size * 0.14);
-      const int offset_y =
-          static_cast<int>(std::sin(puff_phase * 1.23) * element_size * 0.11);
-      const int puff_radius =
-          base_radius + static_cast<int>((1.0 + std::sin(puff_phase * 1.4)) *
-                                         element_size * 0.08);
+      for (int puff = 0; puff < 5; puff++) {
+        const double puff_phase = wobble_clock + puff * 1.17;
+        const int offset_x =
+            static_cast<int>(std::cos(puff_phase) * element_size * 0.14);
+        const int offset_y =
+            static_cast<int>(std::sin(puff_phase * 1.23) * element_size * 0.11);
+        const int puff_radius =
+            base_radius + static_cast<int>((1.0 + std::sin(puff_phase * 1.4)) *
+                                           element_size * 0.08);
 
-      SDL_SetRenderDrawColor(sdl_renderer, 118, 168, 82, base_alpha);
-      SDL_RenderFillCircle(sdl_renderer, center_x + offset_x,
-                           center_y + offset_y, puff_radius);
-      SDL_SetRenderDrawColor(sdl_renderer, 170, 190, 104,
-                             std::min(255, base_alpha / 2 + 30));
-      SDL_RenderFillCircle(sdl_renderer,
-                           center_x + offset_x / 2 + puff_radius / 3,
-                           center_y + offset_y / 2 - puff_radius / 4,
-                           std::max(3, puff_radius / 2));
+        SDL_SetRenderDrawColor(sdl_renderer, 118, 168, 82, base_alpha);
+        SDL_RenderFillCircle(sdl_renderer, center_x + offset_x,
+                             center_y + offset_y, puff_radius);
+        SDL_SetRenderDrawColor(sdl_renderer, 170, 190, 104,
+                               std::min(255, base_alpha / 2 + 30));
+        SDL_RenderFillCircle(sdl_renderer,
+                             center_x + offset_x / 2 + puff_radius / 3,
+                             center_y + offset_y / 2 - puff_radius / 4,
+                             std::max(3, puff_radius / 2));
+      }
+
+      SDL_SetRenderDrawColor(
+          sdl_renderer, 150, 214, 128,
+          static_cast<Uint8>(std::clamp(80.0 * alpha_factor, 0.0, 100.0)));
+      SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                           std::max(7, static_cast<int>(element_size * 0.34)));
+    };
+
+    if (sdl_fart_cloud_texture == nullptr || sdl_fart_cloud_size.x <= 0 ||
+        sdl_fart_cloud_size.y <= 0) {
+      draw_procedural_cloud();
+      continue;
     }
 
-    SDL_SetRenderDrawColor(
-        sdl_renderer, 150, 214, 128,
-        static_cast<Uint8>(std::clamp(80.0 * alpha_factor, 0.0, 100.0)));
-    SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
-                         std::max(7, static_cast<int>(element_size * 0.34)));
+    const Uint32 elapsed = now - cloud.started_ticks;
+    const int frame_index =
+        std::clamp(static_cast<int>(elapsed / std::max<Uint32>(1, kFartCloudFrameMs)),
+                   0, kFartCloudFrames - 1);
+    const int src_x = (frame_index * sdl_fart_cloud_size.x) / kFartCloudFrames;
+    const int src_x_next =
+        ((frame_index + 1) * sdl_fart_cloud_size.x) / kFartCloudFrames;
+    const SDL_Rect src_rect{src_x, 0, std::max(1, src_x_next - src_x),
+                            sdl_fart_cloud_size.y};
+    if (src_rect.w <= 0 || src_rect.h <= 0) {
+      draw_procedural_cloud();
+      continue;
+    }
+
+    double scale_multiplier = 1.0;
+    int drift_x = 0;
+    int drift_y = 0;
+    if (elapsed >= kFartCloudOpenDurationMs) {
+      const double wobble_phase =
+          static_cast<double>(now + cloud.animation_seed * 53) / 260.0;
+      const double scale_phase =
+          static_cast<double>(now + cloud.animation_seed * 97) / 360.0;
+      drift_x = static_cast<int>(
+          std::lround(std::sin(wobble_phase) * element_size *
+                      kFartCloudDriftXFactor));
+      drift_y = static_cast<int>(
+          std::lround(std::cos(wobble_phase * 1.19) * element_size *
+                      kFartCloudDriftYFactor));
+      scale_multiplier =
+          1.0 + std::sin(scale_phase) * kFartCloudScalePulseAmplitude;
+    }
+
+    const int base_max_dimension =
+        std::max(1, static_cast<int>(std::lround(element_size *
+                                                 kFartCloudRenderScale)));
+    const int max_dimension = std::max(
+        1, static_cast<int>(std::lround(base_max_dimension * scale_multiplier)));
+    const double scale =
+        static_cast<double>(max_dimension) /
+        static_cast<double>(std::max(src_rect.w, src_rect.h));
+    const int draw_width =
+        std::max(1, static_cast<int>(std::lround(src_rect.w * scale)));
+    const int draw_height =
+        std::max(1, static_cast<int>(std::lround(src_rect.h * scale)));
+    SDL_Rect destination{center_x - draw_width / 2 + drift_x,
+                         center_y - draw_height / 2 + drift_y, draw_width,
+                         draw_height};
+
+    SDL_SetTextureAlphaMod(
+        sdl_fart_cloud_texture,
+        static_cast<Uint8>(std::clamp(255.0 * alpha_factor, 0.0, 255.0)));
+    SDL_RenderCopy(sdl_renderer, sdl_fart_cloud_texture, &src_rect,
+                   &destination);
+    SDL_SetTextureAlphaMod(sdl_fart_cloud_texture, 255);
   }
 }
 

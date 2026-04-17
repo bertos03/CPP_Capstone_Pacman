@@ -245,6 +245,8 @@ Audio::Audio() {
       Paths::GetDataFilePath("einschlag.wav");
   const std::string monster_explosion_sound_path =
       Paths::GetDataFilePath("monsterexplosion.wav");
+  const std::string monster_fart_sound_path =
+      Paths::GetDataFilePath("monster_fart.mp3");
   const std::string dynamite_explosion_sound_path =
       Paths::GetDataFilePath("dynamitexplosion.wav");
   const std::string dynamite_ignite_sound_path =
@@ -278,7 +280,10 @@ Audio::Audio() {
   if (SFX_monster_explosion == nullptr) {
     SFX_monster_explosion = CreateMonsterExplosionChunk();
   }
-  SFX_monster_fart = CreateMonsterFartChunk();
+  SFX_monster_fart = Mix_LoadWAV(monster_fart_sound_path.c_str());
+  if (SFX_monster_fart == nullptr) {
+    SFX_monster_fart = CreateMonsterFartChunk();
+  }
   SFX_pacman_gag = CreatePacmanGagChunk();
   SFX_teleporter_zap = CreateTeleporterZapChunk();
   SFX_teleporter_arc = CreateTeleporterArcChunk();
