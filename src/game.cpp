@@ -28,6 +28,7 @@ constexpr Uint32 kWallImpactDurationMs = 180;
 constexpr Uint32 kSlimeSplashDurationMs =
     SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT + SLIME_SPLASH_FADE_MS;
 constexpr Uint32 kDynamiteChainDelayMs = 140;
+constexpr double kPlasticExplosiveMonsterHitRadiusCells = 0.72;
 constexpr float kAirstrikePlaneMarginCells = 2.0f;
 constexpr float kAirstrikePathSamplesPerCell = 14.0f;
 
@@ -39,6 +40,7 @@ struct AirstrikePathCandidate {
 
 struct DifficultyTuning {
   int monster_speed_rating;
+  double monster_step_delay_scale;
   Uint32 fireball_cooldown_ms;
   Uint32 fireball_step_duration_ms;
   Uint32 pickup_visible_ms;
@@ -57,13 +59,15 @@ Uint32 RandomInterval(Uint32 minimum, Uint32 maximum) {
 
 DifficultyTuning GetDifficultyTuning(Difficulty difficulty) {
   switch (difficulty) {
+  case Difficulty::Training:
+    return {std::max(1, SPEED_MONSTER - 3), 1.5, 15000, 330, 60000, 0.75};
   case Difficulty::Easy:
-    return {std::max(1, SPEED_MONSTER - 3), 15000, 220, 60000, 0.75};
+    return {std::max(1, SPEED_MONSTER - 3), 1.0, 15000, 220, 60000, 0.75};
   case Difficulty::Hard:
-    return {std::max(1, SPEED_MONSTER), 6500, 120, 20000, 1.4};
+    return {std::max(1, SPEED_MONSTER), 1.0, 6500, 120, 20000, 1.4};
   case Difficulty::Medium:
   default:
-    return {std::max(1, SPEED_MONSTER - 2), 10000, 160, 40000, 1.0};
+    return {std::max(1, SPEED_MONSTER - 2), 1.0, 10000, 160, 40000, 1.0};
   }
 }
 
@@ -80,7 +84,10 @@ Uint32 RandomScaledInterval(Uint32 minimum, Uint32 maximum, double scale) {
 }
 
 int GetMonsterMovementStepDelayMs(Difficulty difficulty) {
-  return std::max(1, 10 - GetDifficultyTuning(difficulty).monster_speed_rating);
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  const double base_delay_ms = std::max(1, 10 - tuning.monster_speed_rating);
+  return std::max(
+      1, static_cast<int>(std::ceil(base_delay_ms * tuning.monster_step_delay_scale)));
 }
 
 MapCoord StepCoord(MapCoord coord, Directions direction) {
@@ -1726,8 +1733,17 @@ void Game::DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
   }
 
   bool eliminated_monster = false;
+  const SDL_FPoint explosive_center = MakeCellCenter(explosive.coord);
   for (auto *monster : monsters) {
-    if (!monster->is_alive || !SameCoord(monster->map_coord, explosive.coord)) {
+    if (!monster->is_alive) {
+      continue;
+    }
+
+    SDL_FPoint monster_center = MakeCellCenter(monster->map_coord);
+    monster_center.x += static_cast<float>(monster->px_delta.x) / 100.0f;
+    monster_center.y += static_cast<float>(monster->px_delta.y) / 100.0f;
+    if (PointDistance(explosive_center, monster_center) >
+        kPlasticExplosiveMonsterHitRadiusCells) {
       continue;
     }
 

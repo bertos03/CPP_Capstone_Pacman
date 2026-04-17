@@ -32,7 +32,7 @@ struct MapCoord {
 };
 
 enum class Directions { None, Up, Down, Left, Right };
-enum class Difficulty { Easy, Medium, Hard };
+enum class Difficulty { Training, Easy, Medium, Hard };
 
 
 // struct DirOptions{

@@ -41,6 +41,8 @@ std::string TrimWhitespace(const std::string &text) {
 
 std::string DifficultyToString(Difficulty difficulty) {
   switch (difficulty) {
+  case Difficulty::Training:
+    return "training";
   case Difficulty::Easy:
     return "easy";
   case Difficulty::Medium:
@@ -53,6 +55,9 @@ std::string DifficultyToString(Difficulty difficulty) {
 
 Difficulty ParseDifficulty(const std::string &value) {
   const std::string trimmed_value = TrimWhitespace(value);
+  if (trimmed_value == "training") {
+    return Difficulty::Training;
+  }
   if (trimmed_value == "easy") {
     return Difficulty::Easy;
   }

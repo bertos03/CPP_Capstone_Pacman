@@ -114,12 +114,14 @@ constexpr Uint32 kEndScreenMinimumMs = 3000;
 
 Difficulty NextDifficulty(Difficulty difficulty) {
   switch (difficulty) {
+  case Difficulty::Training:
+    return Difficulty::Easy;
   case Difficulty::Easy:
     return Difficulty::Medium;
   case Difficulty::Medium:
     return Difficulty::Hard;
   case Difficulty::Hard:
-    return Difficulty::Easy;
+    return Difficulty::Training;
   default:
     return Difficulty::Medium;
   }

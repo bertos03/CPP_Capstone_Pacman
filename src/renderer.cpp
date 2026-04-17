@@ -92,6 +92,8 @@ constexpr std::array<MonsterSpriteDescriptor, 4> kMonsterSpriteDescriptors{{
 
 const char *DifficultyLabel(Difficulty difficulty) {
   switch (difficulty) {
+  case Difficulty::Training:
+    return "Training";
   case Difficulty::Easy:
     return "leicht";
   case Difficulty::Medium:
