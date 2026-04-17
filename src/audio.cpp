@@ -202,6 +202,8 @@ Audio::Audio() {
   SFX_start_trumpet = nullptr;
   SFX_monster_shot = nullptr;
   SFX_fireball_wall_hit = nullptr;
+  SFX_slime_shot = nullptr;
+  SFX_slime_impact = nullptr;
   SFX_monster_explosion = nullptr;
   SFX_monster_fart = nullptr;
   SFX_pacman_gag = nullptr;
@@ -243,6 +245,9 @@ Audio::Audio() {
   const std::string monster_shot_sound_path = Paths::GetDataFilePath("schuss.wav");
   const std::string fireball_impact_sound_path =
       Paths::GetDataFilePath("einschlag.wav");
+  const std::string slime_shot_sound_path = Paths::GetDataFilePath("slime_shot.mp3");
+  const std::string slime_impact_sound_path =
+      Paths::GetDataFilePath("slime_impact.mp3");
   const std::string monster_explosion_sound_path =
       Paths::GetDataFilePath("monsterexplosion.wav");
   const std::string monster_fart_sound_path =
@@ -275,6 +280,16 @@ Audio::Audio() {
   SFX_fireball_wall_hit = Mix_LoadWAV(fireball_impact_sound_path.c_str());
   if (SFX_fireball_wall_hit == nullptr) {
     SFX_fireball_wall_hit = CreateSynthChunk({172, 118}, 90, 0.26, 1.0, 44.0);
+  }
+  SFX_slime_shot = Mix_LoadWAV(slime_shot_sound_path.c_str());
+  if (SFX_slime_shot == nullptr) {
+    SFX_slime_shot =
+        CreateSynthChunk({152, 188, 224}, 110, 0.26, 2.0, 52.0);
+  }
+  SFX_slime_impact = Mix_LoadWAV(slime_impact_sound_path.c_str());
+  if (SFX_slime_impact == nullptr) {
+    SFX_slime_impact =
+        CreateSynthChunk({128, 92, 66}, 180, 0.30, 1.0, 92.0);
   }
   SFX_monster_explosion = Mix_LoadWAV(monster_explosion_sound_path.c_str());
   if (SFX_monster_explosion == nullptr) {
@@ -334,6 +349,7 @@ Audio::Audio() {
       SFX_menu_move == nullptr || SFX_menu_select == nullptr ||
       SFX_countdown_tick == nullptr || SFX_start_trumpet == nullptr ||
       SFX_monster_shot == nullptr || SFX_fireball_wall_hit == nullptr ||
+      SFX_slime_shot == nullptr || SFX_slime_impact == nullptr ||
       SFX_monster_explosion == nullptr || SFX_monster_fart == nullptr ||
       SFX_pacman_gag == nullptr || SFX_teleporter_zap == nullptr ||
       SFX_teleporter_arc == nullptr || SFX_editor_blocked == nullptr ||
@@ -393,6 +409,12 @@ Audio::~Audio() {
   }
   if (SFX_fireball_wall_hit != nullptr) {
     Mix_FreeChunk(SFX_fireball_wall_hit);
+  }
+  if (SFX_slime_shot != nullptr) {
+    Mix_FreeChunk(SFX_slime_shot);
+  }
+  if (SFX_slime_impact != nullptr) {
+    Mix_FreeChunk(SFX_slime_impact);
   }
   if (SFX_monster_explosion != nullptr) {
     Mix_FreeChunk(SFX_monster_explosion);
@@ -1384,6 +1406,10 @@ bool Audio::IsMenuMusicPlaying() const {
 void Audio::PlayMonsterShot() { PlayChunk(SFX_monster_shot); };
 
 void Audio::PlayFireballWallHit() { PlayChunk(SFX_fireball_wall_hit); };
+
+void Audio::PlaySlimeShot() { PlayChunk(SFX_slime_shot); };
+
+void Audio::PlaySlimeImpact() { PlayChunk(SFX_slime_impact); };
 
 void Audio::PlayMonsterExplosion() { PlayChunk(SFX_monster_explosion); };
 

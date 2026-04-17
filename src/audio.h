@@ -48,6 +48,8 @@ public:
   bool IsMenuMusicPlaying() const;
   void PlayMonsterShot();
   void PlayFireballWallHit();
+  void PlaySlimeShot();
+  void PlaySlimeImpact();
   void PlayMonsterExplosion();
   void PlayMonsterFart();
   void PlayPacmanGag();
@@ -98,6 +100,8 @@ private:
   Mix_Chunk *SFX_start_trumpet;
   Mix_Chunk *SFX_monster_shot;
   Mix_Chunk *SFX_fireball_wall_hit;
+  Mix_Chunk *SFX_slime_shot;
+  Mix_Chunk *SFX_slime_impact;
   Mix_Chunk *SFX_monster_explosion;
   Mix_Chunk *SFX_monster_fart;
   Mix_Chunk *SFX_pacman_gag;

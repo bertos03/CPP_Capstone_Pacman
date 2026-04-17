@@ -47,6 +47,15 @@ struct Fireball {
   Uint32 segment_started_ticks;
   // Monster ID so self-hits can be ignored.
   int owner_id;
+  Uint32 step_duration_ms;
+};
+
+struct Slimeball {
+  MapCoord current_coord;
+  Directions direction;
+  Uint32 segment_started_ticks;
+  int owner_id;
+  Uint32 step_duration_ms;
 };
 
 struct GasCloud {
@@ -149,7 +158,8 @@ enum class EffectType {
   MonsterExplosion,
   WallImpact,
   DynamiteExplosion,
-  AirstrikeExplosion
+  AirstrikeExplosion,
+  SlimeSplash
 };
 
 struct GameEffect {
@@ -184,6 +194,7 @@ private:
   Uint32 death_started_ticks;
   MapCoord death_coord;
   std::vector<Fireball> fireballs;
+  std::vector<Slimeball> slimeballs;
   std::vector<GasCloud> gas_clouds;
   InvulnerabilityPotion invulnerability_potion;
   DynamitePickup dynamite_pickup;
@@ -207,6 +218,7 @@ private:
   void ApplyTeleporters();
   void TryTeleportElement(MapElement *element);
   void TryShootFireballs(Uint32 now);
+  void TryShootSlimeballs(Uint32 now);
   void TrySpawnGasClouds(Uint32 now);
   void ScheduleNextInvulnerabilityPotionSpawn(Uint32 now);
   void TrySpawnInvulnerabilityPotion(Uint32 now);
@@ -242,7 +254,9 @@ private:
   bool IsCellFreeForInvulnerabilityPotion(MapCoord coord) const;
   bool IsPacmanInvulnerable(Uint32 now) const;
   void UpdateFireballs(Uint32 now);
+  void UpdateSlimeballs(Uint32 now);
   void UpdateGasClouds(Uint32 now);
+  void ActivateSlimeCover(Uint32 now);
   void CleanupEffects(Uint32 now);
   void EliminateMonster(Monster *monster, Uint32 now);
 };

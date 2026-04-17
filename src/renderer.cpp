@@ -58,12 +58,20 @@ constexpr int kPacmanFramesPerDirection = 4;
 constexpr int kMonsterFramesPerDirection = 4;
 constexpr int kAirstrikeExplosionFrames = 5;
 constexpr int kFartCloudFrames = 4;
+constexpr int kSlimeSplashGridColumns = 3;
+constexpr int kSlimeSplashGridRows = 3;
 constexpr Uint32 kPacmanWalkFrameMs = 140;
 constexpr Uint32 kFartCloudOpenDurationMs = 320;
 constexpr Uint32 kFartCloudFrameMs =
     kFartCloudOpenDurationMs / kFartCloudFrames;
+constexpr Uint8 kSlimeBallBaseAlpha = 176;
+constexpr Uint8 kSlimeOverlayBaseAlpha = 140;
+constexpr Uint8 kSlimeSplashBaseAlpha = 176;
 constexpr double kMonsterRenderScale = 1.19;
 constexpr double kFartCloudRenderScale = 1.20;
+constexpr double kSlimeBallRenderScale = 1.00;
+constexpr double kSlimeOverlayRenderScale = 1.22;
+constexpr double kSlimeSplashRenderScale = 1.26;
 constexpr double kFartCloudDriftXFactor = 0.06;
 constexpr double kFartCloudDriftYFactor = 0.05;
 constexpr double kFartCloudScalePulseAmplitude = 0.04;
@@ -219,6 +227,9 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
       sdl_fart_cloud_texture(nullptr), sdl_fart_cloud_size{0, 0},
+      sdl_slime_ball_texture(nullptr), sdl_slime_ball_size{0, 0},
+      sdl_slime_overlay_texture(nullptr), sdl_slime_overlay_size{0, 0},
+      sdl_slime_splash_texture(nullptr), sdl_slime_splash_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -240,6 +251,9 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
       sdl_fart_cloud_texture(nullptr), sdl_fart_cloud_size{0, 0},
+      sdl_slime_ball_texture(nullptr), sdl_slime_ball_size{0, 0},
+      sdl_slime_overlay_texture(nullptr), sdl_slime_overlay_size{0, 0},
+      sdl_slime_splash_texture(nullptr), sdl_slime_splash_size{0, 0},
       sdl_font_hud(nullptr), sdl_font_menu(nullptr), sdl_font_logo(nullptr),
       sdl_font_display(nullptr), sdl_font_color{255, 255, 255, 255},
       sdl_font_back_color{COLOR_BACK, 255}, texW(0), texH(0) {
@@ -452,6 +466,12 @@ void Renderer::initializeRenderer(size_t row_count_value,
       sdl_airstrike_explosion_size, 12);
   sdl_fart_cloud_texture = loadTrimmedTexture(
       Paths::GetDataFilePath("fart_cloud_sheet.png"), sdl_fart_cloud_size);
+  sdl_slime_ball_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath("slime_ball.png"), sdl_slime_ball_size);
+  sdl_slime_overlay_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath("slime_overlay.png"), sdl_slime_overlay_size);
+  sdl_slime_splash_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath("slime_splash_sheet.png"), sdl_slime_splash_size);
   sdl_dynamite_texture = loadTrimmedTexture(Paths::GetDataFilePath("dynamite.png"),
                                             sdl_dynamite_size);
 }
@@ -496,6 +516,15 @@ Renderer::~Renderer() {
   }
   if (sdl_fart_cloud_texture != nullptr) {
     SDL_DestroyTexture(sdl_fart_cloud_texture);
+  }
+  if (sdl_slime_ball_texture != nullptr) {
+    SDL_DestroyTexture(sdl_slime_ball_texture);
+  }
+  if (sdl_slime_overlay_texture != nullptr) {
+    SDL_DestroyTexture(sdl_slime_overlay_texture);
+  }
+  if (sdl_slime_splash_texture != nullptr) {
+    SDL_DestroyTexture(sdl_slime_splash_texture);
   }
   if (sdl_dynamite_texture != nullptr) {
     SDL_DestroyTexture(sdl_dynamite_texture);
@@ -655,6 +684,7 @@ void Renderer::renderFrame(bool show_hud) {
     drawmonsters();
     drawgasclouds();
     drawfireballs();
+    drawslimeballs();
     drawactiveairstrike();
     draweffects();
   } else {
@@ -2659,6 +2689,7 @@ void Renderer::drawpacman() {
 
   const Uint32 now = SDL_GetTicks();
   const bool invulnerable = game->pacman->invulnerable_until_ticks > now;
+  const bool slimed = game->pacman->slimed_until_ticks > now;
   const bool walking =
       game->pacman->px_delta.x != 0 || game->pacman->px_delta.y != 0;
   const Directions facing_direction =
@@ -2671,6 +2702,66 @@ void Renderer::drawpacman() {
     drawDefeatEffect();
     return;
   }
+
+  const auto draw_slime_overlay = [&](const SDL_Rect &anchor_rect,
+                                      double rotation_degrees) {
+    if (!slimed) {
+      return;
+    }
+
+    const Uint32 fade_start_ticks =
+        (game->pacman->slimed_until_ticks >
+         static_cast<Uint32>(SLIME_OVERLAY_FADE_MS))
+            ? game->pacman->slimed_until_ticks -
+                  static_cast<Uint32>(SLIME_OVERLAY_FADE_MS)
+            : 0;
+    double alpha_factor = 1.0;
+    if (now >= fade_start_ticks) {
+      alpha_factor =
+          1.0 - std::clamp(static_cast<double>(now - fade_start_ticks) /
+                               static_cast<double>(SLIME_OVERLAY_FADE_MS),
+                           0.0, 1.0);
+    }
+    if (alpha_factor <= 0.0) {
+      return;
+    }
+
+    const int center_x = anchor_rect.x + anchor_rect.w / 2;
+    const int center_y = anchor_rect.y + anchor_rect.h / 2;
+    if (sdl_slime_overlay_texture != nullptr && sdl_slime_overlay_size.x > 0 &&
+        sdl_slime_overlay_size.y > 0) {
+      const int max_dimension = std::max(
+          1, static_cast<int>(std::lround(element_size * kSlimeOverlayRenderScale)));
+      const double scale =
+          static_cast<double>(max_dimension) /
+          static_cast<double>(std::max(sdl_slime_overlay_size.x,
+                                       sdl_slime_overlay_size.y));
+      const int draw_width = std::max(
+          1, static_cast<int>(std::lround(sdl_slime_overlay_size.x * scale)));
+      const int draw_height = std::max(
+          1, static_cast<int>(std::lround(sdl_slime_overlay_size.y * scale)));
+      const SDL_Rect overlay_rect{center_x - draw_width / 2,
+                                  center_y - draw_height / 2, draw_width,
+                                  draw_height};
+      SDL_SetTextureAlphaMod(
+          sdl_slime_overlay_texture,
+          static_cast<Uint8>(std::clamp(kSlimeOverlayBaseAlpha * alpha_factor,
+                                        0.0, 255.0)));
+      SDL_RenderCopyEx(sdl_renderer, sdl_slime_overlay_texture, nullptr,
+                       &overlay_rect, rotation_degrees, nullptr, SDL_FLIP_NONE);
+      SDL_SetTextureAlphaMod(sdl_slime_overlay_texture, 255);
+      return;
+    }
+
+    const Uint8 alpha = static_cast<Uint8>(
+        std::clamp(110.0 * alpha_factor, 0.0, 110.0));
+    SDL_SetRenderDrawColor(sdl_renderer, 78, 255, 88, alpha / 2);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                         std::max(8, anchor_rect.w / 2 + 5));
+    SDL_SetRenderDrawColor(sdl_renderer, 174, 255, 138, alpha);
+    SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                         std::max(8, anchor_rect.w / 2 + 6));
+  };
 
   if (game->pacman->teleport_animation_active) {
     const Uint32 elapsed =
@@ -2731,6 +2822,7 @@ void Renderer::drawpacman() {
       SDL_RenderCopyEx(sdl_renderer, pacman_texture, nullptr, &animated_rect,
                        rotation, nullptr, SDL_FLIP_NONE);
     }
+    draw_slime_overlay(animated_rect, rotation);
     return;
   }
 
@@ -2750,6 +2842,7 @@ void Renderer::drawpacman() {
   if (pacman_texture != nullptr) {
     SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr, &sdl_pacman_rect);
   }
+  draw_slime_overlay(sdl_pacman_rect, 0.0);
 }
 
 void Renderer::drawbonusflask() {
@@ -4160,7 +4253,7 @@ void Renderer::drawfireballs() {
     const PixelCoord end_px = getPixelCoord(next_coord, 0, 0);
     const double progress = std::clamp(
         static_cast<double>(SDL_GetTicks() - fireball.segment_started_ticks) /
-            static_cast<double>(FIREBALL_STEP_DURATION_MS),
+            static_cast<double>(std::max<Uint32>(1, fireball.step_duration_ms)),
         0.0, 1.0);
 
     const int start_center_x = start_px.x + element_size / 2;
@@ -4183,6 +4276,87 @@ void Renderer::drawfireballs() {
     SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
                          std::max(3, element_size / 6));
     SDL_SetRenderDrawColor(sdl_renderer, 255, 230, 140, 220);
+    SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, center_x, center_y);
+  }
+}
+
+void Renderer::drawslimeballs() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  for (const auto &slimeball : game->slimeballs) {
+    const MapCoord next_coord = StepRenderCoord(slimeball.current_coord,
+                                                slimeball.direction);
+    const PixelCoord start_px = getPixelCoord(slimeball.current_coord, 0, 0);
+    const PixelCoord end_px = getPixelCoord(next_coord, 0, 0);
+    const double progress = std::clamp(
+        static_cast<double>(now - slimeball.segment_started_ticks) /
+            static_cast<double>(std::max<Uint32>(1, slimeball.step_duration_ms)),
+        0.0, 1.0);
+
+    const int start_center_x = start_px.x + element_size / 2;
+    const int start_center_y = start_px.y + element_size / 2;
+    const int end_center_x = end_px.x + element_size / 2;
+    const int end_center_y = end_px.y + element_size / 2;
+    const int center_x =
+        start_center_x + static_cast<int>((end_center_x - start_center_x) * progress);
+    const int center_y =
+        start_center_y + static_cast<int>((end_center_y - start_center_y) * progress);
+
+    if (sdl_slime_ball_texture != nullptr && sdl_slime_ball_size.x > 0 &&
+        sdl_slime_ball_size.y > 0) {
+      const int max_dimension = std::max(
+          1, static_cast<int>(std::lround(element_size * kSlimeBallRenderScale)));
+      const double scale =
+          static_cast<double>(max_dimension) /
+          static_cast<double>(
+              std::max(sdl_slime_ball_size.x, sdl_slime_ball_size.y));
+      const int draw_width = std::max(
+          1, static_cast<int>(std::lround(sdl_slime_ball_size.x * scale)));
+      const int draw_height = std::max(
+          1, static_cast<int>(std::lround(sdl_slime_ball_size.y * scale)));
+      const SDL_Rect draw_rect{center_x - draw_width / 2,
+                               center_y - draw_height / 2, draw_width,
+                               draw_height};
+
+      double angle_degrees = 0.0;
+      switch (slimeball.direction) {
+      case Directions::Up:
+        angle_degrees = -90.0;
+        break;
+      case Directions::Down:
+        angle_degrees = 90.0;
+        break;
+      case Directions::Left:
+        angle_degrees = 180.0;
+        break;
+      case Directions::Right:
+      case Directions::None:
+      default:
+        angle_degrees = 0.0;
+        break;
+      }
+
+      SDL_SetTextureAlphaMod(sdl_slime_ball_texture, kSlimeBallBaseAlpha);
+      SDL_RenderCopyEx(sdl_renderer, sdl_slime_ball_texture, nullptr,
+                       &draw_rect, angle_degrees, nullptr, SDL_FLIP_NONE);
+      SDL_SetTextureAlphaMod(sdl_slime_ball_texture, 255);
+      continue;
+    }
+
+    const int trail_x =
+        center_x - static_cast<int>((end_center_x - start_center_x) * 0.28);
+    const int trail_y =
+        center_y - static_cast<int>((end_center_y - start_center_y) * 0.28);
+    SDL_SetRenderDrawColor(sdl_renderer, 88, 255, 72, 90);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                         std::max(4, element_size / 4));
+    SDL_SetRenderDrawColor(sdl_renderer, 174, 255, 112, 148);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                         std::max(3, element_size / 6));
+    SDL_SetRenderDrawColor(sdl_renderer, 148, 240, 96, 165);
     SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, center_x, center_y);
   }
 }
@@ -4456,6 +4630,70 @@ void Renderer::draweffects() {
         const int y2 = center_y + static_cast<int>(std::sin(angle) * length);
         SDL_SetRenderDrawColor(sdl_renderer, 255, 220, 120, alpha);
         SDL_RenderDrawLine(sdl_renderer, center_x, center_y, x2, y2);
+      }
+    } else if (effect.type == EffectType::SlimeSplash) {
+      const Uint32 animation_duration_ms =
+          SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT;
+      const int frame_index = std::clamp(
+          static_cast<int>(elapsed / std::max<Uint32>(1, SLIME_SPLASH_FRAME_MS)),
+          0, SLIME_SPLASH_FRAME_COUNT - 1);
+      double alpha_factor = 1.0;
+      if (elapsed > animation_duration_ms) {
+        alpha_factor =
+            1.0 -
+            std::clamp(static_cast<double>(elapsed - animation_duration_ms) /
+                           static_cast<double>(SLIME_SPLASH_FADE_MS),
+                       0.0, 1.0);
+      }
+
+      if (sdl_slime_splash_texture != nullptr && sdl_slime_splash_size.x > 0 &&
+          sdl_slime_splash_size.y > 0) {
+        const int column = frame_index % kSlimeSplashGridColumns;
+        const int row = frame_index / kSlimeSplashGridColumns;
+        const int src_x =
+            (column * sdl_slime_splash_size.x) / kSlimeSplashGridColumns;
+        const int src_x_next =
+            ((column + 1) * sdl_slime_splash_size.x) / kSlimeSplashGridColumns;
+        const int src_y =
+            (row * sdl_slime_splash_size.y) / kSlimeSplashGridRows;
+        const int src_y_next =
+            ((row + 1) * sdl_slime_splash_size.y) / kSlimeSplashGridRows;
+        const SDL_Rect src_rect{src_x, src_y, std::max(1, src_x_next - src_x),
+                                std::max(1, src_y_next - src_y)};
+        const int max_dimension = std::max(
+            1, static_cast<int>(std::lround(element_size * kSlimeSplashRenderScale)));
+        const double scale =
+            static_cast<double>(max_dimension) /
+            static_cast<double>(std::max(src_rect.w, src_rect.h));
+        const int draw_width =
+            std::max(1, static_cast<int>(std::lround(src_rect.w * scale)));
+        const int draw_height =
+            std::max(1, static_cast<int>(std::lround(src_rect.h * scale)));
+        const SDL_Rect dest_rect{center_x - draw_width / 2,
+                                 center_y - draw_height / 2, draw_width,
+                                 draw_height};
+
+        SDL_SetTextureAlphaMod(
+            sdl_slime_splash_texture,
+            static_cast<Uint8>(std::clamp(kSlimeSplashBaseAlpha * alpha_factor,
+                                          0.0, 255.0)));
+        SDL_RenderCopy(sdl_renderer, sdl_slime_splash_texture, &src_rect,
+                       &dest_rect);
+        SDL_SetTextureAlphaMod(sdl_slime_splash_texture, 255);
+      } else {
+        const double growth =
+            std::clamp(static_cast<double>(std::min(elapsed, animation_duration_ms)) /
+                           static_cast<double>(std::max<Uint32>(
+                               1, animation_duration_ms)),
+                       0.0, 1.0);
+        const int radius = std::max(
+            6, static_cast<int>(element_size * (0.18 + 0.34 * growth)));
+        const Uint8 alpha = static_cast<Uint8>(
+            std::clamp(180.0 * alpha_factor, 0.0, 180.0));
+        SDL_SetRenderDrawColor(sdl_renderer, 86, 255, 72, alpha / 2);
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y, radius + 3);
+        SDL_SetRenderDrawColor(sdl_renderer, 170, 255, 124, alpha);
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y, radius);
       }
     } else {
       const double progress =

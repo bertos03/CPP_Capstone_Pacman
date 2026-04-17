@@ -94,6 +94,7 @@ private:
   void drawLayoutEntities(const std::vector<std::string> &layout);
   void drawgasclouds();
   void drawfireballs();
+  void drawslimeballs();
   void draweffects();
   void drawDefeatEffect();
   void drawDefeatOverlay();
@@ -219,6 +220,12 @@ private:
   SDL_Point sdl_airstrike_explosion_size;
   SDL_Texture *sdl_fart_cloud_texture;
   SDL_Point sdl_fart_cloud_size;
+  SDL_Texture *sdl_slime_ball_texture;
+  SDL_Point sdl_slime_ball_size;
+  SDL_Texture *sdl_slime_overlay_texture;
+  SDL_Point sdl_slime_overlay_size;
+  SDL_Texture *sdl_slime_splash_texture;
+  SDL_Point sdl_slime_splash_size;
 
   TTF_Font *sdl_font_hud;
   TTF_Font *sdl_font_menu;

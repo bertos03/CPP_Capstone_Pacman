@@ -30,6 +30,7 @@ Pacman::Pacman(MapCoord _coord) {
   px_delta.y = 0;
   paralyzed_until_ticks = 0;
   invulnerable_until_ticks = 0;
+  slimed_until_ticks = 0;
   facing_direction = Directions::Down;
   teleport_animation_active = false;
   teleport_animation_started_ticks = 0;

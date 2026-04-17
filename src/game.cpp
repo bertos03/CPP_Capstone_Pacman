@@ -25,6 +25,8 @@ namespace {
 
 constexpr Uint32 kMonsterExplosionDurationMs = 900;
 constexpr Uint32 kWallImpactDurationMs = 180;
+constexpr Uint32 kSlimeSplashDurationMs =
+    SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT + SLIME_SPLASH_FADE_MS;
 constexpr Uint32 kDynamiteChainDelayMs = 140;
 constexpr float kAirstrikePlaneMarginCells = 2.0f;
 constexpr float kAirstrikePathSamplesPerCell = 14.0f;
@@ -399,8 +401,10 @@ void Game::Update() {
   }
 
   TryShootFireballs(now);
+  TryShootSlimeballs(now);
   TrySpawnGasClouds(now);
   UpdateFireballs(now);
+  UpdateSlimeballs(now);
   UpdateGasClouds(now);
   UpdateScheduledMonsterBlasts(now);
   if (dead) {
@@ -527,10 +531,39 @@ void Game::TryShootFireballs(Uint32 now) {
       continue;
     }
 
-    fireballs.push_back({monster->map_coord, direction, now, monster->id});
+    fireballs.push_back(
+        {monster->map_coord, direction, now, monster->id,
+         tuning.fireball_step_duration_ms});
     monster->last_fireball_ticks = now;
 #ifdef AUDIO
     audio->PlayMonsterShot();
+#endif
+  }
+}
+
+void Game::TryShootSlimeballs(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  for (auto monster : monsters) {
+    if (!monster->is_alive || monster->monster_char != MONSTER_EXTRA) {
+      continue;
+    }
+
+    if (monster->last_fireball_ticks != 0 &&
+        now - monster->last_fireball_ticks < tuning.fireball_cooldown_ms) {
+      continue;
+    }
+
+    Directions direction = Directions::None;
+    if (!HasLineOfSight(map, monster->map_coord, pacman->map_coord, direction)) {
+      continue;
+    }
+
+    slimeballs.push_back(
+        {monster->map_coord, direction, now, monster->id,
+         tuning.fireball_step_duration_ms});
+    monster->last_fireball_ticks = now;
+#ifdef AUDIO
+    audio->PlaySlimeShot();
 #endif
   }
 }
@@ -640,6 +673,12 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
     }
   }
 
+  for (const auto &slimeball : slimeballs) {
+    if (SameCoord(coord, slimeball.current_coord)) {
+      return false;
+    }
+  }
+
   for (const auto &cloud : gas_clouds) {
     if (SameCoord(coord, cloud.coord)) {
       return false;
@@ -679,6 +718,12 @@ bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
 
   for (const auto &fireball : fireballs) {
     if (SameCoord(coord, fireball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &slimeball : slimeballs) {
+    if (SameCoord(coord, slimeball.current_coord)) {
       return false;
     }
   }
@@ -756,6 +801,12 @@ bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
     }
   }
 
+  for (const auto &slimeball : slimeballs) {
+    if (SameCoord(coord, slimeball.current_coord)) {
+      return false;
+    }
+  }
+
   for (const auto &cloud : gas_clouds) {
     if (SameCoord(coord, cloud.coord)) {
       return false;
@@ -811,6 +862,12 @@ bool Game::IsCellFreeForWalkieTalkiePickup(MapCoord coord) const {
 
   for (const auto &fireball : fireballs) {
     if (SameCoord(coord, fireball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &slimeball : slimeballs) {
+    if (SameCoord(coord, slimeball.current_coord)) {
       return false;
     }
   }
@@ -1518,14 +1575,13 @@ bool Game::IsPacmanInvulnerable(Uint32 now) const {
 }
 
 void Game::UpdateFireballs(Uint32 now) {
-  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   for (size_t index = 0; index < fireballs.size();) {
     Fireball &fireball = fireballs[index];
+    const Uint32 step_duration_ms = std::max<Uint32>(1, fireball.step_duration_ms);
     bool remove_fireball = false;
 
     while (!remove_fireball &&
-           now - fireball.segment_started_ticks >=
-               tuning.fireball_step_duration_ms) {
+           now - fireball.segment_started_ticks >= step_duration_ms) {
       MapCoord next_coord = StepCoord(fireball.current_coord, fireball.direction);
 
       if (map->map_entry(next_coord.u, next_coord.v) == ElementType::TYPE_WALL) {
@@ -1538,7 +1594,7 @@ void Game::UpdateFireballs(Uint32 now) {
       }
 
       fireball.current_coord = next_coord;
-      fireball.segment_started_ticks += tuning.fireball_step_duration_ms;
+      fireball.segment_started_ticks += step_duration_ms;
 
       if (SameCoord(pacman->map_coord, fireball.current_coord)) {
 #ifdef AUDIO
@@ -1566,6 +1622,54 @@ void Game::UpdateFireballs(Uint32 now) {
 
     if (remove_fireball) {
       fireballs.erase(fireballs.begin() + static_cast<long>(index));
+    } else {
+      index++;
+    }
+  }
+}
+
+void Game::UpdateSlimeballs(Uint32 now) {
+  for (size_t index = 0; index < slimeballs.size();) {
+    Slimeball &slimeball = slimeballs[index];
+    const Uint32 step_duration_ms =
+        std::max<Uint32>(1, slimeball.step_duration_ms);
+    bool remove_slimeball = false;
+
+    while (!remove_slimeball &&
+           now - slimeball.segment_started_ticks >= step_duration_ms) {
+      MapCoord next_coord = StepCoord(slimeball.current_coord, slimeball.direction);
+
+      if (map->map_entry(next_coord.u, next_coord.v) == ElementType::TYPE_WALL) {
+        effects.push_back({next_coord, now, EffectType::SlimeSplash, 1});
+#ifdef AUDIO
+        audio->PlaySlimeImpact();
+#endif
+        remove_slimeball = true;
+        break;
+      }
+
+      slimeball.current_coord = next_coord;
+      slimeball.segment_started_ticks += step_duration_ms;
+
+      if (SameCoord(pacman->map_coord, slimeball.current_coord)) {
+#ifdef AUDIO
+        audio->PlaySlimeImpact();
+#endif
+        if (!IsPacmanInvulnerable(now)) {
+          pacman->paralyzed_until_ticks =
+              std::max(pacman->paralyzed_until_ticks,
+                       now + static_cast<Uint32>(PACMAN_PARALYSIS_MS));
+          pacman->px_delta.x = 0;
+          pacman->px_delta.y = 0;
+          ActivateSlimeCover(now);
+        }
+        remove_slimeball = true;
+        break;
+      }
+    }
+
+    if (remove_slimeball) {
+      slimeballs.erase(slimeballs.begin() + static_cast<long>(index));
     } else {
       index++;
     }
@@ -1604,6 +1708,13 @@ void Game::UpdateGasClouds(Uint32 now) {
   }
 }
 
+void Game::ActivateSlimeCover(Uint32 now) {
+  pacman->slimed_until_ticks =
+      std::max(pacman->slimed_until_ticks,
+               now + static_cast<Uint32>(SLIME_OVERLAY_HOLD_MS +
+                                         SLIME_OVERLAY_FADE_MS));
+}
+
 void Game::CleanupEffects(Uint32 now) {
   effects.erase(
       std::remove_if(effects.begin(), effects.end(),
@@ -1621,6 +1732,8 @@ void Game::CleanupEffects(Uint32 now) {
                        } else if (effect.type ==
                                   EffectType::AirstrikeExplosion) {
                          max_age = AIRSTRIKE_EXPLOSION_DURATION_MS;
+                       } else if (effect.type == EffectType::SlimeSplash) {
+                         max_age = kSlimeSplashDurationMs;
                        }
                        return now - effect.started_ticks > max_age;
                      }),

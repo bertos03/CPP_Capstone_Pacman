@@ -2,9 +2,9 @@ Kleine Tore
 xxxxxxxxxxxxxxxxxxxxxx
 xP..............xG..xx
 x.x.x.xxxxx.x.x.x.x.xx
-x...x...........x...xx
+x...x......K....x...xx
 xxx.xxxxxxxxx.xxxxx.xx
-x...................xx
+x..K......K.........xx
 x.xxxxx.xxx.x.x.xxxxxx
 x.x...x.......xG...Gxx
 x.x.x.x.xxxxxxxxxxx.xx
