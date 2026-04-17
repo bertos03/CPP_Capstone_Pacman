@@ -108,6 +108,16 @@ struct WalkieTalkiePickup {
   bool is_fading = false;
 };
 
+struct RocketPickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
 struct PlacedDynamite {
   MapCoord coord{0, 0};
   Uint32 placed_ticks = 0;
@@ -154,6 +164,14 @@ struct ActiveAirstrike {
   std::vector<AirstrikeBomb> bombs;
 };
 
+struct RocketProjectile {
+  MapCoord current_coord{0, 0};
+  Directions direction = Directions::Right;
+  Uint32 segment_started_ticks = 0;
+  Uint32 step_duration_ms = 0;
+  int animation_seed = 0;
+};
+
 enum class EffectType {
   MonsterExplosion,
   WallImpact,
@@ -163,10 +181,12 @@ enum class EffectType {
 };
 
 struct GameEffect {
-  MapCoord coord;
-  Uint32 started_ticks;
-  EffectType type;
-  int radius_cells;
+  MapCoord coord{0, 0};
+  Uint32 started_ticks = 0;
+  EffectType type = EffectType::WallImpact;
+  int radius_cells = 0;
+  bool has_precise_world_center = false;
+  SDL_FPoint precise_world_center{0.0f, 0.0f};
 };
 
 class Game {
@@ -200,16 +220,19 @@ private:
   DynamitePickup dynamite_pickup;
   PlasticExplosivePickup plastic_explosive_pickup;
   WalkieTalkiePickup walkie_talkie_pickup;
+  RocketPickup rocket_pickup;
   std::vector<PlacedDynamite> placed_dynamites;
   PlacedPlasticExplosive placed_plastic_explosive;
   bool plastic_explosive_is_armed;
   ActiveAirstrike active_airstrike;
+  std::vector<RocketProjectile> active_rockets;
   std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
   Uint32 last_update_ticks;
   int dynamite_inventory;
   int plastic_explosive_inventory;
   int airstrike_inventory;
+  int rocket_inventory;
   friend class Renderer;
   bool dead;
   bool win;
@@ -236,18 +259,26 @@ private:
   void ScheduleNextWalkieTalkieSpawn(Uint32 now);
   void TrySpawnWalkieTalkie(Uint32 now);
   void UpdateWalkieTalkiePickup(Uint32 now);
+  void ScheduleNextRocketSpawn(Uint32 now);
+  void TrySpawnRocket(Uint32 now);
+  void UpdateRocketPickup(Uint32 now);
   void TryUseAirstrike(Uint32 now);
+  void TryFireRocket(Uint32 now);
   void UpdateAirstrike(Uint32 now);
+  void UpdateRockets(Uint32 now);
   void UpdatePlacedDynamites(Uint32 now);
   void DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now);
   void DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
                                 Uint32 now);
   void DetonateAirstrikeBomb(const AirstrikeBomb &bomb, Uint32 now);
+  void DetonateRocket(const RocketProjectile &rocket, MapCoord impact_coord,
+                      Monster *hit_monster, bool hit_wall, Uint32 now);
   void UpdateScheduledMonsterBlasts(Uint32 now);
   void ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks);
   bool IsCellFreeForDynamitePickup(MapCoord coord) const;
   bool IsCellFreeForPlasticExplosivePickup(MapCoord coord) const;
   bool IsCellFreeForWalkieTalkiePickup(MapCoord coord) const;
+  bool IsCellFreeForRocketPickup(MapCoord coord) const;
   bool CanPlacePlasticExplosiveAt(MapCoord coord) const;
   bool IsWithinRadius(MapCoord center, MapCoord target, int radius_cells) const;
   bool IsWithinDynamiteRadius(MapCoord center, MapCoord target) const;
@@ -258,6 +289,7 @@ private:
   void UpdateGasClouds(Uint32 now);
   void ActivateSlimeCover(Uint32 now);
   void CleanupEffects(Uint32 now);
+  void EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now);
   void EliminateMonster(Monster *monster, Uint32 now);
 };
 

@@ -218,10 +218,12 @@ Audio::Audio() {
   SFX_plastic_explosive_wall_break = nullptr;
   SFX_airstrike_radio = nullptr;
   SFX_airstrike_explosion = nullptr;
+  SFX_rocket_launch = nullptr;
   SFX_invulnerability_loop = nullptr;
   menu_music = nullptr;
   win_music = nullptr;
   lose_music = nullptr;
+  rocket_launch_channel = 0;
   invulnerability_loop_channel = -1;
   menu_music_active = false;
 
@@ -239,6 +241,7 @@ Audio::Audio() {
   ClearMenuSpectrumLevels();
   Mix_SetPostMix(MenuSpectrumPostMix, nullptr);
   Mix_AllocateChannels(32);
+  Mix_ReserveChannels(1);
 
   const std::string coin_sound_path = Paths::GetDataFilePath("coin.wav");
   const std::string win_sound_path = Paths::GetDataFilePath("win.wav");
@@ -262,6 +265,8 @@ Audio::Audio() {
       Paths::GetDataFilePath("airstrike_radio.wav");
   const std::string airstrike_explosion_sound_path =
       Paths::GetDataFilePath("airstrike_explosion.wav");
+  const std::string rocket_launch_sound_path =
+      Paths::GetDataFilePath("rocket_launch.mp3");
   const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
   const std::string win_music_path = Paths::GetDataFilePath("win_melody.mp3");
   const std::string lose_music_path = Paths::GetDataFilePath("lose_melody.mp3");
@@ -328,6 +333,11 @@ Audio::Audio() {
   if (SFX_airstrike_explosion == nullptr) {
     SFX_airstrike_explosion = CreateDynamiteExplosionChunk();
   }
+  SFX_rocket_launch = Mix_LoadWAV(rocket_launch_sound_path.c_str());
+  if (SFX_rocket_launch == nullptr) {
+    SFX_rocket_launch =
+        CreateSynthChunk({196, 247, 294}, 420, 0.34, 4.0, 90.0);
+  }
   SFX_invulnerability_loop = CreateInvulnerabilityLoopChunk();
   menu_music = Mix_LoadMUS(menu_music_path.c_str());
   if (menu_music == nullptr) {
@@ -360,6 +370,7 @@ Audio::Audio() {
       SFX_plastic_explosive_wall_break == nullptr ||
       SFX_airstrike_radio == nullptr ||
       SFX_airstrike_explosion == nullptr ||
+      SFX_rocket_launch == nullptr ||
       SFX_invulnerability_loop == nullptr) {
     std::cerr << "Failed to load SFX: " << Mix_GetError() << "\n";
     return;
@@ -457,6 +468,9 @@ Audio::~Audio() {
   }
   if (SFX_airstrike_explosion != nullptr) {
     Mix_FreeChunk(SFX_airstrike_explosion);
+  }
+  if (SFX_rocket_launch != nullptr) {
+    Mix_FreeChunk(SFX_rocket_launch);
   }
   if (SFX_invulnerability_loop != nullptr) {
     Mix_FreeChunk(SFX_invulnerability_loop);
@@ -1446,6 +1460,23 @@ void Audio::PlayPlasticExplosiveWallBreak() {
 void Audio::PlayAirstrikeRadio() { PlayChunk(SFX_airstrike_radio); };
 
 void Audio::PlayAirstrikeExplosion() { PlayChunk(SFX_airstrike_explosion); };
+
+void Audio::PlayRocketLaunch() {
+  if (!audio_ready || SFX_rocket_launch == nullptr) {
+    return;
+  }
+
+  Mix_HaltChannel(rocket_launch_channel);
+  Mix_PlayChannel(rocket_launch_channel, SFX_rocket_launch, 0);
+};
+
+void Audio::StopRocketLaunch() {
+  if (!audio_ready) {
+    return;
+  }
+
+  Mix_HaltChannel(rocket_launch_channel);
+}
 
 Uint32 Audio::GetAirstrikeRadioDurationMs() const {
   if (!audio_ready || SFX_airstrike_radio == nullptr) {

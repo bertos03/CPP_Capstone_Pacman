@@ -34,6 +34,7 @@ public:
   bool ConsumePlaceDynamiteRequest();
   bool ConsumePlacePlasticExplosiveRequest();
   bool ConsumeAirstrikeRequest();
+  bool ConsumeRocketRequest();
 
 protected:
 private:
@@ -43,6 +44,7 @@ private:
   bool place_dynamite_requested;
   bool place_plastic_explosive_requested;
   bool airstrike_requested;
+  bool rocket_requested;
 };
 
 #endif

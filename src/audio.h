@@ -65,6 +65,8 @@ public:
   void PlayPlasticExplosiveWallBreak();
   void PlayAirstrikeRadio();
   void PlayAirstrikeExplosion();
+  void PlayRocketLaunch();
+  void StopRocketLaunch();
   Uint32 GetAirstrikeRadioDurationMs() const;
   void StartInvulnerabilityLoop();
   void StopInvulnerabilityLoop();
@@ -116,10 +118,12 @@ private:
   Mix_Chunk *SFX_plastic_explosive_wall_break;
   Mix_Chunk *SFX_airstrike_radio;
   Mix_Chunk *SFX_airstrike_explosion;
+  Mix_Chunk *SFX_rocket_launch;
   Mix_Chunk *SFX_invulnerability_loop;
   Mix_Music *menu_music;
   Mix_Music *win_music;
   Mix_Music *lose_music;
+  int rocket_launch_channel;
   int invulnerability_loop_channel;
   bool menu_music_active;
   bool audio_ready;

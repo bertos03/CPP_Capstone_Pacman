@@ -56,6 +56,7 @@ constexpr Uint8 kStartMenuLedBorderAlpha = 132;
 constexpr double kLogoPi = 3.14159265358979323846;
 constexpr int kPacmanFramesPerDirection = 4;
 constexpr int kMonsterFramesPerDirection = 4;
+constexpr int kRocketFlightFrames = 2;
 constexpr int kAirstrikeExplosionFrames = 5;
 constexpr int kFartCloudFrames = 4;
 constexpr int kSlimeSplashGridColumns = 3;
@@ -75,6 +76,7 @@ constexpr double kSlimeSplashRenderScale = 1.26;
 constexpr double kFartCloudDriftXFactor = 0.06;
 constexpr double kFartCloudDriftYFactor = 0.05;
 constexpr double kFartCloudScalePulseAmplitude = 0.04;
+constexpr double kRocketSpriteAngleOffsetDegrees = 0.0;
 
 struct MonsterSpriteDescriptor {
   char monster_char;
@@ -210,6 +212,21 @@ MapCoord StepRenderCoord(MapCoord coord, Directions direction) {
   return coord;
 }
 
+double DirectionAngleDegrees(Directions direction) {
+  switch (direction) {
+  case Directions::Up:
+    return -90.0;
+  case Directions::Down:
+    return 90.0;
+  case Directions::Left:
+    return 180.0;
+  case Directions::Right:
+  case Directions::None:
+  default:
+    return 0.0;
+  }
+}
+
 } // namespace
 
 Renderer::Renderer(Map *_map, Game *_game)
@@ -224,6 +241,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
       sdl_lose_screen_texture(nullptr), sdl_lose_screen_size{0, 0},
       sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
+      sdl_rocket_texture(nullptr), sdl_rocket_size{0, 0},
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
       sdl_fart_cloud_texture(nullptr), sdl_fart_cloud_size{0, 0},
@@ -248,6 +266,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
       sdl_lose_screen_texture(nullptr), sdl_lose_screen_size{0, 0},
       sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
+      sdl_rocket_texture(nullptr), sdl_rocket_size{0, 0},
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
       sdl_fart_cloud_texture(nullptr), sdl_fart_cloud_size{0, 0},
@@ -459,6 +478,35 @@ void Renderer::initializeRenderer(size_t row_count_value,
       Paths::GetDataFilePath("lose_screen_defeat.png"), sdl_lose_screen_size);
   sdl_walkie_talkie_texture = loadTrimmedChromaKeyTexture(
       Paths::GetDataFilePath("walkie_talkie.png"), sdl_walkie_talkie_size, 26);
+  sdl_rocket_texture =
+      loadTrimmedTexture(Paths::GetDataFilePath("rocket.png"), sdl_rocket_size);
+  sdl_rocket_flight_textures.clear();
+  sdl_rocket_flight_sizes.clear();
+  sdl_rocket_flight_textures.reserve(kRocketFlightFrames);
+  sdl_rocket_flight_sizes.reserve(kRocketFlightFrames);
+  for (int frame_index = 1; frame_index <= kRocketFlightFrames; ++frame_index) {
+    const std::string rocket_frame_path =
+        Paths::GetDataFilePath("rocket_flight_" + std::to_string(frame_index) +
+                               ".png");
+    SDL_Surface *rocket_frame_surface = IMG_Load(rocket_frame_path.c_str());
+    if (rocket_frame_surface == nullptr) {
+      std::cerr << "Could not open rocket sprite frame " << rocket_frame_path
+                << ": " << IMG_GetError() << "\n";
+      exit(1);
+    }
+
+    sdl_rocket_flight_sizes.push_back(
+        SDL_Point{rocket_frame_surface->w, rocket_frame_surface->h});
+    SDL_Texture *rocket_frame_texture =
+        SDL_CreateTextureFromSurface(sdl_renderer, rocket_frame_surface);
+    SDL_FreeSurface(rocket_frame_surface);
+    if (rocket_frame_texture == nullptr) {
+      std::cerr << "Could not create rocket sprite texture: " << SDL_GetError()
+                << "\n";
+      exit(1);
+    }
+    sdl_rocket_flight_textures.push_back(rocket_frame_texture);
+  }
   sdl_airstrike_plane_texture = loadTrimmedChromaKeyTexture(
       Paths::GetDataFilePath("airstrike_plane.png"), sdl_airstrike_plane_size, 26);
   sdl_airstrike_explosion_texture = loadTrimmedChromaKeyTexture(
@@ -507,6 +555,14 @@ Renderer::~Renderer() {
   }
   if (sdl_walkie_talkie_texture != nullptr) {
     SDL_DestroyTexture(sdl_walkie_talkie_texture);
+  }
+  if (sdl_rocket_texture != nullptr) {
+    SDL_DestroyTexture(sdl_rocket_texture);
+  }
+  for (SDL_Texture *rocket_flight_texture : sdl_rocket_flight_textures) {
+    if (rocket_flight_texture != nullptr) {
+      SDL_DestroyTexture(rocket_flight_texture);
+    }
   }
   if (sdl_airstrike_plane_texture != nullptr) {
     SDL_DestroyTexture(sdl_airstrike_plane_texture);
@@ -678,6 +734,7 @@ void Renderer::renderFrame(bool show_hud) {
     drawdynamitepickup();
     drawplasticexplosivepickup();
     drawwalkietalkiepickup();
+    drawrocketpickup();
     drawpacman();
     drawplaceddynamites();
     drawplacedplasticexplosive();
@@ -685,6 +742,7 @@ void Renderer::renderFrame(bool show_hud) {
     drawgasclouds();
     drawfireballs();
     drawslimeballs();
+    drawrockets();
     drawactiveairstrike();
     draweffects();
   } else {
@@ -762,11 +820,14 @@ void Renderer::drawhud() {
       std::to_string(game->plastic_explosive_inventory) + "x";
   const std::string airstrike_text =
       std::to_string(game->airstrike_inventory) + "x";
+  const std::string rocket_text =
+      std::to_string(game->rocket_inventory) + "x";
   int title_width = 0;
   int score_width = 0;
   int dynamite_text_width = 0;
   int plastic_explosive_text_width = 0;
   int airstrike_text_width = 0;
+  int rocket_text_width = 0;
   TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
   if (game->dynamite_inventory > 0) {
@@ -781,6 +842,9 @@ void Renderer::drawhud() {
     TTF_SizeUTF8(sdl_font_hud, airstrike_text.c_str(), &airstrike_text_width,
                  nullptr);
   }
+  if (game->rocket_inventory > 0) {
+    TTF_SizeUTF8(sdl_font_hud, rocket_text.c_str(), &rocket_text_width, nullptr);
+  }
 
   const int line_top = hud_top_y;
   const int hud_gap = std::max(14, element_size / 2);
@@ -794,6 +858,9 @@ void Renderer::drawhud() {
   }
   if (game->airstrike_inventory > 0) {
     line_width += hud_gap + icon_size + 10 + airstrike_text_width;
+  }
+  if (game->rocket_inventory > 0) {
+    line_width += hud_gap + icon_size + 10 + rocket_text_width;
   }
 
   int cursor_x = screen_res_x / 2 - line_width / 2;
@@ -837,6 +904,19 @@ void Renderer::drawhud() {
         icon_rect, 255, static_cast<double>(SDL_GetTicks()) / 220.0);
     cursor_x += icon_rect.w + 10;
     renderTextLeft(sdl_font_hud, airstrike_text, sdl_font_color, cursor_x,
+                   line_top);
+    cursor_x += airstrike_text_width;
+  }
+
+  if (game->rocket_inventory > 0) {
+    cursor_x += hud_gap;
+    const SDL_Rect icon_rect{
+        cursor_x,
+        line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
+        icon_size, icon_size};
+    drawRocketIcon(icon_rect, 255, static_cast<double>(SDL_GetTicks()) / 190.0);
+    cursor_x += icon_rect.w + 10;
+    renderTextLeft(sdl_font_hud, rocket_text, sdl_font_color, cursor_x,
                    line_top);
   }
 
@@ -2980,6 +3060,133 @@ void Renderer::drawWalkieTalkieIcon(const SDL_Rect &icon_rect, Uint8 alpha,
   SDL_RenderFillRect(sdl_renderer, &fallback_rect);
 }
 
+void Renderer::drawRocketIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                              double animation_clock) {
+  if (icon_rect.w <= 0 || icon_rect.h <= 0) {
+    return;
+  }
+
+  if (sdl_rocket_texture != nullptr && sdl_rocket_size.x > 0 &&
+      sdl_rocket_size.y > 0) {
+    const double scale_by_width =
+        static_cast<double>(icon_rect.w) / static_cast<double>(sdl_rocket_size.x);
+    const double scale_by_height =
+        static_cast<double>(icon_rect.h) / static_cast<double>(sdl_rocket_size.y);
+    const double scale = std::min(scale_by_width, scale_by_height);
+    const int draw_width = std::max(
+        1, static_cast<int>(std::lround(sdl_rocket_size.x * scale)));
+    const int draw_height = std::max(
+        1, static_cast<int>(std::lround(sdl_rocket_size.y * scale)));
+    const int bob_offset = static_cast<int>(
+        std::lround(std::sin(animation_clock) * icon_rect.h * 0.04));
+    const SDL_Rect draw_rect{icon_rect.x + (icon_rect.w - draw_width) / 2,
+                             icon_rect.y + (icon_rect.h - draw_height) / 2 +
+                                 bob_offset,
+                             draw_width, draw_height};
+    SDL_SetTextureBlendMode(sdl_rocket_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(sdl_rocket_texture, alpha);
+    SDL_RenderCopy(sdl_renderer, sdl_rocket_texture, nullptr, &draw_rect);
+    SDL_SetTextureAlphaMod(sdl_rocket_texture, 255);
+    return;
+  }
+
+  const int center_x = icon_rect.x + icon_rect.w / 2;
+  const int center_y = icon_rect.y + icon_rect.h / 2;
+  const int body_width = std::max(6, icon_rect.w / 3);
+  const int body_height = std::max(10, icon_rect.h / 2);
+  SDL_Rect body_rect{center_x - body_width / 2, center_y - body_height / 4,
+                     body_width, body_height};
+  SDL_SetRenderDrawColor(sdl_renderer, 132, 164, 196, alpha);
+  SDL_RenderFillRect(sdl_renderer, &body_rect);
+  SDL_SetRenderDrawColor(sdl_renderer, 228, 82, 52, alpha);
+  SDL_RenderDrawLine(sdl_renderer, center_x, icon_rect.y, body_rect.x,
+                     body_rect.y + body_rect.h / 3);
+  SDL_RenderDrawLine(sdl_renderer, center_x, icon_rect.y,
+                     body_rect.x + body_rect.w, body_rect.y + body_rect.h / 3);
+  SDL_RenderDrawLine(sdl_renderer, center_x, icon_rect.y, center_x,
+                     body_rect.y + body_rect.h / 3);
+  SDL_RenderDrawLine(sdl_renderer, body_rect.x, body_rect.y + body_rect.h,
+                     body_rect.x - std::max(2, icon_rect.w / 8),
+                     body_rect.y + body_rect.h - std::max(2, icon_rect.h / 5));
+  SDL_RenderDrawLine(sdl_renderer, body_rect.x + body_rect.w,
+                     body_rect.y + body_rect.h,
+                     body_rect.x + body_rect.w + std::max(2, icon_rect.w / 8),
+                     body_rect.y + body_rect.h - std::max(2, icon_rect.h / 5));
+}
+
+void Renderer::drawRocketFlight(const SDL_FPoint &center, Directions direction,
+                                int max_dimension, int frame_index,
+                                Uint8 alpha) {
+  if (max_dimension <= 0) {
+    return;
+  }
+
+  const double angle_degrees =
+      DirectionAngleDegrees(direction) + kRocketSpriteAngleOffsetDegrees;
+  const int normalized_frame =
+      ((frame_index % kRocketFlightFrames) + kRocketFlightFrames) %
+      kRocketFlightFrames;
+  if (normalized_frame < static_cast<int>(sdl_rocket_flight_textures.size()) &&
+      normalized_frame < static_cast<int>(sdl_rocket_flight_sizes.size()) &&
+      sdl_rocket_flight_textures[static_cast<size_t>(normalized_frame)] != nullptr &&
+      sdl_rocket_flight_sizes[static_cast<size_t>(normalized_frame)].x > 0 &&
+      sdl_rocket_flight_sizes[static_cast<size_t>(normalized_frame)].y > 0) {
+    SDL_Texture *frame_texture =
+        sdl_rocket_flight_textures[static_cast<size_t>(normalized_frame)];
+    const SDL_Point frame_size =
+        sdl_rocket_flight_sizes[static_cast<size_t>(normalized_frame)];
+    const int dominant_dimension = std::max(frame_size.x, frame_size.y);
+    const double scale =
+        static_cast<double>(max_dimension) / static_cast<double>(dominant_dimension);
+    const float draw_width = static_cast<float>(
+        std::max(1, static_cast<int>(std::lround(frame_size.x * scale))));
+    const float draw_height = static_cast<float>(
+        std::max(1, static_cast<int>(std::lround(frame_size.y * scale))));
+
+    SDL_FRect shadow_rect{center.x - draw_width / 2.0f + 5.0f,
+                          center.y - draw_height / 2.0f + 6.0f, draw_width,
+                          draw_height};
+    SDL_SetTextureBlendMode(frame_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureColorMod(frame_texture, 0, 0, 0);
+    SDL_SetTextureAlphaMod(
+        frame_texture,
+        static_cast<Uint8>(std::clamp(static_cast<int>(alpha / 3), 0, 96)));
+    SDL_RenderCopyExF(sdl_renderer, frame_texture, nullptr, &shadow_rect,
+                      angle_degrees, nullptr, SDL_FLIP_NONE);
+
+    SDL_FRect draw_rect{center.x - draw_width / 2.0f,
+                        center.y - draw_height / 2.0f, draw_width,
+                        draw_height};
+    SDL_SetTextureColorMod(frame_texture, 255, 255, 255);
+    SDL_SetTextureAlphaMod(frame_texture, alpha);
+    SDL_RenderCopyExF(sdl_renderer, frame_texture, nullptr, &draw_rect,
+                      angle_degrees, nullptr, SDL_FLIP_NONE);
+    SDL_SetTextureAlphaMod(frame_texture, 255);
+    return;
+  }
+
+  if (sdl_rocket_texture != nullptr && sdl_rocket_size.x > 0 &&
+      sdl_rocket_size.y > 0) {
+    const int dominant_dimension =
+        std::max(sdl_rocket_size.x, sdl_rocket_size.y);
+    const double scale =
+        static_cast<double>(max_dimension) / static_cast<double>(dominant_dimension);
+    const float draw_width = static_cast<float>(
+        std::max(1, static_cast<int>(std::lround(sdl_rocket_size.x * scale))));
+    const float draw_height = static_cast<float>(
+        std::max(1, static_cast<int>(std::lround(sdl_rocket_size.y * scale))));
+    SDL_FRect draw_rect{center.x - draw_width / 2.0f,
+                        center.y - draw_height / 2.0f, draw_width,
+                        draw_height};
+    SDL_SetTextureBlendMode(sdl_rocket_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(sdl_rocket_texture, alpha);
+    SDL_RenderCopyExF(sdl_renderer, sdl_rocket_texture, nullptr, &draw_rect,
+                      angle_degrees + 90.0, nullptr, SDL_FLIP_NONE);
+    SDL_SetTextureAlphaMod(sdl_rocket_texture, 255);
+    return;
+  }
+}
+
 void Renderer::drawAirstrikePlane(const SDL_FPoint &center,
                                   double angle_degrees, int max_dimension,
                                   double wobble_phase) {
@@ -3358,6 +3565,52 @@ void Renderer::drawwalkietalkiepickup() {
   drawWalkieTalkieIcon(icon_rect, body_alpha, animation_clock);
 }
 
+void Renderer::drawrocketpickup() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const auto &rocket = game->rocket_pickup;
+  if (!rocket.is_visible) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  double alpha_factor = 1.0;
+  if (rocket.is_fading) {
+    alpha_factor =
+        1.0 - std::clamp(static_cast<double>(now - rocket.fade_started_ticks) /
+                             static_cast<double>(ROCKET_FADE_MS),
+                         0.0, 1.0);
+  }
+  if (alpha_factor <= 0.0) {
+    return;
+  }
+
+  const PixelCoord pickup_px = getPixelCoord(rocket.coord, 0, 0);
+  const int center_x = pickup_px.x + element_size / 2;
+  const int center_y = pickup_px.y + element_size / 2;
+  const double animation_clock =
+      static_cast<double>(now + rocket.animation_seed * 31) / 190.0;
+  const double pulse = 0.84 + 0.16 * std::sin(animation_clock);
+  const Uint8 glow_alpha = static_cast<Uint8>(
+      std::clamp(118.0 * alpha_factor, 0.0, 156.0));
+  const Uint8 body_alpha = static_cast<Uint8>(
+      std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 112, 46, glow_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(8, static_cast<int>(element_size * 0.29 * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 210, 124, glow_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(10, static_cast<int>(element_size * 0.40 * pulse)));
+
+  const int icon_size = std::max(12, static_cast<int>(element_size * 0.82));
+  const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
+                           icon_size, icon_size};
+  drawRocketIcon(icon_rect, body_alpha, animation_clock);
+}
+
 void Renderer::drawplaceddynamites() {
   if (game == nullptr) {
     return;
@@ -3506,6 +3759,39 @@ void Renderer::drawactiveairstrike() {
     SDL_RenderFillCircle(sdl_renderer, bomb_center_x,
                          bomb_center_y - std::max(1, bomb_radius / 2),
                          std::max(1, bomb_radius / 2));
+  }
+}
+
+void Renderer::drawrockets() {
+  if (game == nullptr) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  for (const auto &rocket : game->active_rockets) {
+    const Uint32 step_duration_ms = std::max<Uint32>(1, rocket.step_duration_ms);
+    const double progress = std::clamp(
+        static_cast<double>(now - rocket.segment_started_ticks) /
+            static_cast<double>(step_duration_ms),
+        0.0, 1.0);
+    const PixelCoord current_px = getPixelCoord(rocket.current_coord, 0, 0);
+    const MapCoord next_coord = StepRenderCoord(rocket.current_coord, rocket.direction);
+    const PixelCoord next_px = getPixelCoord(next_coord, 0, 0);
+    const SDL_FPoint center{
+        static_cast<float>(current_px.x + element_size / 2 +
+                           (next_px.x - current_px.x) * progress),
+        static_cast<float>(current_px.y + element_size / 2 +
+                           (next_px.y - current_px.y) * progress)};
+    const int frame_index =
+        static_cast<int>((now / std::max<Uint32>(1, ROCKET_ANIMATION_FRAME_MS) +
+                          static_cast<Uint32>(rocket.animation_seed)) %
+                         kRocketFlightFrames);
+    const int glow_radius = std::max(7, static_cast<int>(element_size * 0.26));
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 122, 38, 84);
+    SDL_RenderFillCircle(sdl_renderer, static_cast<int>(std::lround(center.x)),
+                         static_cast<int>(std::lround(center.y)), glow_radius);
+    drawRocketFlight(center, rocket.direction, std::max(28, element_size * 2),
+                     frame_index, 255);
   }
 }
 
@@ -4493,9 +4779,22 @@ void Renderer::draweffects() {
       continue;
     }
 
-    const PixelCoord effect_px = getPixelCoord(effect.coord, 0, 0);
-    const int center_x = effect_px.x + element_size / 2;
-    const int center_y = effect_px.y + element_size / 2;
+    int center_x = 0;
+    int center_y = 0;
+    if (effect.has_precise_world_center) {
+      center_x = static_cast<int>(
+          std::lround(static_cast<double>(offset_x) +
+                      static_cast<double>(effect.precise_world_center.x) *
+                          static_cast<double>(element_size + 1)));
+      center_y = static_cast<int>(
+          std::lround(static_cast<double>(offset_y) +
+                      static_cast<double>(effect.precise_world_center.y) *
+                          static_cast<double>(element_size + 1)));
+    } else {
+      const PixelCoord effect_px = getPixelCoord(effect.coord, 0, 0);
+      center_x = effect_px.x + element_size / 2;
+      center_y = effect_px.y + element_size / 2;
+    }
     const Uint32 elapsed = now - effect.started_ticks;
 
     if (effect.type == EffectType::AirstrikeExplosion) {

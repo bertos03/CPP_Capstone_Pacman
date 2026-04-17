@@ -287,6 +287,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty)
   dynamite_inventory = 0;
   plastic_explosive_inventory = 0;
   airstrike_inventory = 0;
+  rocket_inventory = 0;
   plastic_explosive_is_armed = false;
   active_airstrike = {};
   simulation_started = false;
@@ -299,6 +300,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty)
   ScheduleNextDynamiteSpawn(last_update_ticks);
   ScheduleNextPlasticExplosiveSpawn(last_update_ticks);
   ScheduleNextWalkieTalkieSpawn(last_update_ticks);
+  ScheduleNextRocketSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -362,6 +364,7 @@ void Game::Update() {
   if (dead) {
     UpdateAirstrike(now);
     UpdatePlacedDynamites(now);
+    UpdateRockets(now);
     return;
   }
 
@@ -370,11 +373,14 @@ void Game::Update() {
   UpdateDynamitePickup(now);
   UpdatePlasticExplosivePickup(now);
   UpdateWalkieTalkiePickup(now);
+  UpdateRocketPickup(now);
   TryUseAirstrike(now);
   TryPlaceDynamite(now);
   TryUsePlasticExplosive(now);
+  TryFireRocket(now);
   UpdateAirstrike(now);
   UpdatePlacedDynamites(now);
+  UpdateRockets(now);
   if (dead) {
     return;
   }
@@ -623,6 +629,14 @@ void Game::ScheduleNextWalkieTalkieSpawn(Uint32 now) {
                                  tuning.extra_spawn_interval_scale);
 }
 
+void Game::ScheduleNextRocketSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  rocket_pickup.next_spawn_ticks =
+      now + RandomScaledInterval(ROCKET_SPAWN_MIN_INTERVAL_MS,
+                                 ROCKET_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
+}
+
 bool Game::IsWithinRadius(MapCoord center, MapCoord target,
                           int radius_cells) const {
   const int clamped_radius = std::max(0, radius_cells);
@@ -659,6 +673,10 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
     return false;
   }
 
+  if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -675,6 +693,12 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
 
   for (const auto &slimeball : slimeballs) {
     if (SameCoord(coord, slimeball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &rocket : active_rockets) {
+    if (SameCoord(coord, rocket.current_coord)) {
       return false;
     }
   }
@@ -748,8 +772,18 @@ bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
     return false;
   }
 
+  if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+
   for (const auto &dynamite : placed_dynamites) {
     if (SameCoord(coord, dynamite.coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &rocket : active_rockets) {
+    if (SameCoord(coord, rocket.current_coord)) {
       return false;
     }
   }
@@ -787,6 +821,10 @@ bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
     return false;
   }
 
+  if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -803,6 +841,12 @@ bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
 
   for (const auto &slimeball : slimeballs) {
     if (SameCoord(coord, slimeball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &rocket : active_rockets) {
+    if (SameCoord(coord, rocket.current_coord)) {
       return false;
     }
   }
@@ -852,6 +896,10 @@ bool Game::IsCellFreeForWalkieTalkiePickup(MapCoord coord) const {
     return false;
   }
 
+  if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -868,6 +916,88 @@ bool Game::IsCellFreeForWalkieTalkiePickup(MapCoord coord) const {
 
   for (const auto &slimeball : slimeballs) {
     if (SameCoord(coord, slimeball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &rocket : active_rockets) {
+    if (SameCoord(coord, rocket.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &cloud : gas_clouds) {
+    if (SameCoord(coord, cloud.coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &dynamite : placed_dynamites) {
+    if (SameCoord(coord, dynamite.coord)) {
+      return false;
+    }
+  }
+
+  if (plastic_explosive_is_armed &&
+      SameCoord(coord, placed_plastic_explosive.coord)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool Game::IsCellFreeForRocketPickup(MapCoord coord) const {
+  if (map == nullptr ||
+      map->map_entry(static_cast<size_t>(coord.u), static_cast<size_t>(coord.v)) !=
+          ElementType::TYPE_PATH) {
+    return false;
+  }
+
+  if (SameCoord(coord, pacman->map_coord)) {
+    return false;
+  }
+
+  if (invulnerability_potion.is_visible &&
+      SameCoord(coord, invulnerability_potion.coord)) {
+    return false;
+  }
+
+  if (dynamite_pickup.is_visible && SameCoord(coord, dynamite_pickup.coord)) {
+    return false;
+  }
+
+  if (plastic_explosive_pickup.is_visible &&
+      SameCoord(coord, plastic_explosive_pickup.coord)) {
+    return false;
+  }
+
+  if (walkie_talkie_pickup.is_visible &&
+      SameCoord(coord, walkie_talkie_pickup.coord)) {
+    return false;
+  }
+
+  for (const auto *monster : monsters) {
+    if ((monster->is_alive ||
+         monster->scheduled_dynamite_blast_ticks != 0) &&
+        SameCoord(coord, monster->map_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &fireball : fireballs) {
+    if (SameCoord(coord, fireball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &slimeball : slimeballs) {
+    if (SameCoord(coord, slimeball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &rocket : active_rockets) {
+    if (SameCoord(coord, rocket.current_coord)) {
       return false;
     }
   }
@@ -918,8 +1048,16 @@ bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
       SameCoord(coord, walkie_talkie_pickup.coord)) {
     return false;
   }
+  if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
   for (const auto &dynamite : placed_dynamites) {
     if (SameCoord(coord, dynamite.coord)) {
+      return false;
+    }
+  }
+  for (const auto &rocket : active_rockets) {
+    if (SameCoord(coord, rocket.current_coord)) {
       return false;
     }
   }
@@ -1172,6 +1310,71 @@ void Game::UpdateWalkieTalkiePickup(Uint32 now) {
   }
 }
 
+void Game::TrySpawnRocket(Uint32 now) {
+  if (rocket_pickup.is_visible || now < rocket_pickup.next_spawn_ticks) {
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForRocketPickup(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    rocket_pickup.next_spawn_ticks = now + 1000;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  rocket_pickup.coord = candidates[distribution(RandomGenerator())];
+  rocket_pickup.appeared_ticks = now;
+  rocket_pickup.fade_started_ticks = 0;
+  rocket_pickup.animation_seed = static_cast<int>(
+      (now % 997) + rocket_pickup.coord.u * 59 + rocket_pickup.coord.v * 67);
+  rocket_pickup.is_visible = true;
+  rocket_pickup.is_fading = false;
+#ifdef AUDIO
+  audio->PlayDynamiteSpawn();
+#endif
+}
+
+void Game::UpdateRocketPickup(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  TrySpawnRocket(now);
+  if (!rocket_pickup.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, rocket_pickup.coord)) {
+    rocket_inventory++;
+    rocket_pickup.is_visible = false;
+    rocket_pickup.is_fading = false;
+    rocket_pickup.fade_started_ticks = 0;
+    ScheduleNextRocketSpawn(now);
+    return;
+  }
+
+  if (!rocket_pickup.is_fading &&
+      now - rocket_pickup.appeared_ticks >= tuning.pickup_visible_ms) {
+    rocket_pickup.is_fading = true;
+    rocket_pickup.fade_started_ticks = now;
+  }
+
+  if (rocket_pickup.is_fading &&
+      now - rocket_pickup.fade_started_ticks >= ROCKET_FADE_MS) {
+    rocket_pickup.is_visible = false;
+    rocket_pickup.is_fading = false;
+    rocket_pickup.fade_started_ticks = 0;
+    ScheduleNextRocketSpawn(now);
+  }
+}
+
 void Game::TryPlaceDynamite(Uint32 now) {
   if (events == nullptr || pacman == nullptr) {
     return;
@@ -1242,6 +1445,34 @@ void Game::TryUsePlasticExplosive(Uint32 now) {
   plastic_explosive_inventory--;
 #ifdef AUDIO
   audio->PlayPlasticExplosivePlace();
+#endif
+}
+
+void Game::TryFireRocket(Uint32 now) {
+  if (events == nullptr || pacman == nullptr) {
+    return;
+  }
+
+  const bool fire_requested = events->ConsumeRocketRequest();
+  if (!fire_requested || rocket_inventory <= 0 || !active_rockets.empty()) {
+    return;
+  }
+
+  Directions facing_direction = pacman->facing_direction;
+  if (facing_direction == Directions::None) {
+    facing_direction = Directions::Down;
+  }
+
+  active_rockets.push_back(
+      {pacman->map_coord,
+       facing_direction,
+       now,
+       ROCKET_STEP_DURATION_MS,
+       static_cast<int>((now % 997) + pacman->map_coord.u * 79 +
+                        pacman->map_coord.v * 61 + rocket_inventory * 23)});
+  rocket_inventory--;
+#ifdef AUDIO
+  audio->PlayRocketLaunch();
 #endif
 }
 
@@ -1385,6 +1616,54 @@ void Game::UpdateAirstrike(Uint32 now) {
   }
 }
 
+void Game::UpdateRockets(Uint32 now) {
+  for (size_t index = 0; index < active_rockets.size();) {
+    RocketProjectile &rocket = active_rockets[index];
+    const Uint32 step_duration_ms = std::max<Uint32>(1, rocket.step_duration_ms);
+    bool detonate_rocket = false;
+    bool hit_wall = false;
+    MapCoord impact_coord = rocket.current_coord;
+    Monster *hit_monster = nullptr;
+
+    while (!detonate_rocket &&
+           now - rocket.segment_started_ticks >= step_duration_ms) {
+      const MapCoord next_coord = StepCoord(rocket.current_coord, rocket.direction);
+      if (map->map_entry(static_cast<size_t>(next_coord.u),
+                         static_cast<size_t>(next_coord.v)) ==
+          ElementType::TYPE_WALL) {
+        impact_coord = rocket.current_coord;
+        hit_wall = true;
+        detonate_rocket = true;
+        break;
+      }
+
+      rocket.current_coord = next_coord;
+      rocket.segment_started_ticks += step_duration_ms;
+
+      for (auto *monster : monsters) {
+        if (!monster->is_alive) {
+          continue;
+        }
+
+        if (SameCoord(monster->map_coord, rocket.current_coord)) {
+          hit_monster = monster;
+          impact_coord = rocket.current_coord;
+          detonate_rocket = true;
+          break;
+        }
+      }
+    }
+
+    if (detonate_rocket) {
+      const RocketProjectile detonated_rocket = rocket;
+      active_rockets.erase(active_rockets.begin() + static_cast<long>(index));
+      DetonateRocket(detonated_rocket, impact_coord, hit_monster, hit_wall, now);
+    } else {
+      index++;
+    }
+  }
+}
+
 void Game::ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks) {
   if (monster == nullptr || !monster->is_alive) {
     return;
@@ -1490,6 +1769,42 @@ void Game::DetonateAirstrikeBomb(const AirstrikeBomb &bomb, Uint32 now) {
       IsWithinRadius(bomb.coord, pacman->map_coord,
                      AIRSTRIKE_EXPLOSION_RADIUS_CELLS)) {
     TriggerLoss(pacman->map_coord, now);
+  }
+}
+
+void Game::DetonateRocket(const RocketProjectile &rocket, MapCoord impact_coord,
+                          Monster *hit_monster, bool hit_wall, Uint32 now) {
+#ifdef AUDIO
+  audio->StopRocketLaunch();
+  audio->PlayAirstrikeExplosion();
+#endif
+  GameEffect explosion_effect{impact_coord, now, EffectType::AirstrikeExplosion, 1};
+  if (hit_wall) {
+    explosion_effect.has_precise_world_center = true;
+    explosion_effect.precise_world_center = MakeCellCenter(rocket.current_coord);
+    switch (rocket.direction) {
+    case Directions::Up:
+      explosion_effect.precise_world_center.y -= 0.5f;
+      break;
+    case Directions::Down:
+      explosion_effect.precise_world_center.y += 0.5f;
+      break;
+    case Directions::Left:
+      explosion_effect.precise_world_center.x -= 0.5f;
+      break;
+    case Directions::Right:
+      explosion_effect.precise_world_center.x += 0.5f;
+      break;
+    case Directions::None:
+    default:
+      break;
+    }
+  }
+  effects.push_back(explosion_effect);
+
+  if (hit_monster != nullptr && hit_monster->is_alive &&
+      SameCoord(hit_monster->map_coord, impact_coord)) {
+    EliminateMonsterWithDynamiteBlast(hit_monster, now);
   }
 }
 
@@ -1738,6 +2053,23 @@ void Game::CleanupEffects(Uint32 now) {
                        return now - effect.started_ticks > max_age;
                      }),
       effects.end());
+}
+
+void Game::EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now) {
+  if (monster == nullptr || !monster->is_alive) {
+    return;
+  }
+
+  monster->is_alive = false;
+  monster->px_delta.x = 0;
+  monster->px_delta.y = 0;
+  monster->scheduled_dynamite_blast_ticks = 0;
+  monster->death_coord = monster->map_coord;
+  monster->death_started_ticks = now;
+  effects.push_back({monster->death_coord, now, EffectType::MonsterExplosion, 1});
+#ifdef AUDIO
+  audio->PlayDynamiteExplosion();
+#endif
 }
 
 void Game::EliminateMonster(Monster *monster, Uint32 now) {

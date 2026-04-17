@@ -82,12 +82,14 @@ private:
   void drawdynamitepickup();
   void drawplasticexplosivepickup();
   void drawwalkietalkiepickup();
+  void drawrocketpickup();
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
   void drawplaceddynamites();
   void drawplacedplasticexplosive();
   void drawactiveairstrike();
+  void drawrockets();
   void drawStaticPacman();
   void drawStaticMonsters();
   void drawStaticGoodies();
@@ -110,6 +112,10 @@ private:
                             double animation_clock);
   void drawAirstrikePlane(const SDL_FPoint &center, double angle_degrees,
                           int max_dimension, double wobble_phase);
+  void drawRocketIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                      double animation_clock);
+  void drawRocketFlight(const SDL_FPoint &center, Directions direction,
+                        int max_dimension, int frame_index, Uint8 alpha);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
                         double animation_clock, Uint8 alpha,
                         double fuse_burn_progress);
@@ -214,6 +220,10 @@ private:
   SDL_Point sdl_lose_screen_size;
   SDL_Texture *sdl_walkie_talkie_texture;
   SDL_Point sdl_walkie_talkie_size;
+  SDL_Texture *sdl_rocket_texture;
+  SDL_Point sdl_rocket_size;
+  std::vector<SDL_Texture *> sdl_rocket_flight_textures;
+  std::vector<SDL_Point> sdl_rocket_flight_sizes;
   SDL_Texture *sdl_airstrike_plane_texture;
   SDL_Point sdl_airstrike_plane_size;
   SDL_Texture *sdl_airstrike_explosion_texture;
