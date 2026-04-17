@@ -1,8 +1,82 @@
 include(BundleUtilities)
 
 set(BU_CHMOD_BUNDLE_ITEMS ON)
-set(PACMAN_BUNDLE_PATH "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/BobMan.app")
+if(NOT DEFINED BOBMAN_BUNDLE_PATH)
+    set(BOBMAN_BUNDLE_PATH "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/BobMan.app")
+endif()
 set(PACMAN_BUNDLE_SEARCH_DIRS "@PACMAN_BUNDLE_SEARCH_DIRS@")
+set(PACMAN_XATTR_EXECUTABLE "@PACMAN_XATTR_EXECUTABLE@")
+set(PACMAN_CODESIGN_EXECUTABLE "@PACMAN_CODESIGN_EXECUTABLE@")
+set(PACMAN_CODESIGN_IDENTITY "@BOBMAN_CODESIGN_IDENTITY@")
 
-fixup_bundle("${PACMAN_BUNDLE_PATH}" "" "${PACMAN_BUNDLE_SEARCH_DIRS}")
-verify_app("${PACMAN_BUNDLE_PATH}")
+if(NOT EXISTS "${BOBMAN_BUNDLE_PATH}")
+    message(FATAL_ERROR "Bundle path does not exist: ${BOBMAN_BUNDLE_PATH}")
+endif()
+
+fixup_bundle("${BOBMAN_BUNDLE_PATH}" "" "${PACMAN_BUNDLE_SEARCH_DIRS}")
+
+if(PACMAN_XATTR_EXECUTABLE)
+    execute_process(
+        COMMAND "${PACMAN_XATTR_EXECUTABLE}" -cr "${BOBMAN_BUNDLE_PATH}"
+        RESULT_VARIABLE pacman_xattr_result
+        OUTPUT_VARIABLE pacman_xattr_stdout
+        ERROR_VARIABLE pacman_xattr_stderr
+    )
+    if(NOT pacman_xattr_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to clear bundle extended attributes for ${BOBMAN_BUNDLE_PATH}: "
+            "${pacman_xattr_stderr}${pacman_xattr_stdout}")
+    endif()
+
+    execute_process(
+        COMMAND "${PACMAN_XATTR_EXECUTABLE}" -d com.apple.FinderInfo "${BOBMAN_BUNDLE_PATH}"
+        RESULT_VARIABLE pacman_finderinfo_result
+        OUTPUT_QUIET
+        ERROR_QUIET
+    )
+endif()
+
+if(PACMAN_CODESIGN_EXECUTABLE)
+    if(PACMAN_CODESIGN_IDENTITY)
+        set(pacman_codesign_command
+            "${PACMAN_CODESIGN_EXECUTABLE}" --force --deep
+            --sign "${PACMAN_CODESIGN_IDENTITY}"
+            --options runtime
+            --timestamp
+            "${BOBMAN_BUNDLE_PATH}")
+    else()
+        set(pacman_codesign_command
+            "${PACMAN_CODESIGN_EXECUTABLE}" --force --deep
+            --sign -
+            --timestamp=none
+            "${BOBMAN_BUNDLE_PATH}")
+    endif()
+    execute_process(
+        COMMAND ${pacman_codesign_command}
+        RESULT_VARIABLE pacman_codesign_result
+        OUTPUT_VARIABLE pacman_codesign_stdout
+        ERROR_VARIABLE pacman_codesign_stderr
+    )
+    if(NOT pacman_codesign_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to codesign bundle ${BOBMAN_BUNDLE_PATH}: "
+            "${pacman_codesign_stderr}${pacman_codesign_stdout}")
+    endif()
+endif()
+
+verify_app("${BOBMAN_BUNDLE_PATH}")
+
+if(PACMAN_XATTR_EXECUTABLE)
+    execute_process(
+        COMMAND "${PACMAN_XATTR_EXECUTABLE}" -d com.apple.FinderInfo "${BOBMAN_BUNDLE_PATH}"
+        RESULT_VARIABLE pacman_final_finderinfo_result
+        OUTPUT_QUIET
+        ERROR_QUIET
+    )
+    execute_process(
+        COMMAND "${PACMAN_XATTR_EXECUTABLE}" -d com.apple.fileprovider.fpfs#P "${BOBMAN_BUNDLE_PATH}"
+        RESULT_VARIABLE pacman_final_fileprovider_result
+        OUTPUT_QUIET
+        ERROR_QUIET
+    )
+endif()

@@ -80,6 +80,37 @@ make -j$(nproc)
 ./BobMan
 ```
 
+### macOS release artifact
+
+On macOS, `cmake --build --preset macos-app-release` now also creates a sanitized
+distribution archive at `build/macos-app-release/dist/BobMan-macOS.zip`.
+Use that ZIP for transferring the app to another Mac instead of the raw
+`BobMan.app` from the build directory.
+
+If you want Gatekeeper to open the app on another Mac without the
+"Apple could not check it for malicious software" warning, you must sign it
+with a `Developer ID Application` certificate and notarize it.
+
+Example setup:
+
+```bash
+xcrun notarytool store-credentials bobman-notary \
+  --apple-id "YOUR_APPLE_ID" \
+  --team-id "YOUR_TEAM_ID" \
+  --password "YOUR_APP_SPECIFIC_PASSWORD"
+
+cmake --preset macos-app-release \
+  -DBOBMAN_BUNDLE_IDENTIFIER=com.yourdomain.bobman \
+  -DBOBMAN_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+  -DBOBMAN_ENABLE_NOTARIZATION=ON \
+  -DBOBMAN_NOTARY_KEYCHAIN_PROFILE=bobman-notary
+
+cmake --build --preset macos-app-release
+```
+
+Without `BOBMAN_CODESIGN_IDENTITY`, the build falls back to ad-hoc signing for
+local testing only.
+
 ## Controls
 
 - **Menus:** arrow keys up/down, confirm with `Enter`, go back with `Esc`.

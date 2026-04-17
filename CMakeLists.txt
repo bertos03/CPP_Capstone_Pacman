@@ -18,6 +18,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread")
 set(APP_TARGET_NAME BobMan)
 set(APP_INSTALL_DATA_DIR "share/bobman")
 set(APP_ICON_FILE "${CMAKE_SOURCE_DIR}/cmake/BobMan.icns")
+set(BOBMAN_BUNDLE_IDENTIFIER "com.example.bobman" CACHE STRING
+    "macOS bundle identifier used for the BobMan app bundle.")
+set(BOBMAN_CODESIGN_IDENTITY "" CACHE STRING
+    "Developer ID Application identity used for macOS distribution signing.")
+set(BOBMAN_NOTARY_KEYCHAIN_PROFILE "" CACHE STRING
+    "Keychain profile name used by xcrun notarytool for macOS notarization.")
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH
@@ -45,6 +51,20 @@ option(PACMAN_BUILD_APP_BUNDLE
 option(BOBMAN_ENABLE_CPACK
     "Enable CPack packaging generation during configure."
     OFF)
+option(BOBMAN_CREATE_DISTRIBUTABLE_ARCHIVE
+    "Create a sanitized macOS ZIP archive for distribution after app bundle builds."
+    ${APPLE})
+option(BOBMAN_ENABLE_NOTARIZATION
+    "Submit the macOS release archive to Apple notarization after signing."
+    OFF)
+
+if(APPLE)
+    find_program(PACMAN_XATTR_EXECUTABLE xattr)
+    find_program(PACMAN_CODESIGN_EXECUTABLE codesign)
+    find_program(PACMAN_CP_EXECUTABLE cp)
+    find_program(PACMAN_DITTO_EXECUTABLE ditto)
+    find_program(PACMAN_XCRUN_EXECUTABLE xcrun)
+endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl2)
@@ -67,17 +87,12 @@ if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
     add_executable(${APP_TARGET_NAME} MACOSX_BUNDLE ${project_SRCS} ${APP_ICON_FILE})
     set_target_properties(${APP_TARGET_NAME} PROPERTIES
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.example.bobman"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "${BOBMAN_BUNDLE_IDENTIFIER}"
         MACOSX_BUNDLE_BUNDLE_NAME "BobMan"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_ICON_FILE "BobMan.icns"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/cmake/MacOSXBundleInfo.plist.in"
-    )
-    add_custom_command(TARGET ${APP_TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/data
-        $<TARGET_BUNDLE_CONTENT_DIR:${APP_TARGET_NAME}>/Resources/data
     )
 else()
     add_executable(${APP_TARGET_NAME} ${project_SRCS})
@@ -98,7 +113,30 @@ message ([STATUS] "SDL2_MIXER_INCLUDE_DIRS" ${SDL2_MIXER_INCLUDE_DIRS})
 message ([STATUS] "SDL2_MIXER_LIBRARIES" ${SDL2_MIXER_LIBRARIES})
 
 if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
-    install(TARGETS ${APP_TARGET_NAME} BUNDLE DESTINATION .)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release" AND BOBMAN_CREATE_DISTRIBUTABLE_ARCHIVE
+       AND NOT BOBMAN_CODESIGN_IDENTITY)
+        message(WARNING
+            "macOS release builds are currently only ad-hoc signed. "
+            "They will run locally, but Gatekeeper on another Mac will still report "
+            "that Apple could not check the app for malicious software. "
+            "Set BOBMAN_CODESIGN_IDENTITY to a Developer ID Application certificate "
+            "and optionally enable BOBMAN_ENABLE_NOTARIZATION.")
+    endif()
+    if(BOBMAN_ENABLE_NOTARIZATION)
+        if(NOT BOBMAN_CODESIGN_IDENTITY)
+            message(FATAL_ERROR
+                "BOBMAN_ENABLE_NOTARIZATION requires BOBMAN_CODESIGN_IDENTITY "
+                "to be set to a Developer ID Application identity.")
+        endif()
+        if(NOT BOBMAN_NOTARY_KEYCHAIN_PROFILE)
+            message(FATAL_ERROR
+                "BOBMAN_ENABLE_NOTARIZATION requires BOBMAN_NOTARY_KEYCHAIN_PROFILE.")
+        endif()
+        if(NOT PACMAN_XCRUN_EXECUTABLE)
+            message(FATAL_ERROR
+                "BOBMAN_ENABLE_NOTARIZATION requires xcrun / notarytool.")
+        endif()
+    endif()
 
     set(PACMAN_BUNDLE_SEARCH_DIRS "")
     foreach(dep IN LISTS SDL2_LIBRARIES SDL2_IMAGE_LIBRARIES SDL2TTF_LIBRARY SDL2_MIXER_LIBRARIES)
@@ -114,6 +152,38 @@ if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
         "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake"
         @ONLY
     )
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/cmake/CreateMacOSArchive.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/CreateMacOSArchive.cmake"
+        @ONLY
+    )
+
+    add_custom_command(TARGET ${APP_TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -rf
+            $<TARGET_BUNDLE_CONTENT_DIR:${APP_TARGET_NAME}>/Resources/data
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_BUNDLE_CONTENT_DIR:${APP_TARGET_NAME}>/Resources/data
+        COMMAND ${CMAKE_COMMAND} -E env COPYFILE_DISABLE=1
+            ${PACMAN_CP_EXECUTABLE} -RX
+            ${CMAKE_SOURCE_DIR}/data/.
+            $<TARGET_BUNDLE_CONTENT_DIR:${APP_TARGET_NAME}>/Resources/data/
+        COMMAND ${CMAKE_COMMAND}
+            -DBOBMAN_BUNDLE_PATH=$<TARGET_BUNDLE_DIR:${APP_TARGET_NAME}>
+            -P "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake"
+        VERBATIM
+    )
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Release" AND BOBMAN_CREATE_DISTRIBUTABLE_ARCHIVE)
+        add_custom_command(TARGET ${APP_TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                -DBOBMAN_SOURCE_BUNDLE_PATH=$<TARGET_BUNDLE_DIR:${APP_TARGET_NAME}>
+                -DBOBMAN_OUTPUT_ZIP_PATH=${CMAKE_CURRENT_BINARY_DIR}/dist/BobMan-macOS.zip
+                -P "${CMAKE_CURRENT_BINARY_DIR}/CreateMacOSArchive.cmake"
+            VERBATIM
+        )
+    endif()
+
+    install(TARGETS ${APP_TARGET_NAME} BUNDLE DESTINATION .)
     install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake")
 else()
     install(TARGETS ${APP_TARGET_NAME} RUNTIME DESTINATION bin)

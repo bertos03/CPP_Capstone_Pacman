@@ -1,0 +1,180 @@
+set(PACMAN_DITTO_EXECUTABLE "@PACMAN_DITTO_EXECUTABLE@")
+set(PACMAN_XATTR_EXECUTABLE "@PACMAN_XATTR_EXECUTABLE@")
+set(PACMAN_CODESIGN_EXECUTABLE "@PACMAN_CODESIGN_EXECUTABLE@")
+set(PACMAN_CODESIGN_IDENTITY "@BOBMAN_CODESIGN_IDENTITY@")
+set(PACMAN_XCRUN_EXECUTABLE "@PACMAN_XCRUN_EXECUTABLE@")
+set(BOBMAN_ENABLE_NOTARIZATION "@BOBMAN_ENABLE_NOTARIZATION@")
+set(BOBMAN_NOTARY_KEYCHAIN_PROFILE "@BOBMAN_NOTARY_KEYCHAIN_PROFILE@")
+set(BOBMAN_STAGE_ROOT "/tmp/BobMan-dist-@CMAKE_BUILD_TYPE@")
+set(BOBMAN_STAGE_BUNDLE_PATH "${BOBMAN_STAGE_ROOT}/BobMan.app")
+set(BOBMAN_NOTARY_ZIP_PATH "${BOBMAN_STAGE_ROOT}/BobMan-notary-upload.zip")
+
+if(NOT DEFINED BOBMAN_SOURCE_BUNDLE_PATH)
+    message(FATAL_ERROR "BOBMAN_SOURCE_BUNDLE_PATH is required.")
+endif()
+if(NOT DEFINED BOBMAN_OUTPUT_ZIP_PATH)
+    message(FATAL_ERROR "BOBMAN_OUTPUT_ZIP_PATH is required.")
+endif()
+if(NOT EXISTS "${BOBMAN_SOURCE_BUNDLE_PATH}")
+    message(FATAL_ERROR "Source bundle does not exist: ${BOBMAN_SOURCE_BUNDLE_PATH}")
+endif()
+if(NOT PACMAN_DITTO_EXECUTABLE)
+    message(FATAL_ERROR "ditto is required to create the distributable archive.")
+endif()
+
+file(REMOVE_RECURSE "${BOBMAN_STAGE_ROOT}")
+file(MAKE_DIRECTORY "${BOBMAN_STAGE_ROOT}")
+get_filename_component(BOBMAN_OUTPUT_ZIP_DIR "${BOBMAN_OUTPUT_ZIP_PATH}" DIRECTORY)
+file(MAKE_DIRECTORY "${BOBMAN_OUTPUT_ZIP_DIR}")
+file(REMOVE "${BOBMAN_OUTPUT_ZIP_PATH}")
+
+execute_process(
+    COMMAND "${PACMAN_DITTO_EXECUTABLE}" --noqtn --norsrc
+        "${BOBMAN_SOURCE_BUNDLE_PATH}" "${BOBMAN_STAGE_BUNDLE_PATH}"
+    RESULT_VARIABLE pacman_stage_copy_result
+    OUTPUT_VARIABLE pacman_stage_copy_stdout
+    ERROR_VARIABLE pacman_stage_copy_stderr
+)
+if(NOT pacman_stage_copy_result EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to stage bundle for distribution: "
+        "${pacman_stage_copy_stderr}${pacman_stage_copy_stdout}")
+endif()
+
+if(PACMAN_XATTR_EXECUTABLE)
+    execute_process(
+        COMMAND "${PACMAN_XATTR_EXECUTABLE}" -cr "${BOBMAN_STAGE_BUNDLE_PATH}"
+        RESULT_VARIABLE pacman_stage_xattr_result
+        OUTPUT_VARIABLE pacman_stage_xattr_stdout
+        ERROR_VARIABLE pacman_stage_xattr_stderr
+    )
+    if(NOT pacman_stage_xattr_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to clear staged bundle extended attributes: "
+            "${pacman_stage_xattr_stderr}${pacman_stage_xattr_stdout}")
+    endif()
+endif()
+
+if(PACMAN_CODESIGN_EXECUTABLE)
+    if(PACMAN_CODESIGN_IDENTITY)
+        set(pacman_stage_codesign_command
+            "${PACMAN_CODESIGN_EXECUTABLE}" --force --deep
+            --sign "${PACMAN_CODESIGN_IDENTITY}"
+            --options runtime
+            --timestamp
+            "${BOBMAN_STAGE_BUNDLE_PATH}")
+    else()
+        set(pacman_stage_codesign_command
+            "${PACMAN_CODESIGN_EXECUTABLE}" --force --deep
+            --sign -
+            --timestamp=none
+            "${BOBMAN_STAGE_BUNDLE_PATH}")
+    endif()
+    execute_process(
+        COMMAND ${pacman_stage_codesign_command}
+        RESULT_VARIABLE pacman_stage_codesign_result
+        OUTPUT_VARIABLE pacman_stage_codesign_stdout
+        ERROR_VARIABLE pacman_stage_codesign_stderr
+    )
+    if(NOT pacman_stage_codesign_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to codesign staged bundle: "
+            "${pacman_stage_codesign_stderr}${pacman_stage_codesign_stdout}")
+    endif()
+
+    execute_process(
+        COMMAND "${PACMAN_CODESIGN_EXECUTABLE}" --verify --deep --strict --verbose=2
+            "${BOBMAN_STAGE_BUNDLE_PATH}"
+        RESULT_VARIABLE pacman_stage_verify_result
+        OUTPUT_VARIABLE pacman_stage_verify_stdout
+        ERROR_VARIABLE pacman_stage_verify_stderr
+    )
+    if(NOT pacman_stage_verify_result EQUAL 0)
+        message(FATAL_ERROR
+            "Staged bundle verification failed: "
+            "${pacman_stage_verify_stderr}${pacman_stage_verify_stdout}")
+    endif()
+endif()
+
+if(BOBMAN_ENABLE_NOTARIZATION)
+    if(NOT PACMAN_CODESIGN_IDENTITY)
+        message(FATAL_ERROR
+            "BOBMAN_ENABLE_NOTARIZATION requires BOBMAN_CODESIGN_IDENTITY.")
+    endif()
+    if(NOT PACMAN_XCRUN_EXECUTABLE)
+        message(FATAL_ERROR
+            "BOBMAN_ENABLE_NOTARIZATION requires xcrun.")
+    endif()
+    if(NOT BOBMAN_NOTARY_KEYCHAIN_PROFILE)
+        message(FATAL_ERROR
+            "BOBMAN_ENABLE_NOTARIZATION requires BOBMAN_NOTARY_KEYCHAIN_PROFILE.")
+    endif()
+
+    file(REMOVE "${BOBMAN_NOTARY_ZIP_PATH}")
+    execute_process(
+        COMMAND "${PACMAN_DITTO_EXECUTABLE}" -c -k --keepParent --noqtn --norsrc
+            "${BOBMAN_STAGE_BUNDLE_PATH}" "${BOBMAN_NOTARY_ZIP_PATH}"
+        RESULT_VARIABLE pacman_notary_zip_result
+        OUTPUT_VARIABLE pacman_notary_zip_stdout
+        ERROR_VARIABLE pacman_notary_zip_stderr
+    )
+    if(NOT pacman_notary_zip_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to create notarization upload archive: "
+            "${pacman_notary_zip_stderr}${pacman_notary_zip_stdout}")
+    endif()
+
+    execute_process(
+        COMMAND "${PACMAN_XCRUN_EXECUTABLE}" notarytool submit
+            "${BOBMAN_NOTARY_ZIP_PATH}"
+            --keychain-profile "${BOBMAN_NOTARY_KEYCHAIN_PROFILE}"
+            --wait
+        RESULT_VARIABLE pacman_notary_result
+        OUTPUT_VARIABLE pacman_notary_stdout
+        ERROR_VARIABLE pacman_notary_stderr
+    )
+    if(NOT pacman_notary_result EQUAL 0)
+        message(FATAL_ERROR
+            "Apple notarization failed: "
+            "${pacman_notary_stderr}${pacman_notary_stdout}")
+    endif()
+
+    execute_process(
+        COMMAND "${PACMAN_XCRUN_EXECUTABLE}" stapler staple -v "${BOBMAN_STAGE_BUNDLE_PATH}"
+        RESULT_VARIABLE pacman_stapler_result
+        OUTPUT_VARIABLE pacman_stapler_stdout
+        ERROR_VARIABLE pacman_stapler_stderr
+    )
+    if(NOT pacman_stapler_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to staple notarization ticket to the app bundle: "
+            "${pacman_stapler_stderr}${pacman_stapler_stdout}")
+    endif()
+
+    execute_process(
+        COMMAND "${PACMAN_XCRUN_EXECUTABLE}" stapler validate -v "${BOBMAN_STAGE_BUNDLE_PATH}"
+        RESULT_VARIABLE pacman_stapler_validate_result
+        OUTPUT_VARIABLE pacman_stapler_validate_stdout
+        ERROR_VARIABLE pacman_stapler_validate_stderr
+    )
+    if(NOT pacman_stapler_validate_result EQUAL 0)
+        message(FATAL_ERROR
+            "Stapled app validation failed: "
+            "${pacman_stapler_validate_stderr}${pacman_stapler_validate_stdout}")
+    endif()
+endif()
+
+execute_process(
+    COMMAND "${PACMAN_DITTO_EXECUTABLE}" -c -k --keepParent --noqtn --norsrc
+        "${BOBMAN_STAGE_BUNDLE_PATH}" "${BOBMAN_OUTPUT_ZIP_PATH}"
+    RESULT_VARIABLE pacman_zip_result
+    OUTPUT_VARIABLE pacman_zip_stdout
+    ERROR_VARIABLE pacman_zip_stderr
+)
+if(NOT pacman_zip_result EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to create distributable archive: "
+        "${pacman_zip_stderr}${pacman_zip_stdout}")
+endif()
+
+message(STATUS "Created distributable archive: ${BOBMAN_OUTPUT_ZIP_PATH}")
