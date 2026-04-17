@@ -488,23 +488,15 @@ void Renderer::initializeRenderer(size_t row_count_value,
     const std::string rocket_frame_path =
         Paths::GetDataFilePath("rocket_flight_" + std::to_string(frame_index) +
                                ".png");
-    SDL_Surface *rocket_frame_surface = IMG_Load(rocket_frame_path.c_str());
-    if (rocket_frame_surface == nullptr) {
-      std::cerr << "Could not open rocket sprite frame " << rocket_frame_path
-                << ": " << IMG_GetError() << "\n";
-      exit(1);
-    }
-
-    sdl_rocket_flight_sizes.push_back(
-        SDL_Point{rocket_frame_surface->w, rocket_frame_surface->h});
+    SDL_Point rocket_frame_size{0, 0};
     SDL_Texture *rocket_frame_texture =
-        SDL_CreateTextureFromSurface(sdl_renderer, rocket_frame_surface);
-    SDL_FreeSurface(rocket_frame_surface);
+        loadTrimmedTexture(rocket_frame_path, rocket_frame_size);
     if (rocket_frame_texture == nullptr) {
       std::cerr << "Could not create rocket sprite texture: " << SDL_GetError()
                 << "\n";
       exit(1);
     }
+    sdl_rocket_flight_sizes.push_back(rocket_frame_size);
     sdl_rocket_flight_textures.push_back(rocket_frame_texture);
   }
   sdl_airstrike_plane_texture = loadTrimmedChromaKeyTexture(
@@ -3143,17 +3135,7 @@ void Renderer::drawRocketFlight(const SDL_FPoint &center, Directions direction,
     const float draw_height = static_cast<float>(
         std::max(1, static_cast<int>(std::lround(frame_size.y * scale))));
 
-    SDL_FRect shadow_rect{center.x - draw_width / 2.0f + 5.0f,
-                          center.y - draw_height / 2.0f + 6.0f, draw_width,
-                          draw_height};
     SDL_SetTextureBlendMode(frame_texture, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureColorMod(frame_texture, 0, 0, 0);
-    SDL_SetTextureAlphaMod(
-        frame_texture,
-        static_cast<Uint8>(std::clamp(static_cast<int>(alpha / 3), 0, 96)));
-    SDL_RenderCopyExF(sdl_renderer, frame_texture, nullptr, &shadow_rect,
-                      angle_degrees, nullptr, SDL_FLIP_NONE);
-
     SDL_FRect draw_rect{center.x - draw_width / 2.0f,
                         center.y - draw_height / 2.0f, draw_width,
                         draw_height};

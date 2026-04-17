@@ -1955,7 +1955,29 @@ void Game::UpdateSlimeballs(Uint32 now) {
       MapCoord next_coord = StepCoord(slimeball.current_coord, slimeball.direction);
 
       if (map->map_entry(next_coord.u, next_coord.v) == ElementType::TYPE_WALL) {
-        effects.push_back({next_coord, now, EffectType::SlimeSplash, 1});
+        GameEffect slime_impact_effect{
+            slimeball.current_coord, now, EffectType::SlimeSplash, 1};
+        slime_impact_effect.has_precise_world_center = true;
+        slime_impact_effect.precise_world_center =
+            MakeCellCenter(slimeball.current_coord);
+        switch (slimeball.direction) {
+        case Directions::Up:
+          slime_impact_effect.precise_world_center.y -= 0.5f;
+          break;
+        case Directions::Down:
+          slime_impact_effect.precise_world_center.y += 0.5f;
+          break;
+        case Directions::Left:
+          slime_impact_effect.precise_world_center.x -= 0.5f;
+          break;
+        case Directions::Right:
+          slime_impact_effect.precise_world_center.x += 0.5f;
+          break;
+        case Directions::None:
+        default:
+          break;
+        }
+        effects.push_back(slime_impact_effect);
 #ifdef AUDIO
         audio->PlaySlimeImpact();
 #endif
