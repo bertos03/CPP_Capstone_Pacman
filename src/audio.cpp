@@ -219,6 +219,7 @@ Audio::Audio() {
   SFX_invulnerability_loop = nullptr;
   menu_music = nullptr;
   win_music = nullptr;
+  lose_music = nullptr;
   invulnerability_loop_channel = -1;
 
   if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0 &&
@@ -255,6 +256,7 @@ Audio::Audio() {
       Paths::GetDataFilePath("airstrike_explosion.wav");
   const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
   const std::string win_music_path = Paths::GetDataFilePath("win_melody.mp3");
+  const std::string lose_music_path = Paths::GetDataFilePath("lose_melody.mp3");
 
   SFX_coin = Mix_LoadWAV(coin_sound_path.c_str());
   SFX_win = Mix_LoadWAV(win_sound_path.c_str());
@@ -314,6 +316,11 @@ Audio::Audio() {
   win_music = Mix_LoadMUS(win_music_path.c_str());
   if (win_music == nullptr) {
     std::cerr << "Failed to load win music " << win_music_path << ": "
+              << Mix_GetError() << "\n";
+  }
+  lose_music = Mix_LoadMUS(lose_music_path.c_str());
+  if (lose_music == nullptr) {
+    std::cerr << "Failed to load loss music " << lose_music_path << ": "
               << Mix_GetError() << "\n";
   }
 
@@ -431,6 +438,9 @@ Audio::~Audio() {
   }
   if (win_music != nullptr) {
     Mix_FreeMusic(win_music);
+  }
+  if (lose_music != nullptr) {
+    Mix_FreeMusic(lose_music);
   }
 
   if (Mix_QuerySpec(nullptr, nullptr, nullptr) != 0) {
@@ -1250,7 +1260,23 @@ void Audio::PlayCoin() { PlayChunk(SFX_coin); };
  * @brief as the name says
  *
  */
-void Audio::PlayGameOver() { PlayChunk(SFX_gameover); };
+void Audio::PlayGameOver() {
+  if (!audio_ready) {
+    return;
+  }
+
+  if (lose_music != nullptr) {
+    if (Mix_PlayingMusic() != 0) {
+      Mix_HaltMusic();
+    }
+    ClearMenuSpectrumLevels();
+    if (Mix_PlayMusic(lose_music, 0) == 0) {
+      return;
+    }
+  }
+
+  PlayChunk(SFX_gameover);
+};
 
 /**
  * @brief as the name says
@@ -1320,7 +1346,7 @@ void Audio::StopMenuMusic() {
   ClearMenuSpectrumLevels();
 }
 
-void Audio::StopWinMusic() {
+void Audio::StopEndScreenMusic() {
   if (!audio_ready) {
     return;
   }

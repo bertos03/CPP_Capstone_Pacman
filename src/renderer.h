@@ -94,7 +94,11 @@ private:
   void drawfireballs();
   void draweffects();
   void drawDefeatEffect();
+  void drawDefeatOverlay();
   void drawVictoryOverlay();
+  void drawEndScreenOverlay(const std::string &title_text, SDL_Texture *texture,
+                            const SDL_Point &texture_size,
+                            const SDL_Color &glow_color);
   void drawDwarf(const SDL_Rect &dwarf_rect, Directions facing_direction,
                  double gait_phase, bool walking);
   void drawPacmanShield(int center_x, int center_y, int base_radius,
@@ -202,6 +206,8 @@ private:
   SDL_Point sdl_start_menu_hero_size;
   SDL_Texture *sdl_win_screen_texture;
   SDL_Point sdl_win_screen_size;
+  SDL_Texture *sdl_lose_screen_texture;
+  SDL_Point sdl_lose_screen_size;
   SDL_Texture *sdl_walkie_talkie_texture;
   SDL_Point sdl_walkie_talkie_size;
   SDL_Texture *sdl_airstrike_plane_texture;

@@ -206,6 +206,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
+      sdl_lose_screen_texture(nullptr), sdl_lose_screen_size{0, 0},
       sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
@@ -225,6 +226,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
+      sdl_lose_screen_texture(nullptr), sdl_lose_screen_size{0, 0},
       sdl_walkie_talkie_texture(nullptr), sdl_walkie_talkie_size{0, 0},
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
@@ -445,6 +447,8 @@ void Renderer::initializeRenderer(size_t row_count_value,
       sdl_start_menu_hero_size);
   sdl_win_screen_texture = loadTrimmedTexture(
       Paths::GetDataFilePath("win_screen_triumph.png"), sdl_win_screen_size);
+  sdl_lose_screen_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath("lose_screen_defeat.png"), sdl_lose_screen_size);
   sdl_walkie_talkie_texture = loadTrimmedChromaKeyTexture(
       Paths::GetDataFilePath("walkie_talkie.png"), sdl_walkie_talkie_size, 26);
   sdl_airstrike_plane_texture = loadTrimmedChromaKeyTexture(
@@ -481,6 +485,9 @@ Renderer::~Renderer() {
   }
   if (sdl_win_screen_texture != nullptr) {
     SDL_DestroyTexture(sdl_win_screen_texture);
+  }
+  if (sdl_lose_screen_texture != nullptr) {
+    SDL_DestroyTexture(sdl_lose_screen_texture);
   }
   if (sdl_walkie_talkie_texture != nullptr) {
     SDL_DestroyTexture(sdl_walkie_talkie_texture);
@@ -676,9 +683,7 @@ void Renderer::drawhud() {
   }
 
   if (game->dead) {
-    renderBrickText(sdl_font_display, "Game Over", screen_res_x / 2,
-                    (screen_res_y - TTF_FontHeight(sdl_font_display)) / 2,
-                    kBrickOutlineColor);
+    drawDefeatOverlay();
     return;
   }
 
@@ -3996,16 +4001,17 @@ void Renderer::drawDefeatEffect() {
   }
 }
 
-void Renderer::drawVictoryOverlay() {
+void Renderer::drawEndScreenOverlay(const std::string &title_text,
+                                    SDL_Texture *texture,
+                                    const SDL_Point &texture_size,
+                                    const SDL_Color &glow_color) {
   drawDimmer(118);
 
-  const std::string title_text = "Gewonnen!";
   const int title_top = std::max(26, screen_res_y / 10);
   renderBrickText(sdl_font_display, title_text, screen_res_x / 2, title_top,
                   kBrickOutlineColor);
 
-  if (sdl_win_screen_texture == nullptr || sdl_win_screen_size.x <= 0 ||
-      sdl_win_screen_size.y <= 0) {
+  if (texture == nullptr || texture_size.x <= 0 || texture_size.y <= 0) {
     return;
   }
 
@@ -4013,23 +4019,32 @@ void Renderer::drawVictoryOverlay() {
   const int max_height = std::min(screen_res_y * 60 / 100, screen_res_y - 220);
   const double width_scale =
       static_cast<double>(max_width) /
-      static_cast<double>(sdl_win_screen_size.x);
+      static_cast<double>(texture_size.x);
   const double height_scale =
       static_cast<double>(max_height) /
-      static_cast<double>(sdl_win_screen_size.y);
+      static_cast<double>(texture_size.y);
   const double scale = std::max(0.05, std::min(width_scale, height_scale));
   const int image_width = std::max(
-      1, static_cast<int>(std::lround(sdl_win_screen_size.x * scale)));
+      1, static_cast<int>(std::lround(texture_size.x * scale)));
   const int image_height = std::max(
-      1, static_cast<int>(std::lround(sdl_win_screen_size.y * scale)));
+      1, static_cast<int>(std::lround(texture_size.y * scale)));
   const int center_x = screen_res_x / 2;
   const int center_y = screen_res_y / 2 + screen_res_y / 12;
   const SDL_Rect image_rect{center_x - image_width / 2,
                             center_y - image_height / 2, image_width,
                             image_height};
 
-  renderDecorativeTexture(sdl_win_screen_texture, image_rect,
-                          SDL_Color{138, 224, 255, 255}, 0.0, 0.0, 0.0, 1.0);
+  renderDecorativeTexture(texture, image_rect, glow_color, 0.0, 0.0, 0.0, 1.0);
+}
+
+void Renderer::drawDefeatOverlay() {
+  drawEndScreenOverlay("Verloren!", sdl_lose_screen_texture,
+                       sdl_lose_screen_size, SDL_Color{255, 162, 120, 255});
+}
+
+void Renderer::drawVictoryOverlay() {
+  drawEndScreenOverlay("Gewonnen!", sdl_win_screen_texture,
+                       sdl_win_screen_size, SDL_Color{138, 224, 255, 255});
 }
 
 void Renderer::drawgoodies() {

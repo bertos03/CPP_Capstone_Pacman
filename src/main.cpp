@@ -110,7 +110,7 @@ constexpr int kMediumMapRows = 17;
 constexpr int kMediumMapCols = 30;
 constexpr int kLargeMapRows = 21;
 constexpr int kLargeMapCols = 38;
-constexpr Uint32 kVictoryEndScreenMinimumMs = 3000;
+constexpr Uint32 kEndScreenMinimumMs = 3000;
 
 MonsterAmount NextMonsterAmount(MonsterAmount monster_amount) {
   switch (monster_amount) {
@@ -1235,9 +1235,8 @@ int main() {
           game->Update();
         }
         const bool allow_end_screen_dismiss =
-            !game->is_won() ||
-            (end_screen_started != 0 &&
-             SDL_GetTicks() - end_screen_started >= kVictoryEndScreenMinimumMs);
+            end_screen_started != 0 &&
+            SDL_GetTicks() - end_screen_started >= kEndScreenMinimumMs;
         processEndScreenEvents(return_to_menu, quit_application,
                                allow_end_screen_dismiss);
       }
@@ -1246,7 +1245,7 @@ int main() {
       sleep(40);
     }
 
-    audio->StopWinMusic();
+    audio->StopEndScreenMusic();
   }
 
   std::cout << "Quitting app.\n";
