@@ -37,13 +37,14 @@ public:
   Renderer(Map *map, Game *game);
   Renderer(size_t rows, size_t cols);
   ~Renderer();
+  void SetScene(Map *map, Game *game);
 
   // Main render path for the running game.
   void Render();
   // Menu screens for the startup flow.
   void RenderStartMenu(int selected_item, const std::string &map_name,
                        const std::string &status_message);
-  void RenderConfigMenu(int selected_item, MonsterAmount monster_amount);
+  void RenderConfigMenu(int selected_item, Difficulty difficulty);
   void RenderMapSelectionMenu(const std::vector<std::string> &map_names,
                               int selected_index);
   void RenderEditorSelectionMenu(const std::vector<std::string> &items,
@@ -63,6 +64,7 @@ public:
 
 private:
   void initializeRenderer(size_t row_count, size_t col_count);
+  void updateSceneLayout(size_t row_count, size_t col_count);
   void renderFrame(bool show_hud);
   void renderLayoutFrame(const std::vector<std::string> &layout);
   void drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
@@ -120,7 +122,7 @@ private:
   void drawStartMenuOverlay(int selected_item,
                             const std::string &map_name,
                             const std::string &status_message);
-  void drawConfigMenuOverlay(int selected_item, MonsterAmount monster_amount);
+  void drawConfigMenuOverlay(int selected_item, Difficulty difficulty);
   void drawMapSelectionOverlay(const std::vector<std::string> &map_names,
                                int selected_index);
   void drawEditorSelectionOverlay(const std::vector<std::string> &items,
@@ -172,6 +174,7 @@ private:
   int screen_res_x;
   int screen_res_y;
   int element_size;
+  int hud_top_y;
   int offset_x;
   int offset_y;
   size_t rows;

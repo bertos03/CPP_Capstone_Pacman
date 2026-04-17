@@ -23,7 +23,6 @@
 
 namespace {
 
-constexpr Uint32 kFireballCooldownMs = 10000;
 constexpr Uint32 kMonsterExplosionDurationMs = 900;
 constexpr Uint32 kWallImpactDurationMs = 180;
 constexpr Uint32 kDynamiteChainDelayMs = 140;
@@ -36,6 +35,14 @@ struct AirstrikePathCandidate {
   double progress = 0.0;
 };
 
+struct DifficultyTuning {
+  int monster_speed_rating;
+  Uint32 fireball_cooldown_ms;
+  Uint32 fireball_step_duration_ms;
+  Uint32 pickup_visible_ms;
+  double extra_spawn_interval_scale;
+};
+
 std::mt19937 &RandomGenerator() {
   static std::mt19937 generator(std::random_device{}());
   return generator;
@@ -44,6 +51,34 @@ std::mt19937 &RandomGenerator() {
 Uint32 RandomInterval(Uint32 minimum, Uint32 maximum) {
   std::uniform_int_distribution<Uint32> distribution(minimum, maximum);
   return distribution(RandomGenerator());
+}
+
+DifficultyTuning GetDifficultyTuning(Difficulty difficulty) {
+  switch (difficulty) {
+  case Difficulty::Easy:
+    return {std::max(1, SPEED_MONSTER - 3), 15000, 220, 60000, 0.75};
+  case Difficulty::Hard:
+    return {std::max(1, SPEED_MONSTER), 6500, 120, 20000, 1.4};
+  case Difficulty::Medium:
+  default:
+    return {std::max(1, SPEED_MONSTER - 2), 10000, 160, 40000, 1.0};
+  }
+}
+
+Uint32 ScaleInterval(Uint32 base_value, double scale) {
+  return std::max<Uint32>(
+      1000, static_cast<Uint32>(std::lround(base_value * scale)));
+}
+
+Uint32 RandomScaledInterval(Uint32 minimum, Uint32 maximum, double scale) {
+  const Uint32 scaled_minimum = ScaleInterval(minimum, scale);
+  const Uint32 scaled_maximum =
+      std::max(scaled_minimum, ScaleInterval(maximum, scale));
+  return RandomInterval(scaled_minimum, scaled_maximum);
+}
+
+int GetMonsterMovementStepDelayMs(Difficulty difficulty) {
+  return std::max(1, 10 - GetDifficultyTuning(difficulty).monster_speed_rating);
 }
 
 MapCoord StepCoord(MapCoord coord, Directions direction) {
@@ -242,8 +277,8 @@ CollectAirstrikePathCandidates(Map *map, SDL_FPoint start, SDL_FPoint end,
  * @param _events: Pointer to Events object
  * @param _audio: Pointer to Audio object
  */
-Game::Game(Map *_map, Events *_events, Audio *_audio)
-    : map(_map), events(_events), audio(_audio) {
+Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty)
+    : map(_map), events(_events), audio(_audio), difficulty(_difficulty) {
   win = false;
   dead = false;
   score = 0;
@@ -265,8 +300,9 @@ Game::Game(Map *_map, Events *_events, Audio *_audio)
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
-    Monster *monster =
-        new Monster(map->get_coord_monster(i), i, map->get_char_monster(i));
+    Monster *monster = new Monster(map->get_coord_monster(i), i,
+                                   map->get_char_monster(i),
+                                   GetMonsterMovementStepDelayMs(difficulty));
     if (monster->monster_char == MONSTER_MEDIUM) {
       monster->next_gas_cloud_ticks =
           last_update_ticks +
@@ -475,13 +511,14 @@ void Game::TryTeleportElement(MapElement *element) {
 }
 
 void Game::TryShootFireballs(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   for (auto monster : monsters) {
     if (!monster->is_alive || monster->monster_char != MONSTER_MANY) {
       continue;
     }
 
     if (monster->last_fireball_ticks != 0 &&
-        now - monster->last_fireball_ticks < kFireballCooldownMs) {
+        now - monster->last_fireball_ticks < tuning.fireball_cooldown_ms) {
       continue;
     }
 
@@ -522,27 +559,35 @@ void Game::TrySpawnGasClouds(Uint32 now) {
 }
 
 void Game::ScheduleNextInvulnerabilityPotionSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   invulnerability_potion.next_spawn_ticks =
-      now + RandomInterval(BLUE_POTION_SPAWN_MIN_INTERVAL_MS,
-                           BLUE_POTION_SPAWN_MAX_INTERVAL_MS);
+      now + RandomScaledInterval(BLUE_POTION_SPAWN_MIN_INTERVAL_MS,
+                                 BLUE_POTION_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
 }
 
 void Game::ScheduleNextDynamiteSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   dynamite_pickup.next_spawn_ticks =
-      now + RandomInterval(DYNAMITE_SPAWN_MIN_INTERVAL_MS,
-                           DYNAMITE_SPAWN_MAX_INTERVAL_MS);
+      now + RandomScaledInterval(DYNAMITE_SPAWN_MIN_INTERVAL_MS,
+                                 DYNAMITE_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
 }
 
 void Game::ScheduleNextPlasticExplosiveSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   plastic_explosive_pickup.next_spawn_ticks =
-      now + RandomInterval(PLASTIC_EXPLOSIVE_SPAWN_MIN_INTERVAL_MS,
-                           PLASTIC_EXPLOSIVE_SPAWN_MAX_INTERVAL_MS);
+      now + RandomScaledInterval(PLASTIC_EXPLOSIVE_SPAWN_MIN_INTERVAL_MS,
+                                 PLASTIC_EXPLOSIVE_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
 }
 
 void Game::ScheduleNextWalkieTalkieSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   walkie_talkie_pickup.next_spawn_ticks =
-      now + RandomInterval(WALKIE_TALKIE_SPAWN_MIN_INTERVAL_MS,
-                           WALKIE_TALKIE_SPAWN_MAX_INTERVAL_MS);
+      now + RandomScaledInterval(WALKIE_TALKIE_SPAWN_MIN_INTERVAL_MS,
+                                 WALKIE_TALKIE_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
 }
 
 bool Game::IsWithinRadius(MapCoord center, MapCoord target,
@@ -856,7 +901,6 @@ void Game::TrySpawnInvulnerabilityPotion(Uint32 now) {
                        invulnerability_potion.coord.v * 17);
   invulnerability_potion.is_visible = true;
   invulnerability_potion.is_fading = false;
-  ScheduleNextInvulnerabilityPotionSpawn(now);
 #ifdef AUDIO
   audio->PlayPotionSpawn();
 #endif
@@ -898,13 +942,13 @@ void Game::TrySpawnDynamite(Uint32 now) {
       (now % 997) + dynamite_pickup.coord.u * 19 + dynamite_pickup.coord.v * 37);
   dynamite_pickup.is_visible = true;
   dynamite_pickup.is_fading = false;
-  ScheduleNextDynamiteSpawn(now);
 #ifdef AUDIO
   audio->PlayDynamiteSpawn();
 #endif
 }
 
 void Game::UpdateDynamitePickup(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   TrySpawnDynamite(now);
   if (!dynamite_pickup.is_visible) {
     return;
@@ -915,11 +959,12 @@ void Game::UpdateDynamitePickup(Uint32 now) {
     dynamite_pickup.is_visible = false;
     dynamite_pickup.is_fading = false;
     dynamite_pickup.fade_started_ticks = 0;
+    ScheduleNextDynamiteSpawn(now);
     return;
   }
 
   if (!dynamite_pickup.is_fading &&
-      now - dynamite_pickup.appeared_ticks >= DYNAMITE_VISIBLE_MS) {
+      now - dynamite_pickup.appeared_ticks >= tuning.pickup_visible_ms) {
     dynamite_pickup.is_fading = true;
     dynamite_pickup.fade_started_ticks = now;
   }
@@ -929,6 +974,7 @@ void Game::UpdateDynamitePickup(Uint32 now) {
     dynamite_pickup.is_visible = false;
     dynamite_pickup.is_fading = false;
     dynamite_pickup.fade_started_ticks = 0;
+    ScheduleNextDynamiteSpawn(now);
   }
 }
 
@@ -963,13 +1009,13 @@ void Game::TrySpawnPlasticExplosive(Uint32 now) {
       plastic_explosive_pickup.coord.v * 23);
   plastic_explosive_pickup.is_visible = true;
   plastic_explosive_pickup.is_fading = false;
-  ScheduleNextPlasticExplosiveSpawn(now);
 #ifdef AUDIO
   audio->PlayPlasticExplosiveSpawn();
 #endif
 }
 
 void Game::UpdatePlasticExplosivePickup(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   TrySpawnPlasticExplosive(now);
   if (!plastic_explosive_pickup.is_visible) {
     return;
@@ -980,12 +1026,13 @@ void Game::UpdatePlasticExplosivePickup(Uint32 now) {
     plastic_explosive_pickup.is_visible = false;
     plastic_explosive_pickup.is_fading = false;
     plastic_explosive_pickup.fade_started_ticks = 0;
+    ScheduleNextPlasticExplosiveSpawn(now);
     return;
   }
 
   if (!plastic_explosive_pickup.is_fading &&
       now - plastic_explosive_pickup.appeared_ticks >=
-          PLASTIC_EXPLOSIVE_VISIBLE_MS) {
+          tuning.pickup_visible_ms) {
     plastic_explosive_pickup.is_fading = true;
     plastic_explosive_pickup.fade_started_ticks = now;
   }
@@ -996,6 +1043,7 @@ void Game::UpdatePlasticExplosivePickup(Uint32 now) {
     plastic_explosive_pickup.is_visible = false;
     plastic_explosive_pickup.is_fading = false;
     plastic_explosive_pickup.fade_started_ticks = 0;
+    ScheduleNextPlasticExplosiveSpawn(now);
   }
 }
 
@@ -1030,13 +1078,13 @@ void Game::TrySpawnWalkieTalkie(Uint32 now) {
       walkie_talkie_pickup.coord.v * 43);
   walkie_talkie_pickup.is_visible = true;
   walkie_talkie_pickup.is_fading = false;
-  ScheduleNextWalkieTalkieSpawn(now);
 #ifdef AUDIO
   audio->PlayDynamiteSpawn();
 #endif
 }
 
 void Game::UpdateWalkieTalkiePickup(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   TrySpawnWalkieTalkie(now);
   if (!walkie_talkie_pickup.is_visible) {
     return;
@@ -1047,11 +1095,12 @@ void Game::UpdateWalkieTalkiePickup(Uint32 now) {
     walkie_talkie_pickup.is_visible = false;
     walkie_talkie_pickup.is_fading = false;
     walkie_talkie_pickup.fade_started_ticks = 0;
+    ScheduleNextWalkieTalkieSpawn(now);
     return;
   }
 
   if (!walkie_talkie_pickup.is_fading &&
-      now - walkie_talkie_pickup.appeared_ticks >= WALKIE_TALKIE_VISIBLE_MS) {
+      now - walkie_talkie_pickup.appeared_ticks >= tuning.pickup_visible_ms) {
     walkie_talkie_pickup.is_fading = true;
     walkie_talkie_pickup.fade_started_ticks = now;
   }
@@ -1062,6 +1111,7 @@ void Game::UpdateWalkieTalkiePickup(Uint32 now) {
     walkie_talkie_pickup.is_visible = false;
     walkie_talkie_pickup.is_fading = false;
     walkie_talkie_pickup.fade_started_ticks = 0;
+    ScheduleNextWalkieTalkieSpawn(now);
   }
 }
 
@@ -1423,6 +1473,7 @@ void Game::UpdateScheduledMonsterBlasts(Uint32 now) {
 }
 
 void Game::UpdateInvulnerabilityPotion(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   TrySpawnInvulnerabilityPotion(now);
   if (!invulnerability_potion.is_visible) {
     return;
@@ -1433,11 +1484,12 @@ void Game::UpdateInvulnerabilityPotion(Uint32 now) {
     invulnerability_potion.is_visible = false;
     invulnerability_potion.is_fading = false;
     invulnerability_potion.fade_started_ticks = 0;
+    ScheduleNextInvulnerabilityPotionSpawn(now);
     return;
   }
 
   if (!invulnerability_potion.is_fading &&
-      now - invulnerability_potion.appeared_ticks >= BLUE_POTION_VISIBLE_MS) {
+      now - invulnerability_potion.appeared_ticks >= tuning.pickup_visible_ms) {
     invulnerability_potion.is_fading = true;
     invulnerability_potion.fade_started_ticks = now;
   }
@@ -1447,6 +1499,7 @@ void Game::UpdateInvulnerabilityPotion(Uint32 now) {
     invulnerability_potion.is_visible = false;
     invulnerability_potion.is_fading = false;
     invulnerability_potion.fade_started_ticks = 0;
+    ScheduleNextInvulnerabilityPotionSpawn(now);
   }
 }
 
@@ -1465,12 +1518,14 @@ bool Game::IsPacmanInvulnerable(Uint32 now) const {
 }
 
 void Game::UpdateFireballs(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   for (size_t index = 0; index < fireballs.size();) {
     Fireball &fireball = fireballs[index];
     bool remove_fireball = false;
 
     while (!remove_fireball &&
-           now - fireball.segment_started_ticks >= FIREBALL_STEP_DURATION_MS) {
+           now - fireball.segment_started_ticks >=
+               tuning.fireball_step_duration_ms) {
       MapCoord next_coord = StepCoord(fireball.current_coord, fireball.direction);
 
       if (map->map_entry(next_coord.u, next_coord.v) == ElementType::TYPE_WALL) {
@@ -1483,7 +1538,7 @@ void Game::UpdateFireballs(Uint32 now) {
       }
 
       fireball.current_coord = next_coord;
-      fireball.segment_started_ticks += FIREBALL_STEP_DURATION_MS;
+      fireball.segment_started_ticks += tuning.fireball_step_duration_ms;
 
       if (SameCoord(pacman->map_coord, fireball.current_coord)) {
 #ifdef AUDIO

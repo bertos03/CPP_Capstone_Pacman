@@ -67,8 +67,7 @@ enum class ElementType {
 
 class Map {
 public:
-  Map(const std::string &map_path,
-      MonsterAmount monster_amount = MonsterAmount::Many);
+  Map(const std::string &map_path);
   ~Map();
   static std::vector<MapDefinition>
   DiscoverAvailableMaps(const std::string &directory_path = "");
@@ -98,7 +97,6 @@ private:
   bool IsInsideBounds(MapCoord) const;
   void LoadMap(const std::string);
   bool IsMonsterChar(char);
-  bool IsMonsterEnabled(char);
   std::vector<MapCoord> monster_coord;
   std::vector<char> monster_chars;
   std::vector<MapCoord> goodie_coord;
@@ -106,7 +104,6 @@ private:
   MapCoord pacman_coord;
   std::string map_name;
   std::string map_path;
-  MonsterAmount monster_amount;
   std::shared_ptr<vector<vector<ElementType>>> map;
   friend class Renderer;
 };

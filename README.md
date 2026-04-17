@@ -87,6 +87,13 @@ distribution archive at `build/macos-app-release/dist/BobMan-macOS.zip`.
 Use that ZIP for transferring the app to another Mac instead of the raw
 `BobMan.app` from the build directory.
 
+If your repository lives under `~/Documents` or another iCloud/File Provider
+managed folder, Finder can attach metadata such as `com.apple.FinderInfo` to
+the raw build-tree app bundle and break its code signature. To avoid that, the
+macOS app presets build the real `.app` bundle in `/tmp/BobMan-app-<CONFIG>`
+and leave a symlink at `build/<preset>/BobMan.app`. Use that symlink or the
+generated launcher script `build/macos-app-release/Run BobMan.command`.
+
 If you want Gatekeeper to open the app on another Mac without the
 "Apple could not check it for malicious software" warning, you must sign it
 with a `Developer ID Application` certificate and notarize it.

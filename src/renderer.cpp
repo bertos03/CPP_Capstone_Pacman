@@ -72,14 +72,14 @@ constexpr std::array<MonsterSpriteDescriptor, 4> kMonsterSpriteDescriptors{{
     {MONSTER_EXTRA, "green"},
 }};
 
-const char *MonsterAmountLabel(MonsterAmount monster_amount) {
-  switch (monster_amount) {
-  case MonsterAmount::Few:
-    return "wenig";
-  case MonsterAmount::Medium:
+const char *DifficultyLabel(Difficulty difficulty) {
+  switch (difficulty) {
+  case Difficulty::Easy:
+    return "leicht";
+  case Difficulty::Medium:
     return "mittel";
-  case MonsterAmount::Many:
-    return "viel";
+  case Difficulty::Hard:
+    return "schwer";
   default:
     return "mittel";
   }
@@ -197,8 +197,8 @@ MapCoord StepRenderCoord(MapCoord coord, Directions direction) {
 } // namespace
 
 Renderer::Renderer(Map *_map, Game *_game)
-    : screen_res_x(0), screen_res_y(0), element_size(0), offset_x(0),
-      offset_y(0), rows(0), cols(0), map(_map), game(_game),
+    : screen_res_x(0), screen_res_y(0), element_size(0), hud_top_y(0),
+      offset_x(0), offset_y(0), rows(0), cols(0), map(_map), game(_game),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
@@ -217,8 +217,8 @@ Renderer::Renderer(Map *_map, Game *_game)
 }
 
 Renderer::Renderer(size_t row_count, size_t col_count)
-    : screen_res_x(0), screen_res_y(0), element_size(0), offset_x(0),
-      offset_y(0), rows(0), cols(0), map(nullptr), game(nullptr),
+    : screen_res_x(0), screen_res_y(0), element_size(0), hud_top_y(0),
+      offset_x(0), offset_y(0), rows(0), cols(0), map(nullptr), game(nullptr),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
@@ -261,29 +261,12 @@ void Renderer::initializeRenderer(size_t row_count_value,
   SDL_GetCurrentDisplayMode(0, &display_mode);
   screen_res_x = display_mode.w;
   screen_res_y = display_mode.h;
-  rows = row_count_value;
-  cols = col_count_value;
-  const int row_count = static_cast<int>(rows);
-  const int col_count = static_cast<int>(cols);
+  updateSceneLayout(row_count_value, col_count_value);
 
-  const int hud_fontsize = std::max(22, screen_res_y / 35);
-  const int reserved_top_space = hud_fontsize * 2;
-
-  const int element_size_x =
-      (screen_res_y - row_count - 1 - reserved_top_space) /
-      std::max(1, row_count);
-  const int element_size_y = (screen_res_x - col_count - 1) /
-                             std::max(1, col_count);
-  element_size = std::max(8, std::min(element_size_x, element_size_y));
-
-  offset_x = (screen_res_x - static_cast<int>((cols + 1) * element_size)) / 2;
-  offset_y =
-      (screen_res_y - static_cast<int>((rows + 1) * element_size)) / 2 +
-      reserved_top_space;
-
+  const Uint32 window_flags = SDL_WINDOW_FULLSCREEN_DESKTOP;
   sdl_window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
                                 SDL_WINDOWPOS_CENTERED, display_mode.w,
-                                display_mode.h, SDL_WINDOW_BORDERLESS);
+                                display_mode.h, window_flags);
   if (sdl_window == nullptr) {
     std::cerr << "Window could not be created.\n";
     std::cerr << "SDL_Error: " << SDL_GetError() << "\n";
@@ -318,6 +301,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
   SDL_RenderClear(sdl_renderer);
 
   const std::string font_path = Paths::GetDataFilePath("font.ttf");
+  const int hud_fontsize = std::max(22, screen_res_y / 35);
   sdl_font_hud = TTF_OpenFont(font_path.c_str(), hud_fontsize);
   sdl_font_menu =
       TTF_OpenFont(font_path.c_str(), std::max(30, screen_res_y / 22));
@@ -559,11 +543,10 @@ void Renderer::RenderStartMenu(int selected_item, const std::string &map_name,
   SDL_RenderPresent(sdl_renderer);
 }
 
-void Renderer::RenderConfigMenu(int selected_item,
-                                MonsterAmount monster_amount) {
+void Renderer::RenderConfigMenu(int selected_item, Difficulty difficulty) {
   renderFrame(false);
   drawDimmer(120);
-  drawConfigMenuOverlay(selected_item, monster_amount);
+  drawConfigMenuOverlay(selected_item, difficulty);
   SDL_RenderPresent(sdl_renderer);
 }
 
@@ -669,6 +652,41 @@ void Renderer::renderFrame(bool show_hud) {
   }
 }
 
+void Renderer::updateSceneLayout(size_t row_count_value,
+                                 size_t col_count_value) {
+  rows = row_count_value;
+  cols = col_count_value;
+
+  const int row_count = static_cast<int>(rows);
+  const int col_count = static_cast<int>(cols);
+  const int hud_fontsize = std::max(22, screen_res_y / 35);
+  const int reserved_top_space = hud_fontsize * 2;
+  const int element_size_x =
+      (screen_res_y - reserved_top_space - row_count - 1) /
+      std::max(1, row_count);
+  const int element_size_y =
+      (screen_res_x - col_count - 1) / std::max(1, col_count);
+  element_size = std::max(8, std::min(element_size_x, element_size_y));
+
+  const int grid_width = col_count * (element_size + 1) + 1;
+  const int grid_height = row_count * (element_size + 1) + 1;
+  const int content_height = reserved_top_space + grid_height;
+  const int content_top = std::max(0, (screen_res_y - content_height) / 2);
+
+  offset_x = (screen_res_x - grid_width) / 2;
+  offset_y = content_top + reserved_top_space;
+  hud_top_y = content_top + std::max(12, hud_fontsize / 3);
+}
+
+void Renderer::SetScene(Map *new_map, Game *new_game) {
+  map = new_map;
+  game = new_game;
+
+  if (map != nullptr) {
+    updateSceneLayout(map->get_map_rows(), map->get_map_cols());
+  }
+}
+
 void Renderer::renderLayoutFrame(const std::vector<std::string> &layout) {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
@@ -719,7 +737,7 @@ void Renderer::drawhud() {
                  nullptr);
   }
 
-  const int line_top = 30;
+  const int line_top = hud_top_y;
   const int hud_gap = std::max(14, element_size / 2);
   const int icon_size = std::max(18, TTF_FontHeight(sdl_font_hud) - 2);
   int line_width = title_width + hud_gap + score_width;
@@ -1184,8 +1202,7 @@ void Renderer::drawStartMenuOverlay(int selected_item,
   }
 }
 
-void Renderer::drawConfigMenuOverlay(int selected_item,
-                                     MonsterAmount monster_amount) {
+void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty) {
   const int logo_top = screen_res_y / 18;
   renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
@@ -1204,9 +1221,8 @@ void Renderer::drawConfigMenuOverlay(int selected_item,
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
 
   const std::vector<std::string> menu_items{
-      "Monsteranzahl", "Zurueck"};
-  const std::vector<std::string> value_items{
-      MonsterAmountLabel(monster_amount), ""};
+      "Schwierigkeitsgrad", "Zurueck"};
+  const std::vector<std::string> value_items{DifficultyLabel(difficulty), ""};
   const int item_height = std::max(62, TTF_FontHeight(sdl_font_menu) + 24);
   const int highlight_width = panel.w - 56;
   const int item_start_y =

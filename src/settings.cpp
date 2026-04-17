@@ -39,30 +39,44 @@ std::string TrimWhitespace(const std::string &text) {
   return text.substr(first, last - first + 1);
 }
 
-std::string MonsterAmountToString(MonsterAmount monster_amount) {
-  switch (monster_amount) {
-  case MonsterAmount::Few:
-    return "few";
-  case MonsterAmount::Medium:
+std::string DifficultyToString(Difficulty difficulty) {
+  switch (difficulty) {
+  case Difficulty::Easy:
+    return "easy";
+  case Difficulty::Medium:
     return "medium";
-  case MonsterAmount::Many:
+  case Difficulty::Hard:
   default:
-    return "many";
+    return "hard";
   }
 }
 
-MonsterAmount ParseMonsterAmount(const std::string &value) {
+Difficulty ParseDifficulty(const std::string &value) {
   const std::string trimmed_value = TrimWhitespace(value);
-  if (trimmed_value == "few") {
-    return MonsterAmount::Few;
+  if (trimmed_value == "easy") {
+    return Difficulty::Easy;
   }
   if (trimmed_value == "medium") {
-    return MonsterAmount::Medium;
+    return Difficulty::Medium;
+  }
+  if (trimmed_value == "hard") {
+    return Difficulty::Hard;
+  }
+  return Difficulty::Medium;
+}
+
+Difficulty ParseLegacyMonsterAmountAsDifficulty(const std::string &value) {
+  const std::string trimmed_value = TrimWhitespace(value);
+  if (trimmed_value == "few") {
+    return Difficulty::Easy;
+  }
+  if (trimmed_value == "medium") {
+    return Difficulty::Medium;
   }
   if (trimmed_value == "many") {
-    return MonsterAmount::Many;
+    return Difficulty::Hard;
   }
-  return MonsterAmount::Many;
+  return Difficulty::Medium;
 }
 
 fs::path GetSettingsFilePath() {
@@ -104,8 +118,10 @@ AppSettings LoadAppSettings() {
 
     const std::string key = TrimWhitespace(line.substr(0, separator));
     const std::string value = line.substr(separator + 1);
-    if (key == "monster_amount") {
-      settings.monster_amount = ParseMonsterAmount(value);
+    if (key == "difficulty") {
+      settings.difficulty = ParseDifficulty(value);
+    } else if (key == "monster_amount") {
+      settings.difficulty = ParseLegacyMonsterAmountAsDifficulty(value);
     } else if (key == "selected_map_path") {
       settings.selected_map_path = value;
     }
@@ -122,8 +138,7 @@ bool SaveAppSettings(const AppSettings &settings) {
     return false;
   }
 
-  output << "monster_amount="
-         << MonsterAmountToString(settings.monster_amount) << "\n";
+  output << "difficulty=" << DifficultyToString(settings.difficulty) << "\n";
   output << "selected_map_path=" << settings.selected_map_path << "\n";
 
   if (!output.good()) {

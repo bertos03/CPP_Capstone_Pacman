@@ -221,6 +221,7 @@ Audio::Audio() {
   win_music = nullptr;
   lose_music = nullptr;
   invulnerability_loop_channel = -1;
+  menu_music_active = false;
 
   if ((SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0 &&
       SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
@@ -1266,6 +1267,7 @@ void Audio::PlayGameOver() {
   }
 
   if (lose_music != nullptr) {
+    menu_music_active = false;
     if (Mix_PlayingMusic() != 0) {
       Mix_HaltMusic();
     }
@@ -1288,6 +1290,7 @@ void Audio::PlayWin() {
   }
 
   if (win_music != nullptr) {
+    menu_music_active = false;
     if (Mix_PlayingMusic() != 0) {
       Mix_HaltMusic();
     }
@@ -1313,12 +1316,17 @@ bool Audio::StartMenuMusic() {
     return false;
   }
 
+  if (menu_music_active && Mix_PlayingMusic() != 0) {
+    return true;
+  }
+
   ClearMenuSpectrumLevels();
   if (Mix_PlayingMusic() != 0) {
     Mix_HaltMusic();
   }
 
-  return Mix_PlayMusic(menu_music, -1) == 0;
+  menu_music_active = (Mix_PlayMusic(menu_music, -1) == 0);
+  return menu_music_active;
 }
 
 bool Audio::FadeOutMenuMusic(int fade_out_ms) {
@@ -1326,6 +1334,7 @@ bool Audio::FadeOutMenuMusic(int fade_out_ms) {
     return false;
   }
 
+  menu_music_active = false;
   if (fade_out_ms <= 0) {
     Mix_HaltMusic();
     ClearMenuSpectrumLevels();
@@ -1340,6 +1349,7 @@ void Audio::StopMenuMusic() {
     return;
   }
 
+  menu_music_active = false;
   if (Mix_PlayingMusic() != 0) {
     Mix_HaltMusic();
   }
@@ -1351,6 +1361,7 @@ void Audio::StopEndScreenMusic() {
     return;
   }
 
+  menu_music_active = false;
   if (Mix_PlayingMusic() != 0) {
     Mix_HaltMusic();
   }
@@ -1362,7 +1373,7 @@ bool Audio::IsMenuMusicPlaying() const {
     return false;
   }
 
-  return Mix_PlayingMusic() != 0;
+  return menu_music_active && Mix_PlayingMusic() != 0;
 }
 
 void Audio::PlayMonsterShot() { PlayChunk(SFX_monster_shot); };

@@ -8,6 +8,9 @@ set(PACMAN_BUNDLE_SEARCH_DIRS "@PACMAN_BUNDLE_SEARCH_DIRS@")
 set(PACMAN_XATTR_EXECUTABLE "@PACMAN_XATTR_EXECUTABLE@")
 set(PACMAN_CODESIGN_EXECUTABLE "@PACMAN_CODESIGN_EXECUTABLE@")
 set(PACMAN_CODESIGN_IDENTITY "@BOBMAN_CODESIGN_IDENTITY@")
+if(NOT DEFINED BOBMAN_SKIP_BUNDLE_CODESIGN)
+    set(BOBMAN_SKIP_BUNDLE_CODESIGN OFF)
+endif()
 
 if(NOT EXISTS "${BOBMAN_BUNDLE_PATH}")
     message(FATAL_ERROR "Bundle path does not exist: ${BOBMAN_BUNDLE_PATH}")
@@ -36,7 +39,7 @@ if(PACMAN_XATTR_EXECUTABLE)
     )
 endif()
 
-if(PACMAN_CODESIGN_EXECUTABLE)
+if(PACMAN_CODESIGN_EXECUTABLE AND NOT BOBMAN_SKIP_BUNDLE_CODESIGN)
     if(PACMAN_CODESIGN_IDENTITY)
         set(pacman_codesign_command
             "${PACMAN_CODESIGN_EXECUTABLE}" --force --deep
@@ -62,6 +65,10 @@ if(PACMAN_CODESIGN_EXECUTABLE)
             "Failed to codesign bundle ${BOBMAN_BUNDLE_PATH}: "
             "${pacman_codesign_stderr}${pacman_codesign_stdout}")
     endif()
+elseif(BOBMAN_SKIP_BUNDLE_CODESIGN)
+    message(STATUS
+        "Skipping in-place codesign for ${BOBMAN_BUNDLE_PATH}; "
+        "the distributable archive stage will sign a sanitized copy instead.")
 endif()
 
 verify_app("${BOBMAN_BUNDLE_PATH}")

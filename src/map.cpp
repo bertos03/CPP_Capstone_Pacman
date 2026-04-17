@@ -180,24 +180,6 @@ bool Map::IsTeleporterChar(char inp) {
   return inp >= '1' && inp <= '5';
 }
 
-bool Map::IsMonsterEnabled(char inp) {
-  if (!IsMonsterChar(inp)) {
-    return false;
-  }
-
-  switch (monster_amount) {
-  case MonsterAmount::Few:
-    return inp == MONSTER_FEW || inp == MONSTER_EXTRA;
-  case MonsterAmount::Medium:
-    return inp == MONSTER_FEW || inp == MONSTER_MEDIUM ||
-           inp == MONSTER_EXTRA;
-  case MonsterAmount::Many:
-    return true;
-  default:
-    return false;
-  }
-}
-
 /**
  * @brief convert char entry from ascii file to struct type
  *
@@ -224,8 +206,7 @@ ElementType Map::Char2Type(char inp) {
   case MONSTER_MEDIUM:
   case MONSTER_MANY:
   case MONSTER_EXTRA:
-    return IsMonsterEnabled(inp) ? ElementType::TYPE_MONSTER
-                                 : ElementType::TYPE_PATH;
+    return ElementType::TYPE_MONSTER;
   default:
     return ElementType::TYPE_WALL;
   }
@@ -260,10 +241,8 @@ char Map::Type2Char(ElementType inp) {
  * @brief Construct a new Map:: Map object
  *
  * @param _map_path path to the ascii map file
- * @param _monster_amount selected monster amount setting
  */
-Map::Map(const std::string &_map_path, MonsterAmount _monster_amount)
-    : map_path(_map_path), monster_amount(_monster_amount) {
+Map::Map(const std::string &_map_path) : map_path(_map_path) {
   LoadMap(map_path);
 }
 

@@ -117,6 +117,7 @@ private:
   Mix_Music *win_music;
   Mix_Music *lose_music;
   int invulnerability_loop_channel;
+  bool menu_music_active;
   bool audio_ready;
 #endif
 };

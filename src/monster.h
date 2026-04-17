@@ -35,7 +35,7 @@ class Map;
 
 class Monster : public MapElement {
 public:
-  Monster(MapCoord, int, char);
+  Monster(MapCoord, int, char, int);
   ~Monster();
   void simulate(Events *, Map *);
 
@@ -51,6 +51,7 @@ private:
   Uint32 scheduled_dynamite_blast_ticks;
   MapCoord scheduled_dynamite_blast_coord;
   Directions facing_direction;
+  int movement_step_delay_ms;
 
   friend class Renderer;
   friend class Game;

@@ -14,7 +14,7 @@
 #include "globaltypes.h"
 
 struct AppSettings {
-  MonsterAmount monster_amount{MonsterAmount::Many};
+  Difficulty difficulty{Difficulty::Medium};
   std::string selected_map_path;
 };
 

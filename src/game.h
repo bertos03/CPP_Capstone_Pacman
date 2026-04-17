@@ -161,7 +161,7 @@ struct GameEffect {
 
 class Game {
 public:
-  Game(Map *, Events *, Audio *);
+  Game(Map *, Events *, Audio *, Difficulty);
   ~Game();
   bool is_won();
   bool is_lost();
@@ -174,6 +174,7 @@ private:
   Events *events;
   Pacman *pacman;
   Audio *audio;
+  Difficulty difficulty;
   std::vector<Monster *> monsters;
   std::vector<Goodie *> goodies;
   std::vector<std::thread> monster_threads;

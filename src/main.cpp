@@ -48,7 +48,7 @@ enum MenuSelection {
 
 // Selection in the configuration menu.
 enum ConfigSelection {
-  CONFIG_MONSTER_AMOUNT = 0,
+  CONFIG_DIFFICULTY = 0,
   CONFIG_BACK = 1,
 };
 
@@ -112,16 +112,16 @@ constexpr int kLargeMapRows = 21;
 constexpr int kLargeMapCols = 38;
 constexpr Uint32 kEndScreenMinimumMs = 3000;
 
-MonsterAmount NextMonsterAmount(MonsterAmount monster_amount) {
-  switch (monster_amount) {
-  case MonsterAmount::Few:
-    return MonsterAmount::Medium;
-  case MonsterAmount::Medium:
-    return MonsterAmount::Many;
-  case MonsterAmount::Many:
-    return MonsterAmount::Few;
+Difficulty NextDifficulty(Difficulty difficulty) {
+  switch (difficulty) {
+  case Difficulty::Easy:
+    return Difficulty::Medium;
+  case Difficulty::Medium:
+    return Difficulty::Hard;
+  case Difficulty::Hard:
+    return Difficulty::Easy;
   default:
-    return MonsterAmount::Many;
+    return Difficulty::Medium;
   }
 }
 
@@ -168,9 +168,9 @@ void RefreshSelectedMap(const std::vector<MapDefinition> &available_maps,
   active_map_index = resolved_index;
 }
 
-void PersistAppSettings(MonsterAmount monster_amount,
+void PersistAppSettings(Difficulty difficulty,
                         const std::string &selected_map_path) {
-  const AppSettings settings{monster_amount, selected_map_path};
+  const AppSettings settings{difficulty, selected_map_path};
   SaveAppSettings(settings);
 }
 
@@ -792,10 +792,8 @@ void processMainMenuEvents(int &selected_item, MenuScreen &menu_screen,
   }
 }
 
-void processConfigMenuEvents(int &selected_item, MonsterAmount &monster_amount,
+void processConfigMenuEvents(int &selected_item, Difficulty &difficulty,
                              MenuScreen &menu_screen, bool &quit_requested,
-                             bool &rebuild_menu_session,
-                             MenuScreen &next_menu_screen_after_rebuild,
                              Audio *audio) {
   SDL_Event event;
 
@@ -821,10 +819,8 @@ void processConfigMenuEvents(int &selected_item, MonsterAmount &monster_amount,
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
       audio->PlayMenuSelect();
-      if (selected_item == CONFIG_MONSTER_AMOUNT) {
-        monster_amount = NextMonsterAmount(monster_amount);
-        rebuild_menu_session = true;
-        next_menu_screen_after_rebuild = MenuScreen::Config;
+      if (selected_item == CONFIG_DIFFICULTY) {
+        difficulty = NextDifficulty(difficulty);
       } else if (selected_item == CONFIG_BACK) {
         menu_screen = MenuScreen::Main;
       }
@@ -840,9 +836,7 @@ void processConfigMenuEvents(int &selected_item, MonsterAmount &monster_amount,
 
 void processMapSelectionEvents(
     int &active_map_index, int &selected_map_index, MenuScreen &menu_screen,
-    bool &quit_requested, bool &rebuild_menu_session,
-    MenuScreen &next_menu_screen_after_rebuild, Audio *audio,
-    int map_count) {
+    bool &quit_requested, Audio *audio, int map_count) {
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
@@ -860,16 +854,12 @@ void processMapSelectionEvents(
       if (map_count > 1) {
         active_map_index = (active_map_index + map_count - 1) % map_count;
         audio->PlayMenuMove();
-        rebuild_menu_session = true;
-        next_menu_screen_after_rebuild = MenuScreen::MapSelection;
       }
       break;
     case SDLK_DOWN:
       if (map_count > 1) {
         active_map_index = (active_map_index + 1) % map_count;
         audio->PlayMenuMove();
-        rebuild_menu_session = true;
-        next_menu_screen_after_rebuild = MenuScreen::MapSelection;
       }
       break;
     case SDLK_RETURN:
@@ -881,11 +871,8 @@ void processMapSelectionEvents(
     case SDLK_ESCAPE:
       if (active_map_index != selected_map_index) {
         active_map_index = selected_map_index;
-        rebuild_menu_session = true;
-        next_menu_screen_after_rebuild = MenuScreen::Main;
-      } else {
-        menu_screen = MenuScreen::Main;
       }
+      menu_screen = MenuScreen::Main;
       break;
     default:
       break;
@@ -1033,22 +1020,21 @@ int main() {
 
   bool quit_application = false;
   bool maps_need_reload = false;
-  MonsterAmount monster_amount = app_settings.monster_amount;
+  Difficulty difficulty = app_settings.difficulty;
   std::string preferred_selected_map_path = app_settings.selected_map_path;
   int selected_map_index = 0;
   int active_map_index = 0;
   int main_selected_item = MENU_START;
-  int config_selected_item = CONFIG_MONSTER_AMOUNT;
+  int config_selected_item = CONFIG_DIFFICULTY;
   int editor_selected_item = 0;
   int editor_size_selected_item = 0;
-  MenuScreen next_menu_screen_after_rebuild = MenuScreen::Main;
   std::shared_ptr<Audio> audio(new Audio());
 
   RefreshSelectedMap(available_maps, preferred_selected_map_path,
                      selected_map_index, active_map_index);
   preferred_selected_map_path = available_maps[selected_map_index].file_path;
   if (app_settings.selected_map_path != preferred_selected_map_path) {
-    PersistAppSettings(monster_amount, preferred_selected_map_path);
+    PersistAppSettings(difficulty, preferred_selected_map_path);
   }
 
   while (!quit_application) {
@@ -1065,7 +1051,7 @@ int main() {
           available_maps[selected_map_index].file_path;
       if (preferred_selected_map_path != resolved_selected_map_path) {
         preferred_selected_map_path = resolved_selected_map_path;
-        PersistAppSettings(monster_amount, preferred_selected_map_path);
+        PersistAppSettings(difficulty, preferred_selected_map_path);
       }
       editor_selected_item =
           std::clamp(editor_selected_item, 0,
@@ -1073,22 +1059,25 @@ int main() {
       maps_need_reload = false;
     }
 
-    std::shared_ptr<Map> map(new Map(available_maps[active_map_index].file_path,
-                                     monster_amount));
+    std::shared_ptr<Map> map(new Map(available_maps[active_map_index].file_path));
     std::shared_ptr<Events> events(new Events());
-    std::shared_ptr<Game> game(new Game(map.get(), events.get(), audio.get()));
+    std::shared_ptr<Game> game(
+        new Game(map.get(), events.get(), audio.get(), difficulty));
     Renderer renderer(map.get(), game.get());
+    auto refreshPreview = [&]() {
+      map.reset(new Map(available_maps[active_map_index].file_path));
+      events.reset(new Events());
+      game.reset(new Game(map.get(), events.get(), audio.get(), difficulty));
+      renderer.SetScene(map.get(), game.get());
+    };
 
-    bool rebuild_menu_session = false;
     bool start_requested = false;
     bool launch_editor = false;
-    MenuScreen menu_screen = next_menu_screen_after_rebuild;
-    next_menu_screen_after_rebuild = MenuScreen::Main;
+    MenuScreen menu_screen = MenuScreen::Main;
     EditorRequest editor_request;
     audio->StartMenuMusic();
 
-    while (!quit_application && !start_requested && !rebuild_menu_session &&
-           !launch_editor) {
+    while (!quit_application && !start_requested && !launch_editor) {
       const std::vector<std::string> map_display_names =
           GetMapDisplayNames(available_maps);
       std::vector<std::string> editor_items;
@@ -1107,26 +1096,27 @@ int main() {
                                  available_maps[selected_map_index].display_name,
                                  "");
       } else if (menu_screen == MenuScreen::Config) {
-        const MonsterAmount previous_monster_amount = monster_amount;
-        processConfigMenuEvents(config_selected_item, monster_amount,
-                                menu_screen, quit_application,
-                                rebuild_menu_session,
-                                next_menu_screen_after_rebuild, audio.get());
-        if (monster_amount != previous_monster_amount) {
-          PersistAppSettings(monster_amount, preferred_selected_map_path);
+        const Difficulty previous_difficulty = difficulty;
+        processConfigMenuEvents(config_selected_item, difficulty, menu_screen,
+                                quit_application, audio.get());
+        if (difficulty != previous_difficulty) {
+          PersistAppSettings(difficulty, preferred_selected_map_path);
+          refreshPreview();
         }
-        renderer.RenderConfigMenu(config_selected_item, monster_amount);
+        renderer.RenderConfigMenu(config_selected_item, difficulty);
       } else if (menu_screen == MenuScreen::MapSelection) {
         const int previous_selected_map_index = selected_map_index;
+        const int previous_active_map_index = active_map_index;
         processMapSelectionEvents(active_map_index, selected_map_index,
-                                  menu_screen, quit_application,
-                                  rebuild_menu_session,
-                                  next_menu_screen_after_rebuild, audio.get(),
+                                  menu_screen, quit_application, audio.get(),
                                   static_cast<int>(available_maps.size()));
         if (selected_map_index != previous_selected_map_index) {
           preferred_selected_map_path =
               available_maps[selected_map_index].file_path;
-          PersistAppSettings(monster_amount, preferred_selected_map_path);
+          PersistAppSettings(difficulty, preferred_selected_map_path);
+        }
+        if (active_map_index != previous_active_map_index) {
+          refreshPreview();
         }
         renderer.RenderMapSelectionMenu(map_display_names, active_map_index);
       } else if (menu_screen == MenuScreen::EditorSelection) {
@@ -1161,13 +1151,8 @@ int main() {
       maps_need_reload = true;
       if (!editor_result.preferred_map_path.empty()) {
         preferred_selected_map_path = editor_result.preferred_map_path;
-        PersistAppSettings(monster_amount, preferred_selected_map_path);
+        PersistAppSettings(difficulty, preferred_selected_map_path);
       }
-      next_menu_screen_after_rebuild = MenuScreen::Main;
-      continue;
-    }
-
-    if (rebuild_menu_session) {
       continue;
     }
 

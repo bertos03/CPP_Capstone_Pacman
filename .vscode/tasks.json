@@ -85,6 +85,18 @@
       "problemMatcher": ["$gcc"]
     },
     {
+      "label": "Run App Debug",
+      "type": "process",
+      "command": "${workspaceFolder}/build/macos-app-debug/Run BobMan.command",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": ["Build App Debug"],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
       "label": "Build App Release",
       "type": "process",
       "command": "cmake",
@@ -96,6 +108,18 @@
       "dependsOrder": "sequence",
       "group": "build",
       "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Run App Release",
+      "type": "process",
+      "command": "${workspaceFolder}/build/macos-app-release/Run BobMan.command",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": ["Build App Release"],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": []
     },
     {
       "label": "Build Executable Debug",

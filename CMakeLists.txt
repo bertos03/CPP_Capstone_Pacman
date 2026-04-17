@@ -62,6 +62,7 @@ if(APPLE)
     find_program(PACMAN_XATTR_EXECUTABLE xattr)
     find_program(PACMAN_CODESIGN_EXECUTABLE codesign)
     find_program(PACMAN_CP_EXECUTABLE cp)
+    find_program(PACMAN_CHMOD_EXECUTABLE chmod)
     find_program(PACMAN_DITTO_EXECUTABLE ditto)
     find_program(PACMAN_XCRUN_EXECUTABLE xcrun)
 endif()
@@ -113,6 +114,9 @@ message ([STATUS] "SDL2_MIXER_INCLUDE_DIRS" ${SDL2_MIXER_INCLUDE_DIRS})
 message ([STATUS] "SDL2_MIXER_LIBRARIES" ${SDL2_MIXER_LIBRARIES})
 
 if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
+    set(BOBMAN_LOCAL_RUN_BUNDLE_DIR "/tmp/BobMan-app-${CMAKE_BUILD_TYPE}")
+    set(BOBMAN_LOCAL_RUN_BUNDLE_PATH "${BOBMAN_LOCAL_RUN_BUNDLE_DIR}/BobMan.app")
+
     if(CMAKE_BUILD_TYPE STREQUAL "Release" AND BOBMAN_CREATE_DISTRIBUTABLE_ARCHIVE
        AND NOT BOBMAN_CODESIGN_IDENTITY)
         message(WARNING
@@ -157,6 +161,15 @@ if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
         "${CMAKE_CURRENT_BINARY_DIR}/CreateMacOSArchive.cmake"
         @ONLY
     )
+    set_target_properties(${APP_TARGET_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${BOBMAN_LOCAL_RUN_BUNDLE_DIR}"
+    )
+
+    set(BOBMAN_RUN_COMMAND_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/Run BobMan.command")
+    file(WRITE "${BOBMAN_RUN_COMMAND_SCRIPT}" "#!/bin/zsh\nset -e\nAPP=\"${BOBMAN_LOCAL_RUN_BUNDLE_PATH}\"\nif [ ! -d \"$APP\" ]; then\n  echo \"Runnable app bundle not found: $APP\" >&2\n  echo \"Build the app first with the matching CMake preset.\" >&2\n  exit 1\nfi\nopen \"$APP\"\n")
+    if(PACMAN_CHMOD_EXECUTABLE)
+        execute_process(COMMAND "${PACMAN_CHMOD_EXECUTABLE}" +x "${BOBMAN_RUN_COMMAND_SCRIPT}")
+    endif()
 
     add_custom_command(TARGET ${APP_TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E rm -rf
@@ -170,6 +183,11 @@ if(APPLE AND PACMAN_BUILD_APP_BUNDLE)
         COMMAND ${CMAKE_COMMAND}
             -DBOBMAN_BUNDLE_PATH=$<TARGET_BUNDLE_DIR:${APP_TARGET_NAME}>
             -P "${CMAKE_CURRENT_BINARY_DIR}/FixupBundle.cmake"
+        COMMAND ${CMAKE_COMMAND} -E rm -rf
+            ${CMAKE_CURRENT_BINARY_DIR}/BobMan.app
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${BOBMAN_LOCAL_RUN_BUNDLE_PATH}
+            ${CMAKE_CURRENT_BINARY_DIR}/BobMan.app
         VERBATIM
     )
 

@@ -23,8 +23,10 @@
  * @param _coord : the map coordinates for placing the monster
  * @param _id: A unique "monster ID" (currently not used)
  * @param _monster_char original monster type marker from the map
+ * @param _movement_step_delay_ms delay per animation step in milliseconds
  */
-Monster::Monster(MapCoord _coord, int _id, char _monster_char) {
+Monster::Monster(MapCoord _coord, int _id, char _monster_char,
+                 int _movement_step_delay_ms) {
   id = _id;
   // std::cout << "Creating monster #" << id << "\n";
   map_coord = _coord;
@@ -39,6 +41,8 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char) {
   px_delta.x = 0;
   px_delta.y = 0;
   facing_direction = Directions::Down;
+  movement_step_delay_ms =
+      (_movement_step_delay_ms > 0) ? _movement_step_delay_ms : 1;
 }
 
 /**
@@ -71,7 +75,7 @@ void Monster::simulate(Events *events, Map *map) {
     case Directions::Up:
       for (int i = 0; i > -100 && is_alive; i--) {
         px_delta.y = i;
-        sleep(10-SPEED_MONSTER);
+        sleep(movement_step_delay_ms);
       }
       if (!is_alive) {
         break;
@@ -82,7 +86,7 @@ void Monster::simulate(Events *events, Map *map) {
     case Directions::Down:
       for (int i = 0; i < 100 && is_alive; i++) {
         px_delta.y = i;
-        sleep(10-SPEED_MONSTER);
+        sleep(movement_step_delay_ms);
       }
       if (!is_alive) {
         break;
@@ -93,7 +97,7 @@ void Monster::simulate(Events *events, Map *map) {
     case Directions::Left:
       for (int i = 0; i > -100 && is_alive; i--) {
         px_delta.x = i;
-        sleep(10-SPEED_MONSTER);
+        sleep(movement_step_delay_ms);
       }
       if (!is_alive) {
         break;
@@ -104,7 +108,7 @@ void Monster::simulate(Events *events, Map *map) {
     case Directions::Right:
       for (int i = 0; i < 100 && is_alive; i++) {
         px_delta.x = i;
-        sleep(10-SPEED_MONSTER);
+        sleep(movement_step_delay_ms);
       }
       if (!is_alive) {
         break;
