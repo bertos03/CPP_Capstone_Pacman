@@ -35,6 +35,9 @@ public:
   bool is_quit() { return quit; }
   Directions get_next_move() { return current_direction; }
   bool ConsumeExtraUseRequest(ExtraSlot slot);
+  bool ConsumePauseToggleRequest();
+  bool ConsumeExitDialogRequest();
+  bool ConsumeConfirmRequest();
 
 protected:
 private:
@@ -42,6 +45,9 @@ private:
   bool quit;
   Directions current_direction;
   ExtraSlot requested_extra;
+  bool pause_toggle_requested;
+  bool exit_dialog_requested;
+  bool confirm_requested;
   std::atomic<bool> gameplay_frozen;
 };
 

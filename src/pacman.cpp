@@ -68,7 +68,6 @@ void Pacman::simulate(Events *events, Map *map) {
     if (events->IsGameplayFrozen()) {
       px_delta.x = 0;
       px_delta.y = 0;
-      events->Keyreset();
       sleep(15);
       continue;
     }
@@ -90,12 +89,15 @@ void Pacman::simulate(Events *events, Map *map) {
         facing_direction = next_move;
 	        switch (next_move) {
         case Directions::Up:
-          for (int i = 0; i > -100 && SDL_GetTicks() >= paralyzed_until_ticks;
+          for (int i = 0;
+               i > -100 && SDL_GetTicks() >= paralyzed_until_ticks &&
+               !events->IsGameplayFrozen() && !events->is_quit();
                i--) {
             px_delta.y = i;
             sleep(10 - SPEED_PACMAN);
           }
-          if (SDL_GetTicks() < paralyzed_until_ticks) {
+          if (events->IsGameplayFrozen() || events->is_quit() ||
+              SDL_GetTicks() < paralyzed_until_ticks) {
             px_delta.y = 0;
             break;
           }
@@ -103,12 +105,15 @@ void Pacman::simulate(Events *events, Map *map) {
           map_coord.u--;
           break;
         case Directions::Down:
-          for (int i = 0; i < 100 && SDL_GetTicks() >= paralyzed_until_ticks;
+          for (int i = 0;
+               i < 100 && SDL_GetTicks() >= paralyzed_until_ticks &&
+               !events->IsGameplayFrozen() && !events->is_quit();
                i++) {
             px_delta.y = i;
             sleep(10 - SPEED_PACMAN);
           }
-          if (SDL_GetTicks() < paralyzed_until_ticks) {
+          if (events->IsGameplayFrozen() || events->is_quit() ||
+              SDL_GetTicks() < paralyzed_until_ticks) {
             px_delta.y = 0;
             break;
           }
@@ -116,12 +121,15 @@ void Pacman::simulate(Events *events, Map *map) {
           map_coord.u++;
           break;
         case Directions::Left:
-          for (int i = 0; i > -100 && SDL_GetTicks() >= paralyzed_until_ticks;
+          for (int i = 0;
+               i > -100 && SDL_GetTicks() >= paralyzed_until_ticks &&
+               !events->IsGameplayFrozen() && !events->is_quit();
                i--) {
             px_delta.x = i;
             sleep(10 - SPEED_PACMAN);
           }
-          if (SDL_GetTicks() < paralyzed_until_ticks) {
+          if (events->IsGameplayFrozen() || events->is_quit() ||
+              SDL_GetTicks() < paralyzed_until_ticks) {
             px_delta.x = 0;
             break;
           }
@@ -129,12 +137,15 @@ void Pacman::simulate(Events *events, Map *map) {
           map_coord.v--;
           break;
         case Directions::Right:
-          for (int i = 0; i < 100 && SDL_GetTicks() >= paralyzed_until_ticks;
+          for (int i = 0;
+               i < 100 && SDL_GetTicks() >= paralyzed_until_ticks &&
+               !events->IsGameplayFrozen() && !events->is_quit();
                i++) {
             px_delta.x = i;
             sleep(10 - SPEED_PACMAN);
           }
-          if (SDL_GetTicks() < paralyzed_until_ticks) {
+          if (events->IsGameplayFrozen() || events->is_quit() ||
+              SDL_GetTicks() < paralyzed_until_ticks) {
             px_delta.x = 0;
             break;
           }

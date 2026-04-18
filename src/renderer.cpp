@@ -663,8 +663,12 @@ Renderer::~Renderer() {
   SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
-void Renderer::Render() {
+void Renderer::Render(bool show_pause_overlay, bool show_exit_dialog,
+                      int exit_dialog_selected) {
   renderFrame(true);
+  if (show_pause_overlay || show_exit_dialog) {
+    drawGameplayPauseOverlay(show_exit_dialog, exit_dialog_selected);
+  }
   SDL_RenderPresent(sdl_renderer);
 }
 
@@ -1754,6 +1758,73 @@ void Renderer::drawCountdownOverlay(int seconds_left) {
       sdl_font_display, std::to_string(seconds_left), screen_res_x / 2,
       panel.y + (panel.h - TTF_FontHeight(sdl_font_display)) / 2,
       kBrickOutlineColor);
+}
+
+void Renderer::drawGameplayPauseOverlay(bool show_exit_dialog,
+                                        int exit_dialog_selected) {
+  drawDimmer(show_exit_dialog ? 168 : 148);
+
+  if (!show_exit_dialog) {
+    const int panel_width = std::min(700, screen_res_x * 38 / 100);
+    const int panel_height = std::max(240, screen_res_y / 4);
+    SDL_Rect panel{(screen_res_x - panel_width) / 2,
+                   (screen_res_y - panel_height) / 2, panel_width,
+                   panel_height};
+    drawPanel(panel, kPanelFillColor, kPanelBorderColor);
+    renderSimpleText(sdl_font_menu, "Pause", kHudTextColor, screen_res_x / 2,
+                     panel.y + 28);
+    renderSimpleText(sdl_font_hud, "Space setzt das Spiel fort",
+                     kHudTextColor, screen_res_x / 2, panel.y + 102);
+    renderSimpleText(sdl_font_hud, "Esc oeffnet den Beenden-Dialog",
+                     kHudTextColor, screen_res_x / 2, panel.y + 102 +
+                     TTF_FontHeight(sdl_font_hud) + 12);
+    return;
+  }
+
+  const int dialog_width = std::min(700, screen_res_x * 40 / 100);
+  const int dialog_height = std::max(250, screen_res_y / 4);
+  SDL_Rect dialog{(screen_res_x - dialog_width) / 2,
+                  (screen_res_y - dialog_height) / 2, dialog_width,
+                  dialog_height};
+  drawPanel(dialog, kPanelFillColor, kPanelBorderColor);
+  renderSimpleText(sdl_font_menu, "Beenden?", kHudTextColor, screen_res_x / 2,
+                   dialog.y + 24);
+  renderSimpleText(sdl_font_hud, "Aktuelle Runde abbrechen und ins Menue zurueck?",
+                   kHudTextColor, screen_res_x / 2, dialog.y + 86);
+
+  const std::vector<std::string> items{"Ja", "Nein"};
+  const int item_width = std::max(140, dialog.w / 4);
+  const int item_height = std::max(54, TTF_FontHeight(sdl_font_menu) + 16);
+  const int item_gap = std::max(28, dialog.w / 12);
+  const int total_width = item_width * static_cast<int>(items.size()) + item_gap;
+  const int start_x = dialog.x + (dialog.w - total_width) / 2;
+  const int start_y = dialog.y + 132;
+  for (int i = 0; i < static_cast<int>(items.size()); ++i) {
+    SDL_Rect highlight_rect{start_x + i * (item_width + item_gap), start_y,
+                            item_width, item_height};
+    if (i == exit_dialog_selected) {
+      SDL_SetRenderDrawColor(sdl_renderer, 138, 46, 29, 185);
+      SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      SDL_SetRenderDrawColor(sdl_renderer, 235, 182, 140, 255);
+      SDL_RenderDrawRect(sdl_renderer, &highlight_rect);
+    } else {
+      SDL_SetRenderDrawColor(sdl_renderer, 22, 16, 32, 220);
+      SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      SDL_SetRenderDrawColor(sdl_renderer, 196, 130, 92, 180);
+      SDL_RenderDrawRect(sdl_renderer, &highlight_rect);
+    }
+
+    const SDL_Color item_color =
+        (i == exit_dialog_selected) ? kSelectedMenuTextColor : kMenuTextColor;
+    const int text_top =
+        highlight_rect.y +
+        (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
+    renderSimpleText(sdl_font_menu, items[i], item_color,
+                     highlight_rect.x + highlight_rect.w / 2, text_top);
+  }
+
+  renderSimpleText(sdl_font_hud, "Pfeile waehlen | Enter bestaetigt | Esc zurueck",
+                   kStatusTextColor, screen_res_x / 2, dialog.y + dialog.h - 48);
 }
 
 int Renderer::getMonsterAnimationFrame(int animation_seed) const {

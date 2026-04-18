@@ -104,6 +104,8 @@ struct EditorState {
 constexpr int kEditorExitSave = 0;
 constexpr int kEditorExitCancel = 1;
 constexpr int kEditorExitDiscard = 2;
+constexpr int kIngameExitYes = 0;
+constexpr int kIngameExitNo = 1;
 
 constexpr int kSmallMapRows = 13;
 constexpr int kSmallMapCols = 22;
@@ -1222,12 +1224,120 @@ int main() {
 
     bool return_to_menu = false;
     bool frozen_end_screen = false;
+    bool gameplay_paused = false;
+    bool show_exit_dialog = false;
+    bool paused_before_exit_dialog = false;
+    int exit_dialog_selected = kIngameExitNo;
     Uint32 end_screen_started = 0;
+    Uint32 paused_started_ticks = 0;
+
+    auto pause_gameplay = [&]() {
+      if (gameplay_paused) {
+        return;
+      }
+
+      gameplay_paused = true;
+      paused_started_ticks = SDL_GetTicks();
+      game->PauseSimulation();
+      events->Keyreset();
+    };
+
+    auto resume_gameplay = [&]() {
+      if (!gameplay_paused) {
+        return;
+      }
+
+      const Uint32 paused_duration =
+          (paused_started_ticks != 0) ? (SDL_GetTicks() - paused_started_ticks) : 0;
+      gameplay_paused = false;
+      paused_started_ticks = 0;
+      game->ResumeSimulation(paused_duration);
+      events->Keyreset();
+    };
+
+    auto open_exit_dialog = [&]() {
+      if (show_exit_dialog) {
+        return;
+      }
+
+      paused_before_exit_dialog = gameplay_paused;
+      if (!gameplay_paused) {
+        pause_gameplay();
+      } else {
+        events->Keyreset();
+      }
+      show_exit_dialog = true;
+      exit_dialog_selected = kIngameExitNo;
+    };
+
+    auto close_exit_dialog = [&]() {
+      show_exit_dialog = false;
+      exit_dialog_selected = kIngameExitNo;
+      if (!paused_before_exit_dialog) {
+        resume_gameplay();
+      } else {
+        events->Keyreset();
+      }
+      paused_before_exit_dialog = false;
+    };
+
     while ((!events->is_quit() || frozen_end_screen) && !return_to_menu &&
            !quit_application) {
       if (!game->is_lost() && !game->is_won()) {
         events->update();
-        if (!events->is_quit()) {
+
+        if (events->ConsumeExitDialogRequest()) {
+          if (show_exit_dialog) {
+            close_exit_dialog();
+          } else {
+            open_exit_dialog();
+          }
+          audio->PlayMenuSelect();
+        }
+
+        if (show_exit_dialog) {
+          const Directions dialog_move = events->get_next_move();
+          if ((dialog_move == Directions::Left || dialog_move == Directions::Up) &&
+              exit_dialog_selected > kIngameExitYes) {
+            exit_dialog_selected--;
+            events->Keyreset();
+            audio->PlayMenuMove();
+          } else if ((dialog_move == Directions::Right ||
+                      dialog_move == Directions::Down) &&
+                     exit_dialog_selected < kIngameExitNo) {
+            exit_dialog_selected++;
+            events->Keyreset();
+            audio->PlayMenuMove();
+          }
+
+          const bool confirm_exit = events->ConsumeConfirmRequest();
+          if (events->ConsumePauseToggleRequest()) {
+            events->Keyreset();
+          }
+          if (confirm_exit) {
+            audio->PlayMenuSelect();
+            if (exit_dialog_selected == kIngameExitYes) {
+              return_to_menu = true;
+              events->RequestQuit();
+            } else {
+              close_exit_dialog();
+            }
+          }
+        } else {
+          if (events->ConsumeConfirmRequest()) {
+            events->Keyreset();
+          }
+          if (events->ConsumePauseToggleRequest()) {
+            if (gameplay_paused) {
+              resume_gameplay();
+            } else {
+              pause_gameplay();
+            }
+            audio->PlayMenuSelect();
+          }
+        }
+
+        if (!events->is_quit() && !gameplay_paused) {
           game->Update();
         }
         if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
@@ -1251,7 +1361,7 @@ int main() {
                                allow_end_screen_dismiss);
       }
 
-      renderer.Render();
+      renderer.Render(gameplay_paused, show_exit_dialog, exit_dialog_selected);
       sleep(40);
     }
 

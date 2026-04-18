@@ -198,6 +198,8 @@ public:
   bool IsFinalLossSequenceActive(Uint32 now) const;
   Uint32 GetDeathStartedTicks() const;
   void StartSimulation();
+  void PauseSimulation();
+  void ResumeSimulation(Uint32 paused_duration_ms);
   void Update();
 
 protected:
@@ -298,6 +300,7 @@ private:
   void UpdateGasClouds(Uint32 now);
   void ActivateSlimeCover(Uint32 now);
   void CleanupEffects(Uint32 now);
+  void ShiftPausedTimers(Uint32 paused_duration_ms);
   void EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now);
   void EliminateMonster(Monster *monster, Uint32 now);
 };

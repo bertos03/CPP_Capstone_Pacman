@@ -57,6 +57,12 @@ Uint32 RandomInterval(Uint32 minimum, Uint32 maximum) {
   return distribution(RandomGenerator());
 }
 
+void ShiftActiveTicks(Uint32 &ticks, Uint32 delta_ms) {
+  if (ticks != 0) {
+    ticks += delta_ms;
+  }
+}
+
 DifficultyTuning GetDifficultyTuning(Difficulty difficulty) {
   switch (difficulty) {
   case Difficulty::Training:
@@ -351,6 +357,25 @@ void Game::StartSimulation() {
   simulation_started = true;
 }
 
+void Game::PauseSimulation() {
+  if (!simulation_started || events == nullptr) {
+    return;
+  }
+
+  events->SetGameplayFrozen(true);
+  events->Keyreset();
+}
+
+void Game::ResumeSimulation(Uint32 paused_duration_ms) {
+  if (!simulation_started || events == nullptr) {
+    return;
+  }
+
+  ShiftPausedTimers(paused_duration_ms);
+  events->SetGameplayFrozen(false);
+  events->Keyreset();
+}
+
 /**
  * @brief Game logic - is called during each cyclee
  * 
@@ -446,6 +471,97 @@ void Game::Update() {
         TriggerLoss(pacman->map_coord, now);
       }
     }
+  }
+}
+
+void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
+  if (paused_duration_ms == 0) {
+    return;
+  }
+
+  ShiftActiveTicks(last_update_ticks, paused_duration_ms);
+  ShiftActiveTicks(death_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(life_recovery_until_ticks, paused_duration_ms);
+  ShiftActiveTicks(final_loss_commits_at_ticks, paused_duration_ms);
+
+  if (pacman != nullptr) {
+    ShiftActiveTicks(pacman->paralyzed_until_ticks, paused_duration_ms);
+    ShiftActiveTicks(pacman->invulnerable_until_ticks, paused_duration_ms);
+    ShiftActiveTicks(pacman->slimed_until_ticks, paused_duration_ms);
+    ShiftActiveTicks(pacman->teleport_animation_started_ticks,
+                     paused_duration_ms);
+  }
+
+  for (Monster *monster : monsters) {
+    if (monster == nullptr) {
+      continue;
+    }
+    ShiftActiveTicks(monster->last_fireball_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->next_gas_cloud_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->death_started_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->scheduled_dynamite_blast_ticks,
+                     paused_duration_ms);
+  }
+
+  for (Fireball &fireball : fireballs) {
+    ShiftActiveTicks(fireball.segment_started_ticks, paused_duration_ms);
+  }
+  for (Slimeball &slimeball : slimeballs) {
+    ShiftActiveTicks(slimeball.segment_started_ticks, paused_duration_ms);
+  }
+  for (GasCloud &cloud : gas_clouds) {
+    ShiftActiveTicks(cloud.started_ticks, paused_duration_ms);
+    ShiftActiveTicks(cloud.fade_started_ticks, paused_duration_ms);
+  }
+
+  ShiftActiveTicks(invulnerability_potion.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(invulnerability_potion.fade_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(invulnerability_potion.next_spawn_ticks, paused_duration_ms);
+
+  ShiftActiveTicks(dynamite_pickup.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(dynamite_pickup.fade_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(dynamite_pickup.next_spawn_ticks, paused_duration_ms);
+
+  ShiftActiveTicks(plastic_explosive_pickup.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(plastic_explosive_pickup.fade_started_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(plastic_explosive_pickup.next_spawn_ticks, paused_duration_ms);
+
+  ShiftActiveTicks(walkie_talkie_pickup.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(walkie_talkie_pickup.fade_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(walkie_talkie_pickup.next_spawn_ticks, paused_duration_ms);
+
+  ShiftActiveTicks(rocket_pickup.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(rocket_pickup.fade_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(rocket_pickup.next_spawn_ticks, paused_duration_ms);
+
+  for (PlacedDynamite &placed_dynamite : placed_dynamites) {
+    ShiftActiveTicks(placed_dynamite.placed_ticks, paused_duration_ms);
+    ShiftActiveTicks(placed_dynamite.explode_at_ticks, paused_duration_ms);
+  }
+
+  ShiftActiveTicks(placed_plastic_explosive.placed_ticks, paused_duration_ms);
+
+  ShiftActiveTicks(active_airstrike.started_ticks, paused_duration_ms);
+  ShiftActiveTicks(active_airstrike.plane_launch_ticks, paused_duration_ms);
+  ShiftActiveTicks(active_airstrike.overflight_ticks, paused_duration_ms);
+  ShiftActiveTicks(active_airstrike.plane_finished_ticks, paused_duration_ms);
+  ShiftActiveTicks(active_airstrike.finished_ticks, paused_duration_ms);
+  for (AirstrikeBomb &bomb : active_airstrike.bombs) {
+    ShiftActiveTicks(bomb.release_ticks, paused_duration_ms);
+    ShiftActiveTicks(bomb.explode_ticks, paused_duration_ms);
+  }
+
+  for (RocketProjectile &rocket : active_rockets) {
+    ShiftActiveTicks(rocket.segment_started_ticks, paused_duration_ms);
+  }
+
+  for (ScheduledMonsterBlast &blast : scheduled_monster_blasts) {
+    ShiftActiveTicks(blast.trigger_ticks, paused_duration_ms);
+  }
+
+  for (GameEffect &effect : effects) {
+    ShiftActiveTicks(effect.started_ticks, paused_duration_ms);
   }
 }
 

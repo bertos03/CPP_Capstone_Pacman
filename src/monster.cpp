@@ -80,44 +80,56 @@ void Monster::simulate(Events *events, Map *map) {
     }
     switch (next_move) {
     case Directions::Up:
-      for (int i = 0; i > -100 && is_alive; i--) {
+      for (int i = 0;
+           i > -100 && is_alive && !events->IsGameplayFrozen() &&
+           !events->is_quit();
+           i--) {
         px_delta.y = i;
         sleep(movement_step_delay_ms);
       }
-      if (!is_alive) {
+      if (!is_alive || events->IsGameplayFrozen() || events->is_quit()) {
         break;
       }
       px_delta.y = 0;
       map_coord.u--;
       break;
     case Directions::Down:
-      for (int i = 0; i < 100 && is_alive; i++) {
+      for (int i = 0;
+           i < 100 && is_alive && !events->IsGameplayFrozen() &&
+           !events->is_quit();
+           i++) {
         px_delta.y = i;
         sleep(movement_step_delay_ms);
       }
-      if (!is_alive) {
+      if (!is_alive || events->IsGameplayFrozen() || events->is_quit()) {
         break;
       }
       px_delta.y = 0;
       map_coord.u++;
       break;
     case Directions::Left:
-      for (int i = 0; i > -100 && is_alive; i--) {
+      for (int i = 0;
+           i > -100 && is_alive && !events->IsGameplayFrozen() &&
+           !events->is_quit();
+           i--) {
         px_delta.x = i;
         sleep(movement_step_delay_ms);
       }
-      if (!is_alive) {
+      if (!is_alive || events->IsGameplayFrozen() || events->is_quit()) {
         break;
       }
       px_delta.x = 0;
       map_coord.v--;
       break;
     case Directions::Right:
-      for (int i = 0; i < 100 && is_alive; i++) {
+      for (int i = 0;
+           i < 100 && is_alive && !events->IsGameplayFrozen() &&
+           !events->is_quit();
+           i++) {
         px_delta.x = i;
         sleep(movement_step_delay_ms);
       }
-      if (!is_alive) {
+      if (!is_alive || events->IsGameplayFrozen() || events->is_quit()) {
         break;
       }
       px_delta.x = 0;

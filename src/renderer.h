@@ -40,7 +40,9 @@ public:
   void SetScene(Map *map, Game *game);
 
   // Main render path for the running game.
-  void Render();
+  void Render(bool show_pause_overlay = false,
+              bool show_exit_dialog = false,
+              int exit_dialog_selected = 0);
   // Menu screens for the startup flow.
   void RenderStartMenu(int selected_item, const std::string &map_name,
                        const std::string &status_message);
@@ -143,6 +145,8 @@ private:
                          bool show_name_dialog, const std::string &name_input,
                          const std::string &name_dialog_message);
   void drawCountdownOverlay(int seconds_left);
+  void drawGameplayPauseOverlay(bool show_exit_dialog,
+                                int exit_dialog_selected);
   void renderSimpleText(TTF_Font *font, const std::string &text,
                         const SDL_Color &color, int center_x, int top_y);
   void renderTextLeft(TTF_Font *font, const std::string &text,

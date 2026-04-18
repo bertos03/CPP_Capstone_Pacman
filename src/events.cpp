@@ -49,6 +49,9 @@ Events::Events() {
   quit = false;
   current_direction = Directions::None;
   requested_extra = ExtraSlot::None;
+  pause_toggle_requested = false;
+  exit_dialog_requested = false;
+  confirm_requested = false;
   gameplay_frozen.store(false, std::memory_order_relaxed);
 }
 
@@ -87,51 +90,89 @@ bool Events::ConsumeExtraUseRequest(ExtraSlot slot) {
   return true;
 }
 
+bool Events::ConsumePauseToggleRequest() {
+  const bool requested = pause_toggle_requested;
+  pause_toggle_requested = false;
+  return requested;
+}
+
+bool Events::ConsumeExitDialogRequest() {
+  const bool requested = exit_dialog_requested;
+  exit_dialog_requested = false;
+  return requested;
+}
+
+bool Events::ConsumeConfirmRequest() {
+  const bool requested = confirm_requested;
+  confirm_requested = false;
+  return requested;
+}
+
 /**
  * @brief Updates the input buffer each cycle
  *
  */
 void Events::update() {
-  SDL_PollEvent(sdl_events);
-  if (sdl_events->type == SDL_QUIT) {
-    quit = true;
-  }
+  Directions latest_direction = current_direction;
+  bool saw_direction = false;
 
-  if (sdl_events->type == SDL_KEYDOWN) {
-    if (IsGameplayFrozen()) {
-      if (sdl_events->key.keysym.sym == SDLK_ESCAPE) {
-        quit = true;
-      }
-      current_direction = Directions::None;
-      return;
-    }
-
-    const ExtraSlot requested_slot =
-        KeycodeToExtraSlot(sdl_events->key.keysym.sym);
-    if (requested_slot != ExtraSlot::None) {
-      requested_extra = requested_slot;
-      current_direction = Directions::None;
-      return;
-    }
-
-    switch (sdl_events->key.keysym.sym) {
-    case SDLK_UP:
-      current_direction = Directions::Up;
-      break;
-    case SDLK_DOWN:
-      current_direction = Directions::Down;
-      break;
-    case SDLK_LEFT:
-      current_direction = Directions::Left;
-      break;
-    case SDLK_RIGHT:
-      current_direction = Directions::Right;
-      break;
-    case SDLK_ESCAPE: // Quit the program with escape key
+  while (SDL_PollEvent(sdl_events) != 0) {
+    if (sdl_events->type == SDL_QUIT) {
       quit = true;
+      continue;
+    }
+
+    if (sdl_events->type != SDL_KEYDOWN) {
+      continue;
+    }
+
+    const SDL_Keycode keycode = sdl_events->key.keysym.sym;
+    switch (keycode) {
+    case SDLK_SPACE:
+      pause_toggle_requested = true;
+      break;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+      confirm_requested = true;
+      break;
+    case SDLK_ESCAPE:
+      exit_dialog_requested = true;
       break;
     default:
-      current_direction = Directions::None;
+      break;
     }
+
+    if (!IsGameplayFrozen()) {
+      const ExtraSlot requested_slot = KeycodeToExtraSlot(keycode);
+      if (requested_slot != ExtraSlot::None) {
+        requested_extra = requested_slot;
+        continue;
+      }
+    }
+
+    switch (keycode) {
+    case SDLK_UP:
+      latest_direction = Directions::Up;
+      saw_direction = true;
+      break;
+    case SDLK_DOWN:
+      latest_direction = Directions::Down;
+      saw_direction = true;
+      break;
+    case SDLK_LEFT:
+      latest_direction = Directions::Left;
+      saw_direction = true;
+      break;
+    case SDLK_RIGHT:
+      latest_direction = Directions::Right;
+      saw_direction = true;
+      break;
+    default:
+      break;
+    }
+  }
+
+  if (saw_direction) {
+    current_direction = latest_direction;
   }
 }
