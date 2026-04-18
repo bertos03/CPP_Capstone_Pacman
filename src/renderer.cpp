@@ -89,6 +89,15 @@ constexpr std::array<MonsterSpriteDescriptor, 4> kMonsterSpriteDescriptors{{
     {MONSTER_EXTRA, "green"},
 }};
 
+void configureSmoothTextureSampling(SDL_Texture *texture) {
+  if (texture == nullptr) {
+    return;
+  }
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+  SDL_SetTextureScaleMode(texture, SDL_ScaleModeBest);
+#endif
+}
+
 const char *DifficultyLabel(Difficulty difficulty) {
   switch (difficulty) {
   case Difficulty::Training:
@@ -368,7 +377,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
     SDL_FreeSurface(app_icon_surface);
   }
 
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
   sdl_renderer = SDL_CreateRenderer(
       sdl_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (sdl_renderer == nullptr) {
@@ -465,8 +474,10 @@ void Renderer::initializeRenderer(size_t row_count_value,
 
   sdl_wall_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_wall_surface);
+  configureSmoothTextureSampling(sdl_wall_texture);
   sdl_goodie_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_goodie_surface);
+  configureSmoothTextureSampling(sdl_goodie_texture);
   for (SDL_Surface *pacman_surface : sdl_pacman_surfaces) {
     SDL_Texture *pacman_texture =
         SDL_CreateTextureFromSurface(sdl_renderer, pacman_surface);
@@ -475,6 +486,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
                 << "\n";
       exit(1);
     }
+    configureSmoothTextureSampling(pacman_texture);
     sdl_pacman_textures.push_back(pacman_texture);
   }
   for (SDL_Surface *monster_surface : sdl_monster_surfaces) {
@@ -485,6 +497,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
                 << "\n";
       exit(1);
     }
+    configureSmoothTextureSampling(monster_texture);
     sdl_monster_textures.push_back(monster_texture);
   }
 
@@ -1921,6 +1934,7 @@ void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,
     SDL_FreeSurface(logo_surface);
     return;
   }
+  configureSmoothTextureSampling(logo_texture);
 
   const int logo_width = logo_surface->w;
   const int logo_height = logo_surface->h;
@@ -2341,6 +2355,7 @@ SDL_Texture *Renderer::loadTrimmedChromaKeyTexture(const std::string &path,
               << SDL_GetError() << "\n";
   } else {
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    configureSmoothTextureSampling(texture);
     trimmed_size = SDL_Point{trim_rect.w, trim_rect.h};
   }
 
@@ -2433,6 +2448,7 @@ SDL_Texture *Renderer::loadTrimmedTexture(const std::string &path,
               << SDL_GetError() << "\n";
   } else {
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    configureSmoothTextureSampling(texture);
     trimmed_size = SDL_Point{trim_rect.w, trim_rect.h};
   }
 
