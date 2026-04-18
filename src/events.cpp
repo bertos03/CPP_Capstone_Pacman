@@ -29,6 +29,7 @@ Events::Events() {
   place_plastic_explosive_requested = false;
   airstrike_requested = false;
   rocket_requested = false;
+  gameplay_frozen.store(false, std::memory_order_relaxed);
 }
 
 /**
@@ -44,6 +45,21 @@ Events::~Events() { delete sdl_events; }
 void Events::Keyreset() { current_direction = Directions::None; }
 
 void Events::RequestQuit() { quit = true; }
+
+void Events::SetGameplayFrozen(bool frozen) {
+  gameplay_frozen.store(frozen, std::memory_order_relaxed);
+  if (frozen) {
+    current_direction = Directions::None;
+    place_dynamite_requested = false;
+    place_plastic_explosive_requested = false;
+    airstrike_requested = false;
+    rocket_requested = false;
+  }
+}
+
+bool Events::IsGameplayFrozen() const {
+  return gameplay_frozen.load(std::memory_order_relaxed);
+}
 
 bool Events::ConsumePlaceDynamiteRequest() {
   const bool was_requested = place_dynamite_requested;
@@ -80,6 +96,14 @@ void Events::update() {
   }
 
   if (sdl_events->type == SDL_KEYDOWN) {
+    if (IsGameplayFrozen()) {
+      if (sdl_events->key.keysym.sym == SDLK_ESCAPE) {
+        quit = true;
+      }
+      current_direction = Directions::None;
+      return;
+    }
+
     switch (sdl_events->key.keysym.sym) {
     case SDLK_UP:
       current_direction = Directions::Up;

@@ -44,7 +44,8 @@ public:
   // Menu screens for the startup flow.
   void RenderStartMenu(int selected_item, const std::string &map_name,
                        const std::string &status_message);
-  void RenderConfigMenu(int selected_item, Difficulty difficulty);
+  void RenderConfigMenu(int selected_item, Difficulty difficulty,
+                        int player_lives);
   void RenderMapSelectionMenu(const std::vector<std::string> &map_names,
                               int selected_index);
   void RenderEditorSelectionMenu(const std::vector<std::string> &items,
@@ -129,7 +130,8 @@ private:
   void drawStartMenuOverlay(int selected_item,
                             const std::string &map_name,
                             const std::string &status_message);
-  void drawConfigMenuOverlay(int selected_item, Difficulty difficulty);
+  void drawConfigMenuOverlay(int selected_item, Difficulty difficulty,
+                             int player_lives);
   void drawMapSelectionOverlay(const std::vector<std::string> &map_names,
                                int selected_index);
   void drawEditorSelectionOverlay(const std::vector<std::string> &items,

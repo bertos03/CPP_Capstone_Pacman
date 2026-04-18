@@ -49,7 +49,8 @@ enum MenuSelection {
 // Selection in the configuration menu.
 enum ConfigSelection {
   CONFIG_DIFFICULTY = 0,
-  CONFIG_BACK = 1,
+  CONFIG_LIVES = 1,
+  CONFIG_BACK = 2,
 };
 
 enum class MenuScreen {
@@ -171,8 +172,13 @@ void RefreshSelectedMap(const std::vector<MapDefinition> &available_maps,
 }
 
 void PersistAppSettings(Difficulty difficulty,
-                        const std::string &selected_map_path) {
-  const AppSettings settings{difficulty, selected_map_path};
+                        const std::string &selected_map_path,
+                        int player_lives) {
+  AppSettings settings;
+  settings.difficulty = difficulty;
+  settings.selected_map_path = selected_map_path;
+  settings.player_lives =
+      std::clamp(player_lives, PLAYER_LIVES_MIN, PLAYER_LIVES_MAX);
   SaveAppSettings(settings);
 }
 
@@ -795,6 +801,7 @@ void processMainMenuEvents(int &selected_item, MenuScreen &menu_screen,
 }
 
 void processConfigMenuEvents(int &selected_item, Difficulty &difficulty,
+                             int &player_lives,
                              MenuScreen &menu_screen, bool &quit_requested,
                              Audio *audio) {
   SDL_Event event;
@@ -811,11 +818,11 @@ void processConfigMenuEvents(int &selected_item, Difficulty &difficulty,
 
     switch (event.key.keysym.sym) {
     case SDLK_UP:
-      selected_item = (selected_item + 1) % 2;
+      selected_item = (selected_item + 2) % 3;
       audio->PlayMenuMove();
       break;
     case SDLK_DOWN:
-      selected_item = (selected_item + 1) % 2;
+      selected_item = (selected_item + 1) % 3;
       audio->PlayMenuMove();
       break;
     case SDLK_RETURN:
@@ -823,6 +830,10 @@ void processConfigMenuEvents(int &selected_item, Difficulty &difficulty,
       audio->PlayMenuSelect();
       if (selected_item == CONFIG_DIFFICULTY) {
         difficulty = NextDifficulty(difficulty);
+      } else if (selected_item == CONFIG_LIVES) {
+        player_lives = (player_lives < PLAYER_LIVES_MAX)
+                           ? (player_lives + 1)
+                           : PLAYER_LIVES_MIN;
       } else if (selected_item == CONFIG_BACK) {
         menu_screen = MenuScreen::Main;
       }
@@ -1023,6 +1034,8 @@ int main() {
   bool quit_application = false;
   bool maps_need_reload = false;
   Difficulty difficulty = app_settings.difficulty;
+  int player_lives =
+      std::clamp(app_settings.player_lives, PLAYER_LIVES_MIN, PLAYER_LIVES_MAX);
   std::string preferred_selected_map_path = app_settings.selected_map_path;
   int selected_map_index = 0;
   int active_map_index = 0;
@@ -1035,8 +1048,9 @@ int main() {
   RefreshSelectedMap(available_maps, preferred_selected_map_path,
                      selected_map_index, active_map_index);
   preferred_selected_map_path = available_maps[selected_map_index].file_path;
-  if (app_settings.selected_map_path != preferred_selected_map_path) {
-    PersistAppSettings(difficulty, preferred_selected_map_path);
+  if (app_settings.selected_map_path != preferred_selected_map_path ||
+      app_settings.player_lives != player_lives) {
+    PersistAppSettings(difficulty, preferred_selected_map_path, player_lives);
   }
 
   while (!quit_application) {
@@ -1053,7 +1067,8 @@ int main() {
           available_maps[selected_map_index].file_path;
       if (preferred_selected_map_path != resolved_selected_map_path) {
         preferred_selected_map_path = resolved_selected_map_path;
-        PersistAppSettings(difficulty, preferred_selected_map_path);
+        PersistAppSettings(difficulty, preferred_selected_map_path,
+                           player_lives);
       }
       editor_selected_item =
           std::clamp(editor_selected_item, 0,
@@ -1064,12 +1079,14 @@ int main() {
     std::shared_ptr<Map> map(new Map(available_maps[active_map_index].file_path));
     std::shared_ptr<Events> events(new Events());
     std::shared_ptr<Game> game(
-        new Game(map.get(), events.get(), audio.get(), difficulty));
+        new Game(map.get(), events.get(), audio.get(), difficulty,
+                 player_lives));
     Renderer renderer(map.get(), game.get());
     auto refreshPreview = [&]() {
       map.reset(new Map(available_maps[active_map_index].file_path));
       events.reset(new Events());
-      game.reset(new Game(map.get(), events.get(), audio.get(), difficulty));
+      game.reset(new Game(map.get(), events.get(), audio.get(), difficulty,
+                          player_lives));
       renderer.SetScene(map.get(), game.get());
     };
 
@@ -1099,13 +1116,17 @@ int main() {
                                  "");
       } else if (menu_screen == MenuScreen::Config) {
         const Difficulty previous_difficulty = difficulty;
-        processConfigMenuEvents(config_selected_item, difficulty, menu_screen,
-                                quit_application, audio.get());
-        if (difficulty != previous_difficulty) {
-          PersistAppSettings(difficulty, preferred_selected_map_path);
+        const int previous_player_lives = player_lives;
+        processConfigMenuEvents(config_selected_item, difficulty, player_lives,
+                                menu_screen, quit_application, audio.get());
+        if (difficulty != previous_difficulty ||
+            player_lives != previous_player_lives) {
+          PersistAppSettings(difficulty, preferred_selected_map_path,
+                             player_lives);
           refreshPreview();
         }
-        renderer.RenderConfigMenu(config_selected_item, difficulty);
+        renderer.RenderConfigMenu(config_selected_item, difficulty,
+                                  player_lives);
       } else if (menu_screen == MenuScreen::MapSelection) {
         const int previous_selected_map_index = selected_map_index;
         const int previous_active_map_index = active_map_index;
@@ -1115,7 +1136,8 @@ int main() {
         if (selected_map_index != previous_selected_map_index) {
           preferred_selected_map_path =
               available_maps[selected_map_index].file_path;
-          PersistAppSettings(difficulty, preferred_selected_map_path);
+          PersistAppSettings(difficulty, preferred_selected_map_path,
+                             player_lives);
         }
         if (active_map_index != previous_active_map_index) {
           refreshPreview();
@@ -1153,7 +1175,8 @@ int main() {
       maps_need_reload = true;
       if (!editor_result.preferred_map_path.empty()) {
         preferred_selected_map_path = editor_result.preferred_map_path;
-        PersistAppSettings(difficulty, preferred_selected_map_path);
+        PersistAppSettings(difficulty, preferred_selected_map_path,
+                           player_lives);
       }
       continue;
     }
@@ -1210,13 +1233,19 @@ int main() {
         if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
           frozen_end_screen = true;
-          end_screen_started = SDL_GetTicks();
+          end_screen_started =
+              game->is_lost() && game->GetDeathStartedTicks() != 0
+                  ? game->GetDeathStartedTicks()
+                  : SDL_GetTicks();
         }
       } else {
         if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
           frozen_end_screen = true;
-          end_screen_started = SDL_GetTicks();
+          end_screen_started =
+              game->is_lost() && game->GetDeathStartedTicks() != 0
+                  ? game->GetDeathStartedTicks()
+                  : SDL_GetTicks();
         }
         if (game->is_lost()) {
           game->Update();

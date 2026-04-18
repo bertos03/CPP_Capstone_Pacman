@@ -1299,6 +1299,12 @@ void Audio::PlayChunk(Mix_Chunk *chunk) {
 void Audio::PlayCoin() { PlayChunk(SFX_coin); };
 
 /**
+ * @brief Plays the short dramatic cue for an extra-life hit.
+ *
+ */
+void Audio::PlayLifeLost() { PlayChunk(SFX_gameover); };
+
+/**
  * @brief as the name says
  *
  */

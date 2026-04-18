@@ -191,10 +191,12 @@ struct GameEffect {
 
 class Game {
 public:
-  Game(Map *, Events *, Audio *, Difficulty);
+  Game(Map *, Events *, Audio *, Difficulty, int starting_lives);
   ~Game();
   bool is_won();
   bool is_lost();
+  bool IsFinalLossSequenceActive(Uint32 now) const;
+  Uint32 GetDeathStartedTicks() const;
   void StartSimulation();
   void Update();
 
@@ -209,9 +211,13 @@ private:
   std::vector<Goodie *> goodies;
   std::vector<std::thread> monster_threads;
   std::thread pacman_thread;
+  int starting_lives;
+  int remaining_lives;
   int score;
   bool simulation_started;
   Uint32 death_started_ticks;
+  Uint32 life_recovery_until_ticks;
+  Uint32 final_loss_commits_at_ticks;
   MapCoord death_coord;
   std::vector<Fireball> fireballs;
   std::vector<Slimeball> slimeballs;
@@ -247,7 +253,9 @@ private:
   void TrySpawnInvulnerabilityPotion(Uint32 now);
   void UpdateInvulnerabilityPotion(Uint32 now);
   void UpdateInvulnerability(Uint32 now);
+  void UpdateFinalLossSequence(Uint32 now);
   void ActivateInvulnerability(Uint32 now);
+  void ActivateLifeRecovery(Uint32 now);
   void ScheduleNextDynamiteSpawn(Uint32 now);
   void TrySpawnDynamite(Uint32 now);
   void UpdateDynamitePickup(Uint32 now);
@@ -284,6 +292,7 @@ private:
   bool IsWithinDynamiteRadius(MapCoord center, MapCoord target) const;
   bool IsCellFreeForInvulnerabilityPotion(MapCoord coord) const;
   bool IsPacmanInvulnerable(Uint32 now) const;
+  bool IsPacmanRecoveringFromLifeLoss(Uint32 now) const;
   void UpdateFireballs(Uint32 now);
   void UpdateSlimeballs(Uint32 now);
   void UpdateGasClouds(Uint32 now);
