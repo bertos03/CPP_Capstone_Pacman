@@ -1335,6 +1335,9 @@ void Game::UpdateDynamitePickup(Uint32 now) {
 
   if (SameCoord(pacman->map_coord, dynamite_pickup.coord)) {
     dynamite_inventory++;
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
     dynamite_pickup.is_visible = false;
     dynamite_pickup.is_fading = false;
     dynamite_pickup.fade_started_ticks = 0;
@@ -1402,6 +1405,9 @@ void Game::UpdatePlasticExplosivePickup(Uint32 now) {
 
   if (SameCoord(pacman->map_coord, plastic_explosive_pickup.coord)) {
     plastic_explosive_inventory++;
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
     plastic_explosive_pickup.is_visible = false;
     plastic_explosive_pickup.is_fading = false;
     plastic_explosive_pickup.fade_started_ticks = 0;
@@ -1471,6 +1477,9 @@ void Game::UpdateWalkieTalkiePickup(Uint32 now) {
 
   if (SameCoord(pacman->map_coord, walkie_talkie_pickup.coord)) {
     airstrike_inventory++;
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
     walkie_talkie_pickup.is_visible = false;
     walkie_talkie_pickup.is_fading = false;
     walkie_talkie_pickup.fade_started_ticks = 0;
@@ -1537,6 +1546,9 @@ void Game::UpdateRocketPickup(Uint32 now) {
 
   if (SameCoord(pacman->map_coord, rocket_pickup.coord)) {
     rocket_inventory++;
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
     rocket_pickup.is_visible = false;
     rocket_pickup.is_fading = false;
     rocket_pickup.fade_started_ticks = 0;
@@ -2050,6 +2062,9 @@ void Game::UpdateInvulnerabilityPotion(Uint32 now) {
 
   if (SameCoord(pacman->map_coord, invulnerability_potion.coord)) {
     ActivateInvulnerability(now);
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
     invulnerability_potion.is_visible = false;
     invulnerability_potion.is_fading = false;
     invulnerability_potion.fade_started_ticks = 0;
