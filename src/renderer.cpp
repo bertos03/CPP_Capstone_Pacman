@@ -368,7 +368,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
     SDL_FreeSurface(app_icon_surface);
   }
 
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
   sdl_renderer = SDL_CreateRenderer(
       sdl_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (sdl_renderer == nullptr) {
