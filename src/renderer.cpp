@@ -52,8 +52,6 @@ const SDL_Color kTeleporterRed{255, 104, 104, 255};
 const SDL_Color kTeleporterGreen{110, 205, 118, 255};
 const SDL_Color kTeleporterGrey{172, 176, 186, 255};
 const SDL_Color kTeleporterYellow{244, 214, 88, 255};
-constexpr Uint8 kStartMenuLedFillAlpha = 148;
-constexpr Uint8 kStartMenuLedBorderAlpha = 132;
 constexpr double kLogoPi = 3.14159265358979323846;
 constexpr int kPacmanFramesPerDirection = 4;
 constexpr int kMonsterFramesPerDirection = 4;
@@ -193,6 +191,46 @@ SDL_Color LerpColor(const SDL_Color &from, const SDL_Color &to, float factor) {
 
   return SDL_Color{mix_channel(from.r, to.r), mix_channel(from.g, to.g),
                    mix_channel(from.b, to.b), 255};
+}
+
+SDL_Color WithAlpha(const SDL_Color &color, Uint8 alpha) {
+  return SDL_Color{color.r, color.g, color.b, alpha};
+}
+
+SDL_Color SpectrumColor(float factor) {
+  factor = std::clamp(factor, 0.0f, 1.0f);
+  struct ColorStop {
+    float position;
+    SDL_Color color;
+  };
+  constexpr std::array<ColorStop, 6> kStops{{
+      {0.00f, SDL_Color{24, 132, 255, 255}},
+      {0.20f, SDL_Color{0, 232, 255, 255}},
+      {0.40f, SDL_Color{0, 255, 154, 255}},
+      {0.60f, SDL_Color{255, 238, 0, 255}},
+      {0.80f, SDL_Color{255, 136, 0, 255}},
+      {1.00f, SDL_Color{255, 24, 24, 255}},
+  }};
+
+  for (size_t index = 1; index < kStops.size(); ++index) {
+    if (factor <= kStops[index].position) {
+      const float start = kStops[index - 1].position;
+      const float range = std::max(0.0001f, kStops[index].position - start);
+      const float local = (factor - start) / range;
+      return LerpColor(kStops[index - 1].color, kStops[index].color, local);
+    }
+  }
+
+  return kStops.back().color;
+}
+
+float CatmullRomInterpolate(float p0, float p1, float p2, float p3, float t) {
+  const float t2 = t * t;
+  const float t3 = t2 * t;
+  return 0.5f *
+         ((2.0f * p1) + (-p0 + p2) * t +
+          (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
+          (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3);
 }
 
 MapCoord StepRenderCoord(MapCoord coord, Directions direction) {
@@ -1031,42 +1069,25 @@ void Renderer::drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,
 
 void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
   const int available_band_count = Audio::kMenuSpectrumBandCount;
-  const int available_half_band_count = std::max(1, available_band_count / 2);
-  const int configured_half_band_count =
-      std::max(1, START_MENU_LED_HALF_BAR_COUNT);
-  const int band_count = configured_half_band_count * 2;
-  constexpr int kSegmentCount = 8;
-  const int segment_gap = std::max(0, START_MENU_LED_SEGMENT_GAP_X);
-  const int band_gap = std::max(0, START_MENU_LED_SEGMENT_GAP_Y);
-  const int menu_gap = std::max(0, START_MENU_LED_MENU_MARGIN);
-  const int outer_margin = std::max(0, START_MENU_LED_OUTER_MARGIN);
-  const int left_inner = panel.x - menu_gap;
-  const int left_outer = outer_margin;
-  const int right_inner = panel.x + panel.w + menu_gap;
-  const int right_outer = screen_res_x - outer_margin;
-  const int left_max_extent = left_inner - left_outer;
-  const int right_max_extent = right_outer - right_inner;
-  const int minimum_bar_width =
-      kSegmentCount + (kSegmentCount - 1) * segment_gap;
-  if (left_max_extent < minimum_bar_width ||
-      right_max_extent < minimum_bar_width) {
+  if (available_band_count <= 0 || panel.w <= 1 || panel.h <= 1) {
     return;
   }
 
-  const int axis_gap = 0;
-  const int usable_height = panel.h - outer_margin * 2 - axis_gap -
-                            band_gap * std::max(0, band_count - 1);
-  if (usable_height < band_count) {
+  const int outer_margin = std::max(0, START_MENU_SPECTRUM_OUTER_MARGIN);
+  const int top_y = panel.y;
+  const int bottom_y = panel.y + panel.h - 1;
+  const int left_edge_x = panel.x;
+  const int right_edge_x = panel.x + panel.w - 1;
+  const int left_outer_x = outer_margin;
+  const int right_outer_x = screen_res_x - outer_margin - 1;
+  const int left_max_extent = left_edge_x - left_outer_x;
+  const int right_max_extent = right_edge_x < right_outer_x
+                                   ? (right_outer_x - right_edge_x)
+                                   : 0;
+  if (bottom_y <= top_y || left_max_extent < 8 || right_max_extent < 8) {
     return;
   }
 
-  const int safe_band_count = std::max(1, band_count);
-  const int base_band_height = usable_height / safe_band_count;
-  if (base_band_height <= 0) {
-    return;
-  }
-  const int band_height_remainder = usable_height % safe_band_count;
-  const int top_start_y = panel.y + outer_margin;
   const Uint32 now = SDL_GetTicks();
   std::array<float, Audio::kMenuSpectrumBandCount> levels =
       Audio::GetMenuSpectrumLevels();
@@ -1090,184 +1111,131 @@ void Renderer::drawStartMenuSpectrum(const SDL_Rect &panel) {
     }
   }
 
-  auto draw_gradient_bar = [&](const SDL_Rect &rect,
-                               const SDL_Color &start_color,
-                               const SDL_Color &end_color, Uint8 alpha,
-                               int inset = 0) {
-    if (rect.w <= 0 || rect.h <= 0) {
-      return;
+  auto build_support_points = [&](bool left_side, int edge_x,
+                                  int max_extent) -> std::vector<SDL_FPoint> {
+    std::vector<SDL_FPoint> support_points;
+    support_points.reserve(static_cast<size_t>(available_band_count) + 2);
+    support_points.push_back(
+        SDL_FPoint{static_cast<float>(edge_x), static_cast<float>(top_y)});
+
+    const float total_height = static_cast<float>(bottom_y - top_y);
+    for (int band = 0; band < available_band_count; ++band) {
+      const float level =
+          std::clamp(levels[static_cast<size_t>(band)], 0.0f, 1.0f);
+      const float eased_level = std::pow(level, 0.82f);
+      const float extended_level =
+          std::clamp(eased_level * 1.28f, 0.0f, 1.0f);
+      const float y = static_cast<float>(top_y) +
+                      total_height * static_cast<float>(band + 1) /
+                          static_cast<float>(available_band_count + 1);
+      const float extent = extended_level * static_cast<float>(max_extent);
+      const float x = left_side ? static_cast<float>(edge_x) - extent
+                                : static_cast<float>(edge_x) + extent;
+      support_points.push_back(SDL_FPoint{x, y});
     }
 
-    const int y0 = rect.y + inset;
-    const int y1 = rect.y + rect.h - 1 - inset;
-    if (y1 < y0) {
-      return;
-    }
-
-    for (int offset = 0; offset < rect.w; ++offset) {
-      const float factor =
-          (rect.w > 1)
-              ? static_cast<float>(offset) / static_cast<float>(rect.w - 1)
-              : 0.0f;
-      const SDL_Color color = LerpColor(start_color, end_color, factor);
-      SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, alpha);
-      SDL_RenderDrawLine(sdl_renderer, rect.x + offset, y0, rect.x + offset, y1);
-    }
+    support_points.push_back(
+        SDL_FPoint{static_cast<float>(edge_x), static_cast<float>(bottom_y)});
+    return support_points;
   };
 
-  auto draw_rounded_gradient_segment = [&](const SDL_Rect &rect,
-                                           const SDL_Color &start_color,
-                                           const SDL_Color &end_color,
-                                           const SDL_Color &border_start_color,
-                                           const SDL_Color &border_end_color,
-                                           Uint8 fill_alpha,
-                                           Uint8 border_alpha) {
-    if (rect.w <= 1 || rect.h <= 1) {
-      return;
-    }
-    const int border_thickness = std::clamp(std::min(rect.w, rect.h) / 5, 1, 2);
-    draw_gradient_bar(rect, start_color, end_color, fill_alpha);
+  auto sample_curve_points = [&](const std::vector<SDL_FPoint> &support_points,
+                                 int edge_x,
+                                 int outer_x) -> std::vector<SDL_FPoint> {
+    const int sample_count = std::max(64, panel.h / 3);
+    const float min_x = static_cast<float>(std::min(edge_x, outer_x));
+    const float max_x = static_cast<float>(std::max(edge_x, outer_x));
+    const float total_height = static_cast<float>(bottom_y - top_y);
+    std::vector<SDL_FPoint> sampled_points;
+    sampled_points.reserve(static_cast<size_t>(sample_count) + 1);
 
-    const SDL_Color highlight_start{255, 255, 255, 60};
-    const SDL_Color highlight_end{255, 255, 255, 12};
-    SDL_Rect highlight_rect{
-        rect.x + border_thickness,
-        rect.y + border_thickness,
-        std::max(1, rect.w - border_thickness * 2),
-        std::max(1, rect.h / 2 - std::max(0, border_thickness - 1))};
-    draw_gradient_bar(
-        highlight_rect, highlight_start, highlight_end,
-        std::min<Uint8>(static_cast<Uint8>(fill_alpha / 2 + 30), 118));
+    size_t segment_index = 0;
+    for (int sample = 0; sample <= sample_count; ++sample) {
+      const float y = static_cast<float>(top_y) +
+                      total_height * static_cast<float>(sample) /
+                          static_cast<float>(sample_count);
 
-    const SDL_Rect top_border{rect.x, rect.y, rect.w, border_thickness};
-    const SDL_Rect bottom_border{rect.x, rect.y + rect.h - border_thickness,
-                                 rect.w, border_thickness};
-    draw_gradient_bar(top_border, border_start_color, border_end_color,
-                      border_alpha);
-    draw_gradient_bar(
-        bottom_border,
-        LerpColor(border_start_color, SDL_Color{18, 16, 26, 255}, 0.12f),
-        LerpColor(border_end_color, SDL_Color{18, 16, 26, 255}, 0.18f),
-        static_cast<Uint8>(std::max(36, border_alpha - 12)));
-
-    SDL_Rect left_border{rect.x, rect.y, border_thickness, rect.h};
-    SDL_SetRenderDrawColor(sdl_renderer, border_start_color.r,
-                           border_start_color.g, border_start_color.b,
-                           border_alpha);
-    SDL_RenderFillRect(sdl_renderer, &left_border);
-
-    SDL_Rect right_border{rect.x + rect.w - border_thickness, rect.y,
-                          border_thickness, rect.h};
-    SDL_SetRenderDrawColor(sdl_renderer, border_end_color.r,
-                           border_end_color.g, border_end_color.b, border_alpha);
-    SDL_RenderFillRect(sdl_renderer, &right_border);
-  };
-
-  auto spectrum_color = [&](float factor) {
-    factor = std::clamp(factor, 0.0f, 1.0f);
-    struct ColorStop {
-      float position;
-      SDL_Color color;
-    };
-    constexpr std::array<ColorStop, 6> kStops{{
-        {0.00f, SDL_Color{24, 132, 255, 255}},
-        {0.20f, SDL_Color{0, 232, 255, 255}},
-        {0.40f, SDL_Color{0, 255, 154, 255}},
-        {0.60f, SDL_Color{255, 238, 0, 255}},
-        {0.80f, SDL_Color{255, 136, 0, 255}},
-        {1.00f, SDL_Color{255, 24, 24, 255}},
-    }};
-
-    for (size_t index = 1; index < kStops.size(); ++index) {
-      if (factor <= kStops[index].position) {
-        const float start = kStops[index - 1].position;
-        const float range = std::max(0.0001f, kStops[index].position - start);
-        const float local = (factor - start) / range;
-        return LerpColor(kStops[index - 1].color, kStops[index].color, local);
-      }
-    }
-    return kStops.back().color;
-  };
-
-  auto draw_segmented_bar = [&](const SDL_Rect &bar_rect, float level,
-                                bool anchor_from_right) {
-    if (bar_rect.w <= 0 || bar_rect.h <= 0) {
-      return;
-    }
-    const int total_gap = (kSegmentCount - 1) * segment_gap;
-    const int total_segment_width = bar_rect.w - total_gap;
-    const int raw_segment_w = total_segment_width / kSegmentCount;
-    if (raw_segment_w <= 0) {
-      return;
-    }
-    const int remainder = total_segment_width % kSegmentCount;
-    const float clamped_level = std::clamp(level, 0.0f, 1.0f);
-
-    int cursor_x = bar_rect.x;
-    for (int segment = 0; segment < kSegmentCount; ++segment) {
-      int segment_w = raw_segment_w + (segment < remainder ? 1 : 0);
-      if (segment_w <= 0) {
-        cursor_x += segment_gap;
-        continue;
+      while (segment_index + 1 < support_points.size() - 1 &&
+             y > support_points[segment_index + 1].y) {
+        ++segment_index;
       }
 
-      const int distance_from_menu =
-          anchor_from_right ? (kSegmentCount - 1 - segment) : segment;
-      const float threshold = static_cast<float>(distance_from_menu + 1) /
-                              static_cast<float>(kSegmentCount);
-      const bool active = clamped_level >= threshold;
-      SDL_Rect segment_rect{cursor_x, bar_rect.y, segment_w, bar_rect.h};
-      float gradient = static_cast<float>(distance_from_menu) /
-                       static_cast<float>(kSegmentCount - 1);
-      const SDL_Color core = spectrum_color(gradient);
-      if (active) {
-        const SDL_Color edge = LerpColor(core, SDL_Color{255, 255, 255, 255}, 0.24f);
-        const SDL_Color border_core =
-            LerpColor(core, SDL_Color{18, 14, 24, 255}, 0.16f);
-        const SDL_Color border_edge =
-            LerpColor(edge, SDL_Color{22, 16, 26, 255}, 0.22f);
-        draw_rounded_gradient_segment(segment_rect, core, edge, border_core,
-                                      border_edge, kStartMenuLedFillAlpha,
-                                      kStartMenuLedBorderAlpha);
+      const SDL_FPoint &p0 =
+          support_points[(segment_index == 0) ? 0 : segment_index - 1];
+      const SDL_FPoint &p1 = support_points[segment_index];
+      const SDL_FPoint &p2 =
+          support_points[std::min(segment_index + 1, support_points.size() - 1)];
+      const SDL_FPoint &p3 =
+          support_points[std::min(segment_index + 2, support_points.size() - 1)];
+      const float segment_height = std::max(1.0f, p2.y - p1.y);
+      const float t = std::clamp((y - p1.y) / segment_height, 0.0f, 1.0f);
+      const float x =
+          std::clamp(CatmullRomInterpolate(p0.x, p1.x, p2.x, p3.x, t), min_x,
+                     max_x);
+      sampled_points.push_back(SDL_FPoint{x, y});
+    }
+
+    return sampled_points;
+  };
+
+  auto draw_curve_surface = [&](bool left_side) {
+    const int edge_x = left_side ? left_edge_x : right_edge_x;
+    const int outer_x = left_side ? left_outer_x : right_outer_x;
+    const int max_extent = left_side ? left_max_extent : right_max_extent;
+    const std::vector<SDL_FPoint> support_points =
+        build_support_points(left_side, edge_x, max_extent);
+    const std::vector<SDL_FPoint> curve_points =
+        sample_curve_points(support_points, edge_x, outer_x);
+    if (curve_points.size() < 2) {
+      return;
+    }
+
+    constexpr int kSpectrumColumnCount = 9;
+    std::vector<SDL_Vertex> vertices;
+    vertices.reserve(curve_points.size() * kSpectrumColumnCount);
+    std::vector<int> indices;
+    indices.reserve((curve_points.size() - 1) * (kSpectrumColumnCount - 1) * 6);
+
+    for (const SDL_FPoint &curve_point : curve_points) {
+      for (int column = 0; column < kSpectrumColumnCount; ++column) {
+        const float factor =
+            (kSpectrumColumnCount > 1)
+                ? static_cast<float>(column) /
+                      static_cast<float>(kSpectrumColumnCount - 1)
+                : 0.0f;
+        SDL_Vertex vertex{};
+        vertex.position = SDL_FPoint{
+            static_cast<float>(edge_x) +
+                (curve_point.x - static_cast<float>(edge_x)) * factor,
+            curve_point.y};
+        vertex.color =
+            WithAlpha(SpectrumColor(factor), START_MENU_SPECTRUM_FILL_ALPHA);
+        vertex.tex_coord = SDL_FPoint{0.0f, 0.0f};
+        vertices.push_back(vertex);
       }
-      cursor_x += segment_w + segment_gap;
     }
+
+    for (int sample = 0; sample < static_cast<int>(curve_points.size()) - 1;
+         ++sample) {
+      const int row_base = sample * kSpectrumColumnCount;
+      const int next_row_base = (sample + 1) * kSpectrumColumnCount;
+      for (int column = 0; column < kSpectrumColumnCount - 1; ++column) {
+        indices.push_back(row_base + column);
+        indices.push_back(row_base + column + 1);
+        indices.push_back(next_row_base + column);
+        indices.push_back(row_base + column + 1);
+        indices.push_back(next_row_base + column + 1);
+        indices.push_back(next_row_base + column);
+      }
+    }
+
+    SDL_RenderGeometry(sdl_renderer, nullptr, vertices.data(),
+                       static_cast<int>(vertices.size()), indices.data(),
+                       static_cast<int>(indices.size()));
   };
 
-  auto draw_spectrum_row = [&](int band_index, int y, int band_height) {
-    const float level =
-        std::clamp(levels[static_cast<size_t>(band_index)], 0.0f, 1.0f);
-    const float eased_level = std::pow(level, 0.82f);
-    const float extended_level = std::clamp(eased_level * 1.30f, 0.0f, 1.0f);
-    const SDL_Rect left_bar{left_outer, y, left_max_extent, band_height};
-    const SDL_Rect right_bar{right_inner, y, right_max_extent, band_height};
-    draw_segmented_bar(left_bar, extended_level, true);
-    draw_segmented_bar(right_bar, extended_level, false);
-  };
-
-  int current_y = top_start_y;
-  for (int row = 0; row < band_count; ++row) {
-    const int mirrored_index =
-        (row < configured_half_band_count)
-            ? (configured_half_band_count - 1 - row)
-            : (row - configured_half_band_count);
-    const float row_progress =
-        (configured_half_band_count > 1)
-            ? static_cast<float>(mirrored_index) /
-                  static_cast<float>(configured_half_band_count - 1)
-            : 0.0f;
-    const int band_index = std::clamp(
-        static_cast<int>(std::lround(row_progress *
-                                     static_cast<float>(available_half_band_count - 1))),
-        0, available_half_band_count - 1);
-    const int band_height =
-        base_band_height + (row < band_height_remainder ? 1 : 0);
-    draw_spectrum_row(band_index, current_y, band_height);
-    current_y += band_height + band_gap;
-    if (row == configured_half_band_count - 1) {
-      current_y += axis_gap;
-    }
-  }
+  draw_curve_surface(true);
+  draw_curve_surface(false);
 }
 
 void Renderer::drawStartMenuOverlay(int selected_item,

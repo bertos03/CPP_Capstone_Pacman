@@ -116,23 +116,18 @@ inline constexpr int EDITOR_LARGE_MAP_COLS = 38;
 inline constexpr int END_SCREEN_MINIMUM_MS = 3000;
 
 /**
- * @brief Startup menu timing and LED spectrum layout.
+ * @brief Startup menu timing and spectrum-surface layout.
  *
  * `GAME_START_COUNTDOWN` is clamped to 3..9 seconds in code so the countdown
- * always fits on screen and remains readable. The LED values tune the retro
- * side bars in the start menu; higher gaps or margins produce a more airy
- * layout, lower values make the bars denser and more arcade-like.
+ * always fits on screen and remains readable. The spectrum values tune the
+ * translucent side surfaces in the start menu; the margin caps how far the
+ * FFT curve may expand towards the screen edge and the fill alpha controls the
+ * overall intensity.
  */
 inline constexpr int GAME_START_COUNTDOWN = 3;
 inline constexpr int MENU_MUSIC_FADE_OUT_MS = 2000;
-inline constexpr int START_MENU_LED_SEGMENT_GAP_X = 2;
-inline constexpr int START_MENU_LED_SEGMENT_GAP_Y = 2;
-inline constexpr int START_MENU_LED_HALF_BAR_COUNT = 8;
-inline constexpr int START_MENU_LED_SEGMENT_COUNT = 8;
-inline constexpr int START_MENU_LED_OUTER_MARGIN = 10;
-inline constexpr int START_MENU_LED_MENU_MARGIN = 10;
-inline constexpr Uint8 START_MENU_LED_FILL_ALPHA = 148;
-inline constexpr Uint8 START_MENU_LED_BORDER_ALPHA = 132;
+inline constexpr int START_MENU_SPECTRUM_OUTER_MARGIN = 10;
+inline constexpr Uint8 START_MENU_SPECTRUM_FILL_ALPHA = 118;
 
 /**
  * @brief Player life configuration.
