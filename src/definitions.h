@@ -162,14 +162,14 @@ inline constexpr int SPEED_MONSTER = 6;
  * invulnerability duration is used after consuming one remaining life instead
  * of ending the run immediately. Flicker settings control the visual feedback:
  * the sprite alternates between full opacity and `PACMAN_RECOVERY_ALPHA`.
- * `FINAL_LOSS_SOUND_LEAD_IN_MS` freezes the gameplay scene long enough for
- * the final defeat cue to play before the lose screen takes over.
+ * `FINAL_LOSS_SOUND_LEAD_IN_MS` freezes the gameplay scene for two seconds so
+ * the final defeat cue can land before the lose screen takes over.
  */
 inline constexpr int SCORE_PER_GOODIE = 10;
 inline constexpr Uint32 PACMAN_EXTRA_LIFE_INVULNERABLE_MS = 5000;
 inline constexpr Uint8 PACMAN_RECOVERY_ALPHA = 128;
 inline constexpr Uint32 PACMAN_RECOVERY_FLICKER_PHASE_MS = 120;
-inline constexpr Uint32 FINAL_LOSS_SOUND_LEAD_IN_MS = 3000;
+inline constexpr Uint32 FINAL_LOSS_SOUND_LEAD_IN_MS = 2000;
 
 /**
  * @brief Pickup, projectile, status, and effect timing.

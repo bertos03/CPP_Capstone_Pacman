@@ -195,6 +195,7 @@ Audio::Audio() {
   audio_ready = false;
   SFX_coin = nullptr;
   SFX_win = nullptr;
+  SFX_life_lost = nullptr;
   SFX_gameover = nullptr;
   SFX_menu_move = nullptr;
   SFX_menu_select = nullptr;
@@ -245,6 +246,7 @@ Audio::Audio() {
 
   const std::string coin_sound_path = Paths::GetDataFilePath("coin.wav");
   const std::string win_sound_path = Paths::GetDataFilePath("win.wav");
+  const std::string life_lost_sound_path = Paths::GetDataFilePath("gameover.wav");
   const std::string monster_shot_sound_path = Paths::GetDataFilePath("schuss.wav");
   const std::string fireball_impact_sound_path =
       Paths::GetDataFilePath("einschlag.wav");
@@ -273,6 +275,10 @@ Audio::Audio() {
 
   SFX_coin = Mix_LoadWAV(coin_sound_path.c_str());
   SFX_win = Mix_LoadWAV(win_sound_path.c_str());
+  SFX_life_lost = Mix_LoadWAV(life_lost_sound_path.c_str());
+  if (SFX_life_lost == nullptr) {
+    SFX_life_lost = CreateSynthChunk({164, 123, 92}, 110, 0.34, 2.0, 70.0);
+  }
   SFX_gameover = CreateViolinLamentChunk();
   SFX_menu_move = CreateSynthChunk({1396, 1865}, 70, 0.30, 4.0, 38.0);
   SFX_menu_select = CreateSynthChunk({784, 988, 1175}, 150, 0.42, 6.0, 90.0);
@@ -355,7 +361,8 @@ Audio::Audio() {
               << Mix_GetError() << "\n";
   }
 
-  if (SFX_coin == nullptr || SFX_win == nullptr || SFX_gameover == nullptr ||
+  if (SFX_coin == nullptr || SFX_win == nullptr ||
+      SFX_life_lost == nullptr || SFX_gameover == nullptr ||
       SFX_menu_move == nullptr || SFX_menu_select == nullptr ||
       SFX_countdown_tick == nullptr || SFX_start_trumpet == nullptr ||
       SFX_monster_shot == nullptr || SFX_fireball_wall_hit == nullptr ||
@@ -399,6 +406,9 @@ Audio::~Audio() {
   }
   if (SFX_win != nullptr) {
     Mix_FreeChunk(SFX_win);
+  }
+  if (SFX_life_lost != nullptr) {
+    Mix_FreeChunk(SFX_life_lost);
   }
   if (SFX_gameover != nullptr) {
     Mix_FreeChunk(SFX_gameover);
@@ -613,8 +623,8 @@ Mix_Chunk *Audio::CreateViolinLamentChunk() {
   };
 
   const std::vector<ViolinNote> melody{
-      {659.25, 180, 0.16}, {587.33, 210, 0.18}, {523.25, 260, 0.22},
-      {493.88, 240, 0.20}, {440.00, 420, 0.24}};
+      {659.25, 240, 0.16}, {587.33, 280, 0.18}, {523.25, 360, 0.22},
+      {493.88, 320, 0.20}, {440.00, 800, 0.24}};
   std::vector<Sint16> pcm_samples;
 
   double note_time_offset = 0.0;
@@ -1299,13 +1309,13 @@ void Audio::PlayChunk(Mix_Chunk *chunk) {
 void Audio::PlayCoin() { PlayChunk(SFX_coin); };
 
 /**
- * @brief Plays the short dramatic cue for an extra-life hit.
+ * @brief Plays the short "zonk" when one life is consumed.
  *
  */
-void Audio::PlayLifeLost() { PlayChunk(SFX_gameover); };
+void Audio::PlayLifeLost() { PlayChunk(SFX_life_lost); };
 
 /**
- * @brief as the name says
+ * @brief Plays the sad cue before the lose screen appears.
  *
  */
 void Audio::PlayGameOver() {
@@ -1313,19 +1323,21 @@ void Audio::PlayGameOver() {
     return;
   }
 
-  if (lose_music != nullptr) {
-    menu_music_active = false;
-    if (Mix_PlayingMusic() != 0) {
-      Mix_HaltMusic();
-    }
-    ClearMenuSpectrumLevels();
-    if (Mix_PlayMusic(lose_music, 0) == 0) {
-      return;
-    }
-  }
-
   PlayChunk(SFX_gameover);
 };
+
+void Audio::StartLoseMusic() {
+  if (!audio_ready || lose_music == nullptr) {
+    return;
+  }
+
+  menu_music_active = false;
+  if (Mix_PlayingMusic() != 0) {
+    Mix_HaltMusic();
+  }
+  ClearMenuSpectrumLevels();
+  Mix_PlayMusic(lose_music, 0);
+}
 
 /**
  * @brief as the name says

@@ -1233,19 +1233,13 @@ int main() {
         if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
           frozen_end_screen = true;
-          end_screen_started =
-              game->is_lost() && game->GetDeathStartedTicks() != 0
-                  ? game->GetDeathStartedTicks()
-                  : SDL_GetTicks();
+          end_screen_started = SDL_GetTicks();
         }
       } else {
         if ((game->is_lost() || game->is_won()) && !frozen_end_screen) {
           events->RequestQuit();
           frozen_end_screen = true;
-          end_screen_started =
-              game->is_lost() && game->GetDeathStartedTicks() != 0
-                  ? game->GetDeathStartedTicks()
-                  : SDL_GetTicks();
+          end_screen_started = SDL_GetTicks();
         }
         if (game->is_lost()) {
           game->Update();

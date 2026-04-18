@@ -37,6 +37,7 @@ public:
   void PlayCoin();
   void PlayLifeLost();
   void PlayGameOver();
+  void StartLoseMusic();
   void PlayWin();
   void PlayMenuMove();
   void PlayMenuSelect();
@@ -96,6 +97,7 @@ private:
 
   Mix_Chunk *SFX_coin;
   Mix_Chunk *SFX_win;
+  Mix_Chunk *SFX_life_lost;
   Mix_Chunk *SFX_gameover;
   Mix_Chunk *SFX_menu_move;
   Mix_Chunk *SFX_menu_select;

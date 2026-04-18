@@ -1974,7 +1974,7 @@ void Game::UpdateFinalLossSequence(Uint32 now) {
 
   final_loss_commits_at_ticks = 0;
 #ifdef AUDIO
-  audio->StopEndScreenMusic();
+  audio->StartLoseMusic();
 #endif
   dead = true;
 }
