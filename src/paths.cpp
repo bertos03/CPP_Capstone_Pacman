@@ -4,8 +4,10 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <system_error>
+#include <unistd.h>
 
 namespace {
 
@@ -42,6 +44,20 @@ bool IsExistingDirectory(const fs::path &path) {
 bool IsExistingRegularFile(const fs::path &path) {
   std::error_code error;
   return fs::exists(path, error) && fs::is_regular_file(path, error);
+}
+
+bool EnsureDirectoryIsWritable(const fs::path &path) {
+  if (path.empty()) {
+    return false;
+  }
+
+  std::error_code create_error;
+  fs::create_directories(path, create_error);
+  if (create_error) {
+    return false;
+  }
+
+  return ::access(path.c_str(), W_OK) == 0;
 }
 
 void AppendUniquePath(std::vector<fs::path> &paths, const fs::path &candidate) {
@@ -132,25 +148,33 @@ const fs::path &ResolveWritableMapsDirectory() {
   static const fs::path writable_maps_directory = [] {
     const fs::path source_root = GetSourceRootPath();
     const fs::path executable_base = GetExecutableBasePath();
-    fs::path maps_directory;
+    const fs::path bundled_maps_directory =
+        NormalizePath(ResolveDataDirectory() / "maps");
 
     if (!source_root.empty() && !executable_base.empty() &&
         IsPathWithin(executable_base, source_root)) {
-      maps_directory = source_root / "data" / "maps";
-    } else {
-      const std::string preference_root =
-          ConsumeSdlPath(SDL_GetPrefPath("BobMan", "BobMan"));
-      if (!preference_root.empty()) {
-        maps_directory = fs::path(preference_root) / "maps";
-      } else {
-        maps_directory = ResolveDataDirectory() / "maps";
+      const fs::path source_maps_directory =
+          NormalizePath(source_root / "data" / "maps");
+      EnsureDirectoryIsWritable(source_maps_directory);
+      return source_maps_directory;
+    }
+
+    if (EnsureDirectoryIsWritable(bundled_maps_directory)) {
+      return bundled_maps_directory;
+    }
+
+    const std::string preference_root =
+        ConsumeSdlPath(SDL_GetPrefPath("BobMan", "BobMan"));
+    if (!preference_root.empty()) {
+      const fs::path preference_maps_directory =
+          NormalizePath(fs::path(preference_root) / "maps");
+      if (EnsureDirectoryIsWritable(preference_maps_directory)) {
+        return preference_maps_directory;
       }
     }
 
-    maps_directory = NormalizePath(maps_directory);
-    std::error_code create_error;
-    fs::create_directories(maps_directory, create_error);
-    return maps_directory;
+    EnsureDirectoryIsWritable(bundled_maps_directory);
+    return bundled_maps_directory;
   }();
   return writable_maps_directory;
 }

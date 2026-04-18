@@ -637,10 +637,11 @@ void Renderer::RenderStartMenu(int selected_item, const std::string &map_name,
   SDL_RenderPresent(sdl_renderer);
 }
 
-void Renderer::RenderConfigMenu(int selected_item, Difficulty difficulty) {
+void Renderer::RenderConfigMenu(int selected_item, Difficulty difficulty,
+                                int player_lives) {
   renderFrame(false);
   drawDimmer(120);
-  drawConfigMenuOverlay(selected_item, difficulty);
+  drawConfigMenuOverlay(selected_item, difficulty, player_lives);
   SDL_RenderPresent(sdl_renderer);
 }
 
@@ -808,6 +809,7 @@ void Renderer::drawhud() {
   }
 
   const std::string title_text = "BOBMAN";
+  const std::string lives_text = "x" + std::to_string(game->remaining_lives);
   const std::string score_text = "Score: " + std::to_string(game->score);
   const std::string dynamite_text = std::to_string(game->dynamite_inventory) + "x";
   const std::string plastic_explosive_text =
@@ -817,12 +819,14 @@ void Renderer::drawhud() {
   const std::string rocket_text =
       std::to_string(game->rocket_inventory) + "x";
   int title_width = 0;
+  int lives_text_width = 0;
   int score_width = 0;
   int dynamite_text_width = 0;
   int plastic_explosive_text_width = 0;
   int airstrike_text_width = 0;
   int rocket_text_width = 0;
   TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
+  TTF_SizeUTF8(sdl_font_hud, lives_text.c_str(), &lives_text_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
   if (game->dynamite_inventory > 0) {
     TTF_SizeUTF8(sdl_font_hud, dynamite_text.c_str(), &dynamite_text_width,
@@ -843,7 +847,9 @@ void Renderer::drawhud() {
   const int line_top = hud_top_y;
   const int hud_gap = std::max(14, element_size / 2);
   const int icon_size = std::max(18, TTF_FontHeight(sdl_font_hud) - 2);
-  int line_width = title_width + hud_gap + score_width;
+  int line_width =
+      title_width + hud_gap + icon_size + 10 + lives_text_width + hud_gap +
+      score_width;
   if (game->dynamite_inventory > 0) {
     line_width += hud_gap + icon_size + 10 + dynamite_text_width;
   }
@@ -860,6 +866,18 @@ void Renderer::drawhud() {
   int cursor_x = screen_res_x / 2 - line_width / 2;
   renderTextLeft(sdl_font_hud, title_text, sdl_font_color, cursor_x, line_top);
   cursor_x += title_width + hud_gap;
+  const SDL_Rect lives_icon_rect{
+      cursor_x,
+      line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
+      icon_size, icon_size};
+  if (SDL_Texture *lives_texture = getPacmanTexture(Directions::Down, false);
+      lives_texture != nullptr) {
+    SDL_SetTextureAlphaMod(lives_texture, 255);
+    SDL_RenderCopy(sdl_renderer, lives_texture, nullptr, &lives_icon_rect);
+  }
+  cursor_x += lives_icon_rect.w + 10;
+  renderTextLeft(sdl_font_hud, lives_text, sdl_font_color, cursor_x, line_top);
+  cursor_x += lives_text_width + hud_gap;
   renderTextLeft(sdl_font_hud, score_text, sdl_font_color, cursor_x, line_top);
   cursor_x += score_width;
 
@@ -1321,7 +1339,8 @@ void Renderer::drawStartMenuOverlay(int selected_item,
   }
 }
 
-void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty) {
+void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty,
+                                     int player_lives) {
   const int logo_top = screen_res_y / 18;
   renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
@@ -1340,8 +1359,9 @@ void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty) {
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
 
   const std::vector<std::string> menu_items{
-      "Schwierigkeitsgrad", "Zurueck"};
-  const std::vector<std::string> value_items{DifficultyLabel(difficulty), ""};
+      "Schwierigkeitsgrad", "Leben", "Zurueck"};
+  const std::vector<std::string> value_items{DifficultyLabel(difficulty),
+                                             std::to_string(player_lives), ""};
   const int item_height = std::max(62, TTF_FontHeight(sdl_font_menu) + 24);
   const int highlight_width = panel.w - 56;
   const int item_start_y =
@@ -1365,7 +1385,7 @@ void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty) {
         highlight_rect.y +
         (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
 
-    if (i == 0) {
+    if (i < 2) {
       renderSimpleText(sdl_font_menu, menu_items[i], item_color,
                        panel.x + panel.w / 3, text_top);
       renderSimpleText(sdl_font_menu, value_items[i], item_color,
@@ -2762,17 +2782,25 @@ void Renderer::drawpacman() {
   }
 
   const Uint32 now = SDL_GetTicks();
-  const bool invulnerable = game->pacman->invulnerable_until_ticks > now;
+  const bool final_loss_sequence_active = game->IsFinalLossSequenceActive(now);
+  const bool potion_invulnerable = game->pacman->invulnerable_until_ticks > now;
+  const bool life_recovery_active = game->IsPacmanRecoveringFromLifeLoss(now);
   const bool slimed = game->pacman->slimed_until_ticks > now;
   const bool walking =
       game->pacman->px_delta.x != 0 || game->pacman->px_delta.y != 0;
+  const Uint32 flicker_phase_ms =
+      std::max<Uint32>(1, PACMAN_RECOVERY_FLICKER_PHASE_MS);
+  const Uint8 pacman_alpha =
+      (!life_recovery_active || ((now / flicker_phase_ms) % 2 == 0))
+          ? 255
+          : PACMAN_RECOVERY_ALPHA;
   const Directions facing_direction =
       (game->pacman->facing_direction == Directions::None)
           ? Directions::Down
           : game->pacman->facing_direction;
   SDL_Texture *pacman_texture = getPacmanTexture(facing_direction, walking);
 
-  if (game->dead) {
+  if (game->dead || final_loss_sequence_active) {
     drawDefeatEffect();
     return;
   }
@@ -2861,7 +2889,7 @@ void Renderer::drawpacman() {
         base_px.x + element_size / 2 - size / 2,
         base_px.y + element_size / 2 - size / 2, size, size};
 
-    if (invulnerable) {
+    if (potion_invulnerable) {
       drawPacmanShield(animated_rect.x + animated_rect.w / 2,
                        animated_rect.y + animated_rect.h / 2,
                        std::max(8, animated_rect.w / 2 + 5),
@@ -2893,8 +2921,10 @@ void Renderer::drawpacman() {
     }
 
     if (size > 1 && pacman_texture != nullptr) {
+      SDL_SetTextureAlphaMod(pacman_texture, pacman_alpha);
       SDL_RenderCopyEx(sdl_renderer, pacman_texture, nullptr, &animated_rect,
                        rotation, nullptr, SDL_FLIP_NONE);
+      SDL_SetTextureAlphaMod(pacman_texture, 255);
     }
     draw_slime_overlay(animated_rect, rotation);
     return;
@@ -2907,14 +2937,16 @@ void Renderer::drawpacman() {
       SDL_Rect{game->pacman->px_coord.x + int(element_size * 0.05),
                game->pacman->px_coord.y + int(element_size * 0.05),
                int(element_size * 0.9), int(element_size * 0.9)};
-  if (invulnerable) {
+  if (potion_invulnerable) {
     drawPacmanShield(sdl_pacman_rect.x + sdl_pacman_rect.w / 2,
                      sdl_pacman_rect.y + sdl_pacman_rect.h / 2,
                      std::max(8, sdl_pacman_rect.w / 2 + 5),
                      static_cast<double>(now) / 180.0);
   }
   if (pacman_texture != nullptr) {
+    SDL_SetTextureAlphaMod(pacman_texture, pacman_alpha);
     SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr, &sdl_pacman_rect);
+    SDL_SetTextureAlphaMod(pacman_texture, 255);
   }
   draw_slime_overlay(sdl_pacman_rect, 0.0);
 }
@@ -3611,7 +3643,8 @@ void Renderer::drawplaceddynamites() {
             : 0;
     const double countdown_progress =
         std::clamp(static_cast<double>(remaining_ms) /
-                       static_cast<double>(std::max(1, DYNAMITE_COUNTDOWN_MS)),
+                       static_cast<double>(
+                           std::max<Uint32>(1, DYNAMITE_COUNTDOWN_MS)),
                    0.0, 1.0);
     const double urgency = 1.0 - countdown_progress;
     const double pulse_clock =

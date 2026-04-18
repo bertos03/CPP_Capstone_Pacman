@@ -66,6 +66,13 @@ void Monster::simulate(Events *events, Map *map) {
   next_move = options[rand() % options.size()];
 
   while (!events->is_quit() && is_alive) {
+    if (events->IsGameplayFrozen()) {
+      px_delta.x = 0;
+      px_delta.y = 0;
+      sleep(15);
+      continue;
+    }
+
     // carry out next monster move ... do it with a little dirty hack to enable
     // smooth moving
     if (next_move != Directions::None) {

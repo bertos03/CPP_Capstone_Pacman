@@ -1,121 +1,361 @@
 /*
  * PROJECT COMMENT (definitions.h)
  * ---------------------------------------------------------------------------
- * This file is part of "BobMan", an SDL2 game inspired by Pac-Man.
- * The code in this unit has a clear responsibility so newcomers can quickly
- * understand the architecture: data model (map, elements), runtime logic
- * (game, events), rendering (renderer), and optional audio output.
+ * This header is the single source of truth for BobMan's compile-time
+ * configuration. It groups feature flags, asset paths, gameplay timing,
+ * editor defaults, rendering colors, HUD tuning, and audio analysis values.
  *
- * Important notes for newcomers:
- * - Header files declare classes, methods, and data types.
- * - CPP files contain the concrete implementation of the logic.
- * - Multiple threads move game entities in parallel, so shared data is read
- *   and written in a controlled way.
- * - Macros in definitions.h control resource paths, colors, and features.
+ * Design rules for this file:
+ * - Preprocessor feature toggles stay macros because #ifdef checks need them.
+ * - Regular parameters use typed inline constexpr constants.
+ * - Asset paths are stored as data-relative paths and are resolved at runtime
+ *   through Paths::GetDataFilePath().
+ * - Every value documents its unit, valid range, and the gameplay or visual
+ *   consequence of changing it.
  */
 
+#ifndef DEFINITIONS_H
+#define DEFINITIONS_H
 
-// Flags to comment out for compatibility with Udacity workspace
-#define AUDIO 
+#include <SDL.h>
+
+/**
+ * @brief Compile-time feature toggles.
+ *
+ * Comment out these macros only when the target environment lacks the matching
+ * SDL subsystem or font support. They remain macros on purpose because the
+ * codebase uses them with #ifdef / #ifndef guards.
+ */
+#define AUDIO
 #define FONT_FINE
 
-#define COLOR_BACK 10,0,35
+/**
+ * @brief Tuple-style draw colors intentionally kept as macros.
+ *
+ * These values are passed directly into SDL_SetRenderDrawColor() at a few
+ * call sites that expect a raw channel list instead of an SDL_Color object.
+ * Valid values are 0..255 per channel.
+ */
+#define COLOR_BACK 10, 0, 35
 #define COLOR_PACMAN 200, 200, 0
 #define COLOR_MONSTER 255, 10, 10
 #define COLOR_GOODIE 0, 50, 255
-#define COLOR_PATH 40,40,40
+#define COLOR_PATH 40, 40, 40
 
-#define MAPS_DIRECTORY_PATH "../data/maps"
-#define FONT_PATH "../data/font.ttf"
-#define LOGO_BRICK_TEXTURE_PATH "../data/brick.png"
-#define FONT_COLOR &white
-#define WINDOW_TITLE "BobMan"
+/**
+ * @brief Asset and window configuration.
+ *
+ * All paths are relative to the bundled `data/` directory. They are resolved
+ * at runtime to support both source-tree execution and packaged app bundles.
+ */
+inline constexpr const char *WINDOW_TITLE = "BobMan";
+inline constexpr const char *MAPS_SUBDIRECTORY = "maps";
+inline constexpr const char *FONT_ASSET_PATH = "font.ttf";
+inline constexpr const char *APP_ICON_RGBA_ASSET_PATH = "app_icon_rgba.png";
+inline constexpr const char *APP_ICON_FALLBACK_ASSET_PATH = "app_icon.png";
+inline constexpr const char *WALL_TEXTURE_ASSET_PATH = "brick.bmp";
+inline constexpr const char *GOODIE_TEXTURE_ASSET_PATH = "goodie.bmp";
+inline constexpr const char *LOGO_BRICK_TEXTURE_PATH = "brick.png";
+inline constexpr const char *START_MENU_MONSTER_ASSET_PATH =
+    "start_menu_monster.png";
+inline constexpr const char *START_MENU_HERO_ASSET_PATH =
+    "start_menu_spielfigur.png";
+inline constexpr const char *WIN_SCREEN_ASSET_PATH = "win_screen_triumph.png";
+inline constexpr const char *LOSE_SCREEN_ASSET_PATH = "lose_screen_defeat.png";
+inline constexpr const char *WALKIE_TALKIE_ASSET_PATH = "walkie_talkie.png";
+inline constexpr const char *ROCKET_ASSET_PATH = "rocket.png";
+inline constexpr const char *AIRSTRIKE_PLANE_ASSET_PATH =
+    "airstrike_plane.png";
+inline constexpr const char *AIRSTRIKE_EXPLOSION_SHEET_ASSET_PATH =
+    "airstrike_explosion_sheet.png";
+inline constexpr const char *FART_CLOUD_SHEET_ASSET_PATH =
+    "fart_cloud_sheet.png";
+inline constexpr const char *SLIME_BALL_ASSET_PATH = "slime_ball.png";
+inline constexpr const char *SLIME_OVERLAY_ASSET_PATH = "slime_overlay.png";
+inline constexpr const char *SLIME_SPLASH_SHEET_ASSET_PATH =
+    "slime_splash_sheet.png";
+inline constexpr const char *DYNAMITE_ASSET_PATH = "dynamite.png";
+inline constexpr const char *MENU_MUSIC_PATH = "menu_music.mp3";
+inline constexpr const char *WIN_MUSIC_PATH = "win_melody.mp3";
+inline constexpr const char *LOSE_MUSIC_PATH = "lose_melody.mp3";
+inline constexpr const char *COIN_SOUND_PATH = "coin.wav";
+inline constexpr const char *WIN_SOUND_PATH = "win.wav";
+inline constexpr const char *MONSTER_SHOT_SOUND_PATH = "schuss.wav";
+inline constexpr const char *FIREBALL_IMPACT_SOUND_PATH = "einschlag.wav";
+inline constexpr const char *SLIME_SHOT_SOUND_PATH = "slime_shot.mp3";
+inline constexpr const char *SLIME_IMPACT_SOUND_PATH = "slime_impact.mp3";
+inline constexpr const char *MONSTER_EXPLOSION_SOUND_PATH =
+    "monsterexplosion.wav";
+inline constexpr const char *MONSTER_FART_SOUND_PATH = "monster_fart.mp3";
+inline constexpr const char *DYNAMITE_EXPLOSION_SOUND_PATH =
+    "dynamitexplosion.wav";
+inline constexpr const char *DYNAMITE_IGNITE_SOUND_PATH =
+    "dynamite_ignite.mp3";
+inline constexpr const char *PLASTIC_EXPLOSIVE_WALL_BREAK_SOUND_PATH =
+    "plastic_explosive_wall_break.mp3";
+inline constexpr const char *AIRSTRIKE_RADIO_SOUND_PATH =
+    "airstrike_radio.wav";
+inline constexpr const char *AIRSTRIKE_EXPLOSION_SOUND_PATH =
+    "airstrike_explosion.wav";
+inline constexpr const char *ROCKET_LAUNCH_SOUND_PATH = "rocket_launch.mp3";
+inline constexpr const char *SETTINGS_FILE_NAME = "settings.cfg";
 
-#define GAME_START_COUNTDOWN 3 // allowed values: 3..9 seconds
-#define MENU_MUSIC_FADE_OUT_MS 2000
-#define MENU_MUSIC_PATH "../data/menu_music.mp3"
-#define START_MENU_LED_SEGMENT_GAP_X 2
-#define START_MENU_LED_SEGMENT_GAP_Y 2
-#define START_MENU_LED_HALF_BAR_COUNT 8
-#define START_MENU_LED_OUTER_MARGIN 10
-#define START_MENU_LED_MENU_MARGIN 10
+/**
+ * @brief Map editor defaults and UI timing.
+ *
+ * The row and column counts define the exact map canvas size for newly created
+ * maps. The end-screen minimum keeps win/loss overlays visible long enough to
+ * read before the user can dismiss them.
+ */
+inline constexpr int EDITOR_SMALL_MAP_ROWS = 13;
+inline constexpr int EDITOR_SMALL_MAP_COLS = 22;
+inline constexpr int EDITOR_MEDIUM_MAP_ROWS = 17;
+inline constexpr int EDITOR_MEDIUM_MAP_COLS = 30;
+inline constexpr int EDITOR_LARGE_MAP_ROWS = 21;
+inline constexpr int EDITOR_LARGE_MAP_COLS = 38;
+inline constexpr int END_SCREEN_MINIMUM_MS = 3000;
 
-#define COIN_SOUND_PATH "../data/coin.wav"
-#define WIN_SOUND_PATH "../data/win.wav"
-#define GAMEOVER_SOUND_PATH "../data/gameover.wav"
-#define MONSTER_SHOT_SOUND_PATH "../data/schuss.wav"
-#define FIREBALL_IMPACT_SOUND_PATH "../data/einschlag.wav"
-#define MONSTER_EXPLOSION_SOUND_PATH "../data/monsterexplosion.wav"
-#define DYNAMITE_EXPLOSION_SOUND_PATH "../data/dynamitexplosion.wav"
+/**
+ * @brief Startup menu timing and LED spectrum layout.
+ *
+ * `GAME_START_COUNTDOWN` is clamped to 3..9 seconds in code so the countdown
+ * always fits on screen and remains readable. The LED values tune the retro
+ * side bars in the start menu; higher gaps or margins produce a more airy
+ * layout, lower values make the bars denser and more arcade-like.
+ */
+inline constexpr int GAME_START_COUNTDOWN = 3;
+inline constexpr int MENU_MUSIC_FADE_OUT_MS = 2000;
+inline constexpr int START_MENU_LED_SEGMENT_GAP_X = 2;
+inline constexpr int START_MENU_LED_SEGMENT_GAP_Y = 2;
+inline constexpr int START_MENU_LED_HALF_BAR_COUNT = 8;
+inline constexpr int START_MENU_LED_SEGMENT_COUNT = 8;
+inline constexpr int START_MENU_LED_OUTER_MARGIN = 10;
+inline constexpr int START_MENU_LED_MENU_MARGIN = 10;
+inline constexpr Uint8 START_MENU_LED_FILL_ALPHA = 148;
+inline constexpr Uint8 START_MENU_LED_BORDER_ALPHA = 132;
 
-#define WALL_PATH "../data/brick.bmp"
-#define PACMAN_PATH "../data/pacman.bmp"
-#define GOODIE_PATH "../data/goodie.bmp"
-#define MONSTER_PATH "../data/monster.bmp"
-#define MONSTER_FRAME_1_PATH "../data/monster_1.bmp"
-#define MONSTER_FRAME_2_PATH "../data/monster_2.bmp"
-#define MONSTER_FRAME_3_PATH "../data/monster_3.bmp"
+/**
+ * @brief Player life configuration.
+ *
+ * `PLAYER_DEFAULT_LIVES` is used when no setting has been stored yet.
+ * The config menu clamps the runtime value into the inclusive range defined by
+ * `PLAYER_LIVES_MIN` and `PLAYER_LIVES_MAX`.
+ */
+inline constexpr int PLAYER_LIVES_MIN = 1;
+inline constexpr int PLAYER_LIVES_MAX = 5;
+inline constexpr int PLAYER_DEFAULT_LIVES = 3;
 
-#define MONSTER_ANIMATION_FRAME_MS 180
-#define FIREBALL_STEP_DURATION_MS 160 // higher values make fireballs slower
-#define MONSTER_GAS_MIN_INTERVAL_MS 20000
-#define MONSTER_GAS_MAX_INTERVAL_MS 60000
-#define GAS_CLOUD_ACTIVE_MS 30000
-#define GAS_CLOUD_FADE_MS 1000
-#define BLUE_POTION_SPAWN_MIN_INTERVAL_MS 10000
-#define BLUE_POTION_SPAWN_MAX_INTERVAL_MS 30000
-#define BLUE_POTION_VISIBLE_MS 10000
-#define BLUE_POTION_FADE_MS 1000
-#define DYNAMITE_SPAWN_MIN_INTERVAL_MS 5000
-#define DYNAMITE_SPAWN_MAX_INTERVAL_MS 10000
-#define DYNAMITE_VISIBLE_MS 60000
-#define DYNAMITE_FADE_MS 1000
-#define PLASTIC_EXPLOSIVE_SPAWN_MIN_INTERVAL_MS 5000
-#define PLASTIC_EXPLOSIVE_SPAWN_MAX_INTERVAL_MS 10000
-#define PLASTIC_EXPLOSIVE_VISIBLE_MS 60000
-#define PLASTIC_EXPLOSIVE_FADE_MS 1000
-#define WALKIE_TALKIE_SPAWN_MIN_INTERVAL_MS 12000
-#define WALKIE_TALKIE_SPAWN_MAX_INTERVAL_MS 22000
-#define WALKIE_TALKIE_VISIBLE_MS 60000
-#define WALKIE_TALKIE_FADE_MS 1000
-#define ROCKET_SPAWN_MIN_INTERVAL_MS 8000
-#define ROCKET_SPAWN_MAX_INTERVAL_MS 16000
-#define ROCKET_VISIBLE_MS 60000
-#define ROCKET_FADE_MS 1000
-#define DYNAMITE_COUNTDOWN_MS 5000
-#define DYNAMITE_EXPLOSION_DURATION_MS 2000
-#define DYNAMITE_EXPLOSION_RADIUS_CELLS 3
-#define ROCKET_STEP_DURATION_MS 90
-#define ROCKET_ANIMATION_FRAME_MS 90
-#define AIRSTRIKE_BOMB_COUNT 10
-#define AIRSTRIKE_RADIO_DELAY_MS 4000
-#define AIRSTRIKE_BOMB_FALL_MS 320
-#define AIRSTRIKE_PLANE_CELL_TRAVEL_MS 105
-#define AIRSTRIKE_PLANE_MIN_FLIGHT_MS 2200
-#define AIRSTRIKE_EXPLOSION_FRAME_MS 110
-#define AIRSTRIKE_EXPLOSION_DURATION_MS (AIRSTRIKE_EXPLOSION_FRAME_MS * 5)
-#define AIRSTRIKE_EXPLOSION_RADIUS_CELLS 1
-#define PACMAN_INVULNERABLE_MS 30000
-#define PACMAN_PARALYSIS_MS 3000
-#define SLIME_OVERLAY_HOLD_MS 2000
-#define SLIME_OVERLAY_FADE_MS 1000
-#define SLIME_SPLASH_FRAME_MS 80
-#define SLIME_SPLASH_FRAME_COUNT 9
-#define SLIME_SPLASH_FADE_MS 1000
-#define TELEPORT_ANIMATION_PHASE_MS 1000
+/**
+ * @brief Movement speed ratings for Pacman and monsters.
+ *
+ * These ratings are intentionally kept on a simple 1..10 scale so gameplay can
+ * be tuned without touching the movement loops. Higher values mean less delay
+ * between micro-steps and therefore faster movement.
+ */
+inline constexpr int SPEED_PACMAN = 8;
+inline constexpr int SPEED_MONSTER = 6;
 
-#define BRICK 'x'
-#define PATH '.'
-#define GOODIE 'G'
-#define PACMAN 'P'
-// Monster map codes / editor keys.
-#define MONSTER_FEW 'M'
-#define MONSTER_MEDIUM 'N'
-#define MONSTER_MANY 'O'
-#define MONSTER_EXTRA 'K'
+/**
+ * @brief Score and loss-recovery tuning.
+ *
+ * `SCORE_PER_GOODIE` controls how rewarding each pellet is. The extra-life
+ * invulnerability duration is used after consuming one remaining life instead
+ * of ending the run immediately. Flicker settings control the visual feedback:
+ * the sprite alternates between full opacity and `PACMAN_RECOVERY_ALPHA`.
+ * `FINAL_LOSS_SOUND_LEAD_IN_MS` freezes the gameplay scene long enough for
+ * the final defeat cue to play before the lose screen takes over.
+ */
+inline constexpr int SCORE_PER_GOODIE = 10;
+inline constexpr Uint32 PACMAN_EXTRA_LIFE_INVULNERABLE_MS = 5000;
+inline constexpr Uint8 PACMAN_RECOVERY_ALPHA = 128;
+inline constexpr Uint32 PACMAN_RECOVERY_FLICKER_PHASE_MS = 120;
+inline constexpr Uint32 FINAL_LOSS_SOUND_LEAD_IN_MS = 3000;
 
-#define SPEED_PACMAN 8 // 1..10
-#define SPEED_MONSTER 6 // 1..10
-// #define SIZE_PACMAN 5 // cellwidth - 2*X
-// #define SIZE_MONSTER 10 // cellwidth - 2*X
-#define SCORE_PER_GOODIE 10 //
+/**
+ * @brief Pickup, projectile, status, and effect timing.
+ *
+ * All values are measured in milliseconds unless noted otherwise. Raising
+ * visible durations makes pickups easier to collect; lowering cooldowns makes
+ * enemies more aggressive; increasing radii or durations makes explosives and
+ * status effects more punishing.
+ */
+inline constexpr Uint32 MONSTER_ANIMATION_FRAME_MS = 180;
+inline constexpr Uint32 FIREBALL_STEP_DURATION_MS = 160;
+inline constexpr Uint32 MONSTER_GAS_MIN_INTERVAL_MS = 20000;
+inline constexpr Uint32 MONSTER_GAS_MAX_INTERVAL_MS = 60000;
+inline constexpr Uint32 GAS_CLOUD_ACTIVE_MS = 30000;
+inline constexpr Uint32 GAS_CLOUD_FADE_MS = 1000;
+inline constexpr Uint32 BLUE_POTION_SPAWN_MIN_INTERVAL_MS = 10000;
+inline constexpr Uint32 BLUE_POTION_SPAWN_MAX_INTERVAL_MS = 30000;
+inline constexpr Uint32 BLUE_POTION_VISIBLE_MS = 10000;
+inline constexpr Uint32 BLUE_POTION_FADE_MS = 1000;
+inline constexpr Uint32 DYNAMITE_SPAWN_MIN_INTERVAL_MS = 5000;
+inline constexpr Uint32 DYNAMITE_SPAWN_MAX_INTERVAL_MS = 10000;
+inline constexpr Uint32 DYNAMITE_VISIBLE_MS = 60000;
+inline constexpr Uint32 DYNAMITE_FADE_MS = 1000;
+inline constexpr Uint32 PLASTIC_EXPLOSIVE_SPAWN_MIN_INTERVAL_MS = 5000;
+inline constexpr Uint32 PLASTIC_EXPLOSIVE_SPAWN_MAX_INTERVAL_MS = 10000;
+inline constexpr Uint32 PLASTIC_EXPLOSIVE_VISIBLE_MS = 60000;
+inline constexpr Uint32 PLASTIC_EXPLOSIVE_FADE_MS = 1000;
+inline constexpr Uint32 WALKIE_TALKIE_SPAWN_MIN_INTERVAL_MS = 12000;
+inline constexpr Uint32 WALKIE_TALKIE_SPAWN_MAX_INTERVAL_MS = 22000;
+inline constexpr Uint32 WALKIE_TALKIE_VISIBLE_MS = 60000;
+inline constexpr Uint32 WALKIE_TALKIE_FADE_MS = 1000;
+inline constexpr Uint32 ROCKET_SPAWN_MIN_INTERVAL_MS = 8000;
+inline constexpr Uint32 ROCKET_SPAWN_MAX_INTERVAL_MS = 16000;
+inline constexpr Uint32 ROCKET_VISIBLE_MS = 60000;
+inline constexpr Uint32 ROCKET_FADE_MS = 1000;
+inline constexpr Uint32 DYNAMITE_COUNTDOWN_MS = 5000;
+inline constexpr Uint32 DYNAMITE_EXPLOSION_DURATION_MS = 2000;
+inline constexpr int DYNAMITE_EXPLOSION_RADIUS_CELLS = 3;
+inline constexpr Uint32 DYNAMITE_CHAIN_BASE_DELAY_MS = 140;
+inline constexpr Uint32 DYNAMITE_CHAIN_STEP_DELAY_MS = 80;
+inline constexpr Uint32 ROCKET_STEP_DURATION_MS = 90;
+inline constexpr Uint32 ROCKET_ANIMATION_FRAME_MS = 90;
+inline constexpr int AIRSTRIKE_BOMB_COUNT = 10;
+inline constexpr Uint32 AIRSTRIKE_RADIO_DELAY_MS = 4000;
+inline constexpr Uint32 AIRSTRIKE_BOMB_FALL_MS = 320;
+inline constexpr Uint32 AIRSTRIKE_PLANE_CELL_TRAVEL_MS = 105;
+inline constexpr Uint32 AIRSTRIKE_PLANE_MIN_FLIGHT_MS = 2200;
+inline constexpr Uint32 AIRSTRIKE_EXPLOSION_FRAME_MS = 110;
+inline constexpr int AIRSTRIKE_EXPLOSION_FRAME_COUNT = 5;
+inline constexpr Uint32 AIRSTRIKE_EXPLOSION_DURATION_MS =
+    AIRSTRIKE_EXPLOSION_FRAME_MS * AIRSTRIKE_EXPLOSION_FRAME_COUNT;
+inline constexpr int AIRSTRIKE_EXPLOSION_RADIUS_CELLS = 1;
+inline constexpr Uint32 PACMAN_INVULNERABLE_MS = 30000;
+inline constexpr Uint32 PACMAN_PARALYSIS_MS = 3000;
+inline constexpr Uint32 SLIME_OVERLAY_HOLD_MS = 2000;
+inline constexpr Uint32 SLIME_OVERLAY_FADE_MS = 1000;
+inline constexpr Uint32 SLIME_SPLASH_FRAME_MS = 80;
+inline constexpr int SLIME_SPLASH_FRAME_COUNT = 9;
+inline constexpr Uint32 SLIME_SPLASH_FADE_MS = 1000;
+inline constexpr Uint32 SLIME_SPLASH_TOTAL_DURATION_MS =
+    SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT + SLIME_SPLASH_FADE_MS;
+inline constexpr Uint32 TELEPORT_ANIMATION_PHASE_MS = 1000;
+inline constexpr Uint32 MONSTER_EXPLOSION_EFFECT_DURATION_MS = 900;
+inline constexpr Uint32 WALL_IMPACT_EFFECT_DURATION_MS = 180;
+inline constexpr double PLASTIC_EXPLOSIVE_MONSTER_HIT_RADIUS_CELLS = 0.72;
+inline constexpr float AIRSTRIKE_PLANE_MARGIN_CELLS = 2.0f;
+inline constexpr float AIRSTRIKE_PATH_SAMPLES_PER_CELL = 14.0f;
+
+/**
+ * @brief Difficulty preset values used to derive enemy behavior.
+ *
+ * `monster_speed_offset_from_base` is added to `SPEED_MONSTER` and clamped to
+ * at least 1 at runtime. Positive spawn interval scales make extra pickups
+ * rarer; values below 1.0 make them appear more frequently.
+ */
+struct DifficultyTuningPreset {
+  int monster_speed_offset_from_base;
+  double monster_step_delay_scale;
+  Uint32 fireball_cooldown_ms;
+  Uint32 fireball_step_duration_ms;
+  Uint32 pickup_visible_ms;
+  double extra_spawn_interval_scale;
+};
+
+inline constexpr DifficultyTuningPreset TRAINING_DIFFICULTY_TUNING{
+    -4, 1.5, 15000, 330, 60000, 0.75};
+inline constexpr DifficultyTuningPreset EASY_DIFFICULTY_TUNING{
+    -3, 1.0, 15000, 220, 60000, 0.75};
+inline constexpr DifficultyTuningPreset MEDIUM_DIFFICULTY_TUNING{
+    -2, 1.0, 10000, 160, 40000, 1.0};
+inline constexpr DifficultyTuningPreset HARD_DIFFICULTY_TUNING{
+    0, 1.0, 6500, 120, 20000, 1.4};
+
+/**
+ * @brief Rendering palette used for HUD, menus, and effects.
+ *
+ * All channel values are 0..255. Changing these constants lets the whole UI
+ * be recolored without touching renderer logic.
+ */
+inline constexpr SDL_Color HUD_TEXT_COLOR{243, 236, 222, 255};
+inline constexpr SDL_Color MENU_TEXT_COLOR{225, 223, 218, 255};
+inline constexpr SDL_Color SELECTED_MENU_TEXT_COLOR{255, 248, 238, 255};
+inline constexpr SDL_Color STATUS_TEXT_COLOR{255, 189, 163, 255};
+inline constexpr SDL_Color WARNING_TEXT_COLOR{255, 110, 110, 255};
+inline constexpr SDL_Color PANEL_FILL_COLOR{10, 6, 18, 205};
+inline constexpr SDL_Color PANEL_BORDER_COLOR{196, 130, 92, 255};
+inline constexpr SDL_Color START_MENU_PANEL_FILL_COLOR{10, 6, 18, 118};
+inline constexpr SDL_Color START_MENU_PANEL_BORDER_COLOR{196, 130, 92, 180};
+inline constexpr SDL_Color BRICK_OUTLINE_COLOR{78, 20, 14, 255};
+inline constexpr SDL_Color SHIELD_TEXT_COLOR{116, 220, 255, 255};
+inline constexpr SDL_Color START_LOGO_HIGHLIGHT_COLOR{238, 252, 255, 255};
+inline constexpr SDL_Color START_LOGO_LIGHT_COLOR{88, 234, 255, 255};
+inline constexpr SDL_Color START_LOGO_MID_COLOR{44, 156, 255, 255};
+inline constexpr SDL_Color START_LOGO_DEEP_COLOR{18, 70, 222, 255};
+inline constexpr SDL_Color START_LOGO_OUTLINE_COLOR{6, 18, 102, 255};
+inline constexpr SDL_Color TELEPORTER_BLUE_COLOR{78, 160, 255, 255};
+inline constexpr SDL_Color TELEPORTER_RED_COLOR{255, 104, 104, 255};
+inline constexpr SDL_Color TELEPORTER_GREEN_COLOR{110, 205, 118, 255};
+inline constexpr SDL_Color TELEPORTER_GREY_COLOR{172, 176, 186, 255};
+inline constexpr SDL_Color TELEPORTER_YELLOW_COLOR{244, 214, 88, 255};
+
+/**
+ * @brief Rendering animation and sprite-layout tuning.
+ *
+ * Frame counts must match the shipped sprite sheets. Scale values are
+ * multiplicative factors relative to one map cell. Alpha values control the
+ * baseline opacity of overlays and particle sprites.
+ */
+inline constexpr int PACMAN_FRAMES_PER_DIRECTION = 4;
+inline constexpr int MONSTER_FRAMES_PER_DIRECTION = 4;
+inline constexpr int ROCKET_FLIGHT_FRAME_COUNT = 2;
+inline constexpr int FART_CLOUD_FRAME_COUNT = 4;
+inline constexpr int SLIME_SPLASH_GRID_COLUMNS = 3;
+inline constexpr int SLIME_SPLASH_GRID_ROWS = 3;
+inline constexpr Uint32 PACMAN_WALK_FRAME_MS = 140;
+inline constexpr Uint32 FART_CLOUD_OPEN_DURATION_MS = 320;
+inline constexpr Uint32 FART_CLOUD_FRAME_MS =
+    FART_CLOUD_OPEN_DURATION_MS / FART_CLOUD_FRAME_COUNT;
+inline constexpr Uint8 SLIME_BALL_BASE_ALPHA = 176;
+inline constexpr Uint8 SLIME_OVERLAY_BASE_ALPHA = 140;
+inline constexpr Uint8 SLIME_SPLASH_BASE_ALPHA = 176;
+inline constexpr double MONSTER_RENDER_SCALE = 1.19;
+inline constexpr double FART_CLOUD_RENDER_SCALE = 1.20;
+inline constexpr double SLIME_BALL_RENDER_SCALE = 1.00;
+inline constexpr double SLIME_OVERLAY_RENDER_SCALE = 1.22;
+inline constexpr double SLIME_SPLASH_RENDER_SCALE = 1.26;
+inline constexpr double FART_CLOUD_DRIFT_X_FACTOR = 0.06;
+inline constexpr double FART_CLOUD_DRIFT_Y_FACTOR = 0.05;
+inline constexpr double FART_CLOUD_SCALE_PULSE_AMPLITUDE = 0.04;
+inline constexpr double ROCKET_SPRITE_ANGLE_OFFSET_DEGREES = 0.0;
+inline constexpr Uint8 WALKIE_TALKIE_ICON_ALPHA = 255;
+inline constexpr Uint8 HUD_ICON_ALPHA = 255;
+
+/**
+ * @brief Audio mixer and spectrum-analyser configuration.
+ *
+ * Sample rate and channel count define the PCM format used for synth-generated
+ * sounds. Spectrum values tune the retro menu equalizer; the min/max dB window
+ * decides how aggressively quiet sounds are suppressed or amplified visually.
+ */
+inline constexpr int MENU_SPECTRUM_BAND_COUNT = 32;
+inline constexpr int AUDIO_SAMPLE_RATE_HZ = 44100;
+inline constexpr int AUDIO_OUTPUT_CHANNEL_COUNT = 2;
+inline constexpr int AUDIO_MIX_CHUNK_SIZE = 2048;
+inline constexpr int AUDIO_ALLOCATED_CHANNEL_COUNT = 32;
+inline constexpr int AUDIO_RESERVED_CHANNEL_COUNT = 1;
+inline constexpr double MENU_SPECTRUM_MIN_FREQUENCY_HZ = 40.0;
+inline constexpr double MENU_SPECTRUM_MAX_FREQUENCY_HZ = 12000.0;
+inline constexpr double MENU_SPECTRUM_MIN_DB = -52.0;
+inline constexpr double MENU_SPECTRUM_MAX_DB = -8.0;
+inline constexpr int MENU_SPECTRUM_MAX_FRAMES = 4096;
+
+/**
+ * @brief Map file symbols.
+ *
+ * These characters define the serialized map format and the keyboard shortcuts
+ * used by the editor. Changing them requires existing map files to be updated
+ * to the same symbol set.
+ */
+inline constexpr char BRICK = 'x';
+inline constexpr char PATH = '.';
+inline constexpr char GOODIE = 'G';
+inline constexpr char PACMAN = 'P';
+inline constexpr char MONSTER_FEW = 'M';
+inline constexpr char MONSTER_MEDIUM = 'N';
+inline constexpr char MONSTER_MANY = 'O';
+inline constexpr char MONSTER_EXTRA = 'K';
+
+#endif

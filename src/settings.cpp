@@ -9,6 +9,7 @@
 
 #include <SDL.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -84,17 +85,31 @@ Difficulty ParseLegacyMonsterAmountAsDifficulty(const std::string &value) {
   return Difficulty::Medium;
 }
 
+int ParsePlayerLives(const std::string &value) {
+  const std::string trimmed_value = TrimWhitespace(value);
+  if (trimmed_value.empty()) {
+    return PLAYER_DEFAULT_LIVES;
+  }
+
+  try {
+    return std::clamp(std::stoi(trimmed_value), PLAYER_LIVES_MIN,
+                      PLAYER_LIVES_MAX);
+  } catch (...) {
+    return PLAYER_DEFAULT_LIVES;
+  }
+}
+
 fs::path GetSettingsFilePath() {
   const std::string preference_root =
       ConsumeSdlPath(SDL_GetPrefPath("BobMan", "BobMan"));
   if (preference_root.empty()) {
-    return fs::path("settings.cfg");
+    return fs::path(SETTINGS_FILE_NAME);
   }
 
   const fs::path settings_directory(preference_root);
   std::error_code create_error;
   fs::create_directories(settings_directory, create_error);
-  return settings_directory / "settings.cfg";
+  return settings_directory / SETTINGS_FILE_NAME;
 }
 
 } // namespace
@@ -129,9 +144,13 @@ AppSettings LoadAppSettings() {
       settings.difficulty = ParseLegacyMonsterAmountAsDifficulty(value);
     } else if (key == "selected_map_path") {
       settings.selected_map_path = value;
+    } else if (key == "player_lives") {
+      settings.player_lives = ParsePlayerLives(value);
     }
   }
 
+  settings.player_lives =
+      std::clamp(settings.player_lives, PLAYER_LIVES_MIN, PLAYER_LIVES_MAX);
   return settings;
 }
 
@@ -145,6 +164,10 @@ bool SaveAppSettings(const AppSettings &settings) {
 
   output << "difficulty=" << DifficultyToString(settings.difficulty) << "\n";
   output << "selected_map_path=" << settings.selected_map_path << "\n";
+  output << "player_lives="
+         << std::clamp(settings.player_lives, PLAYER_LIVES_MIN,
+                       PLAYER_LIVES_MAX)
+         << "\n";
 
   if (!output.good()) {
     std::cerr << "Failed while writing settings file: " << settings_path

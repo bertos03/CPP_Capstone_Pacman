@@ -18,6 +18,7 @@
 #define EVENTS_H
 
 #include <SDL.h>
+#include <atomic>
 #include <iostream>
 
 #include "globaltypes.h"
@@ -29,6 +30,8 @@ public:
   void update();
   void Keyreset();
   void RequestQuit();
+  void SetGameplayFrozen(bool frozen);
+  bool IsGameplayFrozen() const;
   bool is_quit() { return quit; }
   Directions get_next_move() { return current_direction; }
   bool ConsumePlaceDynamiteRequest();
@@ -45,6 +48,7 @@ private:
   bool place_plastic_explosive_requested;
   bool airstrike_requested;
   bool rocket_requested;
+  std::atomic<bool> gameplay_frozen;
 };
 
 #endif

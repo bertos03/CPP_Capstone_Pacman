@@ -35,6 +35,7 @@ public:
   static std::array<float, kMenuSpectrumBandCount> GetMenuSpectrumLevels();
 #ifdef AUDIO
   void PlayCoin();
+  void PlayLifeLost();
   void PlayGameOver();
   void PlayWin();
   void PlayMenuMove();

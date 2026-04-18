@@ -285,11 +285,15 @@ CollectAirstrikePathCandidates(Map *map, SDL_FPoint start, SDL_FPoint end,
  * @param _map: Pointer to Map object
  * @param _events: Pointer to Events object
  * @param _audio: Pointer to Audio object
+ * @param _starting_lives Configured number of lives for a new run
  */
-Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty)
+Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
+           int _starting_lives)
     : map(_map), events(_events), audio(_audio), difficulty(_difficulty) {
   win = false;
   dead = false;
+  starting_lives = std::clamp(_starting_lives, PLAYER_LIVES_MIN, PLAYER_LIVES_MAX);
+  remaining_lives = starting_lives;
   score = 0;
   dynamite_inventory = 0;
   plastic_explosive_inventory = 0;
@@ -299,6 +303,8 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty)
   active_airstrike = {};
   simulation_started = false;
   death_started_ticks = 0;
+  life_recovery_until_ticks = 0;
+  final_loss_commits_at_ticks = 0;
   last_update_ticks = SDL_GetTicks();
   // create Pacman object
   pacman = new Pacman(map->get_coord_pacman());
@@ -334,6 +340,7 @@ void Game::StartSimulation() {
     return;
   }
 
+  events->SetGameplayFrozen(false);
   events->Keyreset();
 
   for (size_t i = 0; i < monsters.size(); i++) {
@@ -353,6 +360,10 @@ void Game::Update() {
   CleanupEffects(now);
   UpdateScheduledMonsterBlasts(now);
   UpdateInvulnerability(now);
+  UpdateFinalLossSequence(now);
+  if (IsFinalLossSequenceActive(now)) {
+    return;
+  }
   if (pacman->teleport_animation_active &&
       !pacman->teleport_arrival_sound_played &&
       now - pacman->teleport_animation_started_ticks >=
@@ -470,18 +481,44 @@ Game::~Game() {
 bool Game::is_lost() { return dead; }
 bool Game::is_won() { return win; }
 
+bool Game::IsFinalLossSequenceActive(Uint32 now) const {
+  return !dead && final_loss_commits_at_ticks != 0 &&
+         now < final_loss_commits_at_ticks;
+}
+
+Uint32 Game::GetDeathStartedTicks() const { return death_started_ticks; }
+
 void Game::TriggerLoss(MapCoord coord, Uint32 now) {
-  if (dead) {
+  if (dead || IsFinalLossSequenceActive(now)) {
+    return;
+  }
+
+  if (remaining_lives > 1) {
+    ActivateLifeRecovery(now);
+#ifdef AUDIO
+    audio->PlayLifeLost();
+#endif
     return;
   }
 
   death_coord = coord;
   death_started_ticks = now;
+  final_loss_commits_at_ticks = now + FINAL_LOSS_SOUND_LEAD_IN_MS;
+  pacman->px_delta.x = 0;
+  pacman->px_delta.y = 0;
+  pacman->teleport_animation_active = false;
+  pacman->teleport_animation_started_ticks = 0;
+  pacman->teleport_animation_from_coord = pacman->map_coord;
+  pacman->teleport_animation_to_coord = pacman->map_coord;
+  pacman->teleport_arrival_sound_played = false;
+  if (events != nullptr) {
+    events->SetGameplayFrozen(true);
+    events->Keyreset();
+  }
 #ifdef AUDIO
   audio->StopInvulnerabilityLoop();
   audio->PlayGameOver();
 #endif
-  dead = true;
 }
 
 void Game::ApplyTeleporters() {
@@ -1113,6 +1150,30 @@ void Game::ActivateInvulnerability(Uint32 now) {
 #ifdef AUDIO
   audio->StartInvulnerabilityLoop();
 #endif
+}
+
+void Game::ActivateLifeRecovery(Uint32 now) {
+  if (pacman == nullptr) {
+    return;
+  }
+
+  remaining_lives = std::max(PLAYER_LIVES_MIN, remaining_lives - 1);
+  life_recovery_until_ticks =
+      std::max(life_recovery_until_ticks,
+               now + PACMAN_EXTRA_LIFE_INVULNERABLE_MS);
+
+  pacman->px_delta.x = 0;
+  pacman->px_delta.y = 0;
+  pacman->paralyzed_until_ticks = 0;
+  pacman->slimed_until_ticks = 0;
+  pacman->teleport_animation_active = false;
+  pacman->teleport_animation_started_ticks = 0;
+  pacman->teleport_animation_from_coord = pacman->map_coord;
+  pacman->teleport_animation_to_coord = pacman->map_coord;
+  pacman->teleport_arrival_sound_played = false;
+  if (events != nullptr) {
+    events->Keyreset();
+  }
 }
 
 void Game::TrySpawnDynamite(Uint32 now) {
@@ -1892,6 +1953,10 @@ void Game::UpdateInvulnerabilityPotion(Uint32 now) {
 }
 
 void Game::UpdateInvulnerability(Uint32 now) {
+  if (life_recovery_until_ticks != 0 && now >= life_recovery_until_ticks) {
+    life_recovery_until_ticks = 0;
+  }
+
   if (pacman->invulnerable_until_ticks != 0 &&
       now >= pacman->invulnerable_until_ticks) {
     pacman->invulnerable_until_ticks = 0;
@@ -1901,8 +1966,27 @@ void Game::UpdateInvulnerability(Uint32 now) {
   }
 }
 
+void Game::UpdateFinalLossSequence(Uint32 now) {
+  if (dead || final_loss_commits_at_ticks == 0 ||
+      now < final_loss_commits_at_ticks) {
+    return;
+  }
+
+  final_loss_commits_at_ticks = 0;
+#ifdef AUDIO
+  audio->StopEndScreenMusic();
+#endif
+  dead = true;
+}
+
 bool Game::IsPacmanInvulnerable(Uint32 now) const {
-  return pacman != nullptr && pacman->invulnerable_until_ticks > now;
+  return pacman != nullptr &&
+         (pacman->invulnerable_until_ticks > now ||
+          life_recovery_until_ticks > now);
+}
+
+bool Game::IsPacmanRecoveringFromLifeLoss(Uint32 now) const {
+  return pacman != nullptr && life_recovery_until_ticks > now;
 }
 
 void Game::UpdateFireballs(Uint32 now) {

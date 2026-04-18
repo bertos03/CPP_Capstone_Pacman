@@ -11,11 +11,13 @@
 
 #include <string>
 
+#include "definitions.h"
 #include "globaltypes.h"
 
 struct AppSettings {
   Difficulty difficulty{Difficulty::Medium};
   std::string selected_map_path;
+  int player_lives{PLAYER_DEFAULT_LIVES};
 };
 
 AppSettings LoadAppSettings();

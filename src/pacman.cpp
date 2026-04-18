@@ -65,6 +65,14 @@ void Pacman::simulate(Events *events, Map *map) {
   lck.unlock();
 
   while (!events->is_quit()) {
+    if (events->IsGameplayFrozen()) {
+      px_delta.x = 0;
+      px_delta.y = 0;
+      events->Keyreset();
+      sleep(15);
+      continue;
+    }
+
     if (SDL_GetTicks() < paralyzed_until_ticks) {
       px_delta.x = 0;
       px_delta.y = 0;
