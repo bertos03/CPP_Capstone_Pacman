@@ -814,7 +814,7 @@ void Renderer::updateSceneLayout(size_t row_count_value,
   const int row_count = static_cast<int>(rows);
   const int col_count = static_cast<int>(cols);
   const int hud_fontsize = std::max(22, screen_res_y / 35);
-  const int reserved_top_space = hud_fontsize * 4 + 28;
+  const int reserved_top_space = hud_fontsize * 3 + 24;
   const int element_size_x =
       (screen_res_y - reserved_top_space - row_count - 1) /
       std::max(1, row_count);
