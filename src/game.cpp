@@ -1448,7 +1448,8 @@ void Game::TryPlaceDynamite(Uint32 now) {
     return;
   }
 
-  const bool place_requested = events->ConsumePlaceDynamiteRequest();
+  const bool place_requested =
+      events->ConsumeExtraUseRequest(ExtraSlot::Dynamite);
   if (!place_requested || dynamite_inventory <= 0) {
     return;
   }
@@ -1474,7 +1475,8 @@ void Game::TryUsePlasticExplosive(Uint32 now) {
     return;
   }
 
-  const bool use_requested = events->ConsumePlacePlasticExplosiveRequest();
+  const bool use_requested =
+      events->ConsumeExtraUseRequest(ExtraSlot::PlasticExplosive);
   if (!use_requested) {
     return;
   }
@@ -1521,7 +1523,8 @@ void Game::TryFireRocket(Uint32 now) {
     return;
   }
 
-  const bool fire_requested = events->ConsumeRocketRequest();
+  const bool fire_requested =
+      events->ConsumeExtraUseRequest(ExtraSlot::Rocket);
   if (!fire_requested || rocket_inventory <= 0 || !active_rockets.empty()) {
     return;
   }
@@ -1549,7 +1552,8 @@ void Game::TryUseAirstrike(Uint32 now) {
     return;
   }
 
-  const bool use_requested = events->ConsumeAirstrikeRequest();
+  const bool use_requested =
+      events->ConsumeExtraUseRequest(ExtraSlot::Airstrike);
   if (!use_requested || airstrike_inventory <= 0 || active_airstrike.is_active) {
     return;
   }

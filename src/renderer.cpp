@@ -35,6 +35,7 @@ const SDL_Color kMenuTextColor{225, 223, 218, 255};
 const SDL_Color kSelectedMenuTextColor{255, 248, 238, 255};
 const SDL_Color kStatusTextColor{255, 189, 163, 255};
 const SDL_Color kWarningTextColor{255, 110, 110, 255};
+const SDL_Color kDisabledHudTextColor{156, 150, 162, 255};
 const SDL_Color kPanelFillColor{10, 6, 18, 205};
 const SDL_Color kPanelBorderColor{196, 130, 92, 255};
 const SDL_Color kStartMenuPanelFillColor{10, 6, 18, 118};
@@ -758,7 +759,7 @@ void Renderer::updateSceneLayout(size_t row_count_value,
   const int row_count = static_cast<int>(rows);
   const int col_count = static_cast<int>(cols);
   const int hud_fontsize = std::max(22, screen_res_y / 35);
-  const int reserved_top_space = hud_fontsize * 2;
+  const int reserved_top_space = hud_fontsize * 4 + 28;
   const int element_size_x =
       (screen_res_y - reserved_top_space - row_count - 1) /
       std::max(1, row_count);
@@ -773,7 +774,7 @@ void Renderer::updateSceneLayout(size_t row_count_value,
 
   offset_x = (screen_res_x - grid_width) / 2;
   offset_y = content_top + reserved_top_space;
-  hud_top_y = content_top + std::max(12, hud_fontsize / 3);
+  hud_top_y = content_top + std::max(4, hud_fontsize / 5);
 }
 
 void Renderer::SetScene(Map *new_map, Game *new_game) {
@@ -818,57 +819,76 @@ void Renderer::drawhud() {
       std::to_string(game->airstrike_inventory) + "x";
   const std::string rocket_text =
       std::to_string(game->rocket_inventory) + "x";
+  const bool plastic_explosive_armed = game->plastic_explosive_is_armed;
+  const bool airstrike_available =
+      game->airstrike_inventory > 0 && !game->active_airstrike.is_active;
+  const bool rocket_available =
+      game->rocket_inventory > 0 && game->active_rockets.empty();
+  struct ExtraHudSlot {
+    ExtraSlot slot;
+    char key_label;
+    std::string count_text;
+    bool key_enabled;
+    bool emphasize_slot;
+    bool armed;
+  };
+  const std::array<ExtraHudSlot, 4> extra_slots{{
+      {ExtraSlot::Dynamite, '1', dynamite_text, game->dynamite_inventory > 0,
+       game->dynamite_inventory > 0, false},
+      {ExtraSlot::PlasticExplosive, '2', plastic_explosive_text,
+       plastic_explosive_armed || game->plastic_explosive_inventory > 0,
+       plastic_explosive_armed || game->plastic_explosive_inventory > 0,
+       plastic_explosive_armed},
+      {ExtraSlot::Airstrike, '3', airstrike_text, airstrike_available,
+       game->airstrike_inventory > 0, false},
+      {ExtraSlot::Rocket, '4', rocket_text, rocket_available,
+       game->rocket_inventory > 0, false},
+  }};
   int title_width = 0;
   int lives_text_width = 0;
   int score_width = 0;
-  int dynamite_text_width = 0;
-  int plastic_explosive_text_width = 0;
-  int airstrike_text_width = 0;
-  int rocket_text_width = 0;
+  std::array<int, 4> extra_text_widths{};
+  std::array<int, 4> extra_slot_widths{};
   TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, lives_text.c_str(), &lives_text_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
-  if (game->dynamite_inventory > 0) {
-    TTF_SizeUTF8(sdl_font_hud, dynamite_text.c_str(), &dynamite_text_width,
-                 nullptr);
-  }
-  if (game->plastic_explosive_inventory > 0) {
-    TTF_SizeUTF8(sdl_font_hud, plastic_explosive_text.c_str(),
-                 &plastic_explosive_text_width, nullptr);
-  }
-  if (game->airstrike_inventory > 0) {
-    TTF_SizeUTF8(sdl_font_hud, airstrike_text.c_str(), &airstrike_text_width,
-                 nullptr);
-  }
-  if (game->rocket_inventory > 0) {
-    TTF_SizeUTF8(sdl_font_hud, rocket_text.c_str(), &rocket_text_width, nullptr);
+
+  const int hud_font_height = TTF_FontHeight(sdl_font_hud);
+  const int keycap_height =
+      std::max(12, static_cast<int>(std::lround(std::max(20, hud_font_height + 2) *
+                                                0.60)));
+  const int keycap_width =
+      std::max(16, static_cast<int>(std::lround(std::max(26, keycap_height + 14) *
+                                                0.60)));
+  const int keycap_gap = std::max(2, hud_font_height / 8);
+  const int line_top = hud_top_y + keycap_height + keycap_gap;
+  const int keycap_top = line_top - keycap_height - keycap_gap;
+  const int hud_gap = std::max(14, element_size / 2);
+  const int icon_size = std::max(18, hud_font_height - 2);
+  const int icon_text_gap = 10;
+
+  for (size_t index = 0; index < extra_slots.size(); ++index) {
+    TTF_SizeUTF8(sdl_font_hud, extra_slots[index].count_text.c_str(),
+                 &extra_text_widths[index], nullptr);
+    extra_slot_widths[index] =
+        std::max(keycap_width, icon_size + icon_text_gap + extra_text_widths[index]);
   }
 
-  const int line_top = hud_top_y;
-  const int hud_gap = std::max(14, element_size / 2);
-  const int icon_size = std::max(18, TTF_FontHeight(sdl_font_hud) - 2);
   int line_width =
       title_width + hud_gap + icon_size + 10 + lives_text_width + hud_gap +
       score_width;
-  if (game->dynamite_inventory > 0) {
-    line_width += hud_gap + icon_size + 10 + dynamite_text_width;
-  }
-  if (game->plastic_explosive_inventory > 0) {
-    line_width += hud_gap + icon_size + 10 + plastic_explosive_text_width;
-  }
-  if (game->airstrike_inventory > 0) {
-    line_width += hud_gap + icon_size + 10 + airstrike_text_width;
-  }
-  if (game->rocket_inventory > 0) {
-    line_width += hud_gap + icon_size + 10 + rocket_text_width;
+  for (size_t index = 0; index < extra_slots.size(); ++index) {
+    line_width += hud_gap + extra_slot_widths[index];
   }
 
+  const Uint32 now = SDL_GetTicks();
+  const double animation_clock = static_cast<double>(now);
   int cursor_x = screen_res_x / 2 - line_width / 2;
   renderTextLeft(sdl_font_hud, title_text, sdl_font_color, cursor_x, line_top);
   cursor_x += title_width + hud_gap;
   const SDL_Rect lives_icon_rect{
       cursor_x,
-      line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
+      line_top + std::max(0, (hud_font_height - icon_size) / 2),
       icon_size, icon_size};
   if (SDL_Texture *lives_texture = getPacmanTexture(Directions::Down, false);
       lives_texture != nullptr) {
@@ -881,58 +901,100 @@ void Renderer::drawhud() {
   renderTextLeft(sdl_font_hud, score_text, sdl_font_color, cursor_x, line_top);
   cursor_x += score_width;
 
-  if (game->dynamite_inventory > 0) {
+  auto draw_keycap = [&](const SDL_Rect &key_rect, char key_label,
+                         bool enabled) {
+    const Uint8 outline_alpha = enabled ? 255 : 136;
+    const Uint8 label_alpha = enabled ? 255 : 150;
+    const int key_depth = std::max(1, key_rect.h / 5);
+    const SDL_Rect depth_rect{key_rect.x, key_rect.y + key_depth, key_rect.w,
+                              key_rect.h};
+    const SDL_Color outline_color{255, 255, 255, outline_alpha};
+    const SDL_Color label_color{255, 255, 255, label_alpha};
+
+    SDL_SetRenderDrawColor(sdl_renderer, outline_color.r, outline_color.g,
+                           outline_color.b, outline_color.a);
+    SDL_RenderDrawRect(sdl_renderer, &depth_rect);
+    SDL_RenderDrawRect(sdl_renderer, &key_rect);
+    SDL_RenderDrawLine(sdl_renderer, key_rect.x, key_rect.y + key_rect.h - 1,
+                       depth_rect.x, depth_rect.y + depth_rect.h - 1);
+    SDL_RenderDrawLine(sdl_renderer, key_rect.x + key_rect.w - 1,
+                       key_rect.y + key_rect.h - 1,
+                       depth_rect.x + depth_rect.w - 1,
+                       depth_rect.y + depth_rect.h - 1);
+
+    const std::string key_text(1, key_label);
+    SDL_Surface *text_surface =
+        TTF_RenderUTF8_Blended(sdl_font_hud, key_text.c_str(), label_color);
+    if (text_surface == nullptr) {
+      return;
+    }
+
+    SDL_Texture *text_texture =
+        SDL_CreateTextureFromSurface(sdl_renderer, text_surface);
+    if (text_texture != nullptr) {
+      const double label_scale = 0.52;
+      const int label_width =
+          std::max(1, static_cast<int>(std::lround(text_surface->w * label_scale)));
+      const int label_height =
+          std::max(1, static_cast<int>(std::lround(text_surface->h * label_scale)));
+      const SDL_Rect label_rect{
+          key_rect.x + (key_rect.w - label_width) / 2,
+          key_rect.y + std::max(0, (key_rect.h - label_height) / 2) - 1,
+          label_width,
+          label_height};
+      SDL_RenderCopy(sdl_renderer, text_texture, nullptr, &label_rect);
+      SDL_DestroyTexture(text_texture);
+    }
+
+    SDL_FreeSurface(text_surface);
+  };
+
+  auto draw_extra_slot = [&](size_t index) {
+    const ExtraHudSlot &slot = extra_slots[index];
     cursor_x += hud_gap;
-    const SDL_Rect icon_rect{
-        cursor_x, line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
-        icon_size, icon_size};
-    drawDynamiteIcon(icon_rect, false, static_cast<double>(SDL_GetTicks()) / 180.0,
-                     255, 0.0);
-    cursor_x += icon_rect.w + 10;
-    renderTextLeft(sdl_font_hud, dynamite_text, sdl_font_color, cursor_x,
-                   line_top);
-    cursor_x += dynamite_text_width;
+    const int slot_left = cursor_x;
+    const int slot_width = extra_slot_widths[index];
+    const int slot_content_width = icon_size + icon_text_gap + extra_text_widths[index];
+    const int content_left = slot_left + (slot_width - slot_content_width) / 2;
+    const SDL_Rect key_rect{slot_left + (slot_width - keycap_width) / 2, keycap_top,
+                            keycap_width, keycap_height};
+    const SDL_Rect icon_rect{content_left,
+                             line_top + std::max(0, (hud_font_height - icon_size) / 2),
+                             icon_size, icon_size};
+    const Uint8 icon_alpha = slot.emphasize_slot ? 255 : 120;
+    const SDL_Color text_color =
+        slot.emphasize_slot ? sdl_font_color : kDisabledHudTextColor;
+
+    draw_keycap(key_rect, slot.key_label, slot.key_enabled);
+
+    switch (slot.slot) {
+    case ExtraSlot::Dynamite:
+      drawDynamiteIcon(icon_rect, false, animation_clock / 180.0, icon_alpha, 0.0);
+      break;
+    case ExtraSlot::PlasticExplosive:
+      drawPlasticExplosiveIcon(icon_rect, animation_clock / 170.0, icon_alpha,
+                               slot.armed);
+      break;
+    case ExtraSlot::Airstrike:
+      drawWalkieTalkieIcon(icon_rect, icon_alpha, animation_clock / 220.0);
+      break;
+    case ExtraSlot::Rocket:
+      drawRocketIcon(icon_rect, icon_alpha, animation_clock / 190.0);
+      break;
+    case ExtraSlot::None:
+    default:
+      break;
+    }
+
+    renderTextLeft(sdl_font_hud, slot.count_text, text_color,
+                   content_left + icon_rect.w + icon_text_gap, line_top);
+    cursor_x += slot_width;
+  };
+
+  for (size_t index = 0; index < extra_slots.size(); ++index) {
+    draw_extra_slot(index);
   }
 
-  if (game->plastic_explosive_inventory > 0) {
-    cursor_x += hud_gap;
-    const SDL_Rect icon_rect{
-        cursor_x, line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
-        icon_size, icon_size};
-    drawPlasticExplosiveIcon(icon_rect, static_cast<double>(SDL_GetTicks()) / 170.0,
-                             255, false);
-    cursor_x += icon_rect.w + 10;
-    renderTextLeft(sdl_font_hud, plastic_explosive_text, sdl_font_color, cursor_x,
-                   line_top);
-    cursor_x += plastic_explosive_text_width;
-  }
-
-  if (game->airstrike_inventory > 0) {
-    cursor_x += hud_gap;
-    const SDL_Rect icon_rect{
-        cursor_x, line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
-        icon_size, icon_size};
-    drawWalkieTalkieIcon(
-        icon_rect, 255, static_cast<double>(SDL_GetTicks()) / 220.0);
-    cursor_x += icon_rect.w + 10;
-    renderTextLeft(sdl_font_hud, airstrike_text, sdl_font_color, cursor_x,
-                   line_top);
-    cursor_x += airstrike_text_width;
-  }
-
-  if (game->rocket_inventory > 0) {
-    cursor_x += hud_gap;
-    const SDL_Rect icon_rect{
-        cursor_x,
-        line_top + std::max(0, (TTF_FontHeight(sdl_font_hud) - icon_size) / 2),
-        icon_size, icon_size};
-    drawRocketIcon(icon_rect, 255, static_cast<double>(SDL_GetTicks()) / 190.0);
-    cursor_x += icon_rect.w + 10;
-    renderTextLeft(sdl_font_hud, rocket_text, sdl_font_color, cursor_x,
-                   line_top);
-  }
-
-  const Uint32 now = SDL_GetTicks();
   if (game->pacman != nullptr && game->pacman->invulnerable_until_ticks > now) {
     const Uint32 remaining_ms = game->pacman->invulnerable_until_ticks - now;
     const int remaining_seconds =

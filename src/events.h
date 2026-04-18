@@ -34,20 +34,14 @@ public:
   bool IsGameplayFrozen() const;
   bool is_quit() { return quit; }
   Directions get_next_move() { return current_direction; }
-  bool ConsumePlaceDynamiteRequest();
-  bool ConsumePlacePlasticExplosiveRequest();
-  bool ConsumeAirstrikeRequest();
-  bool ConsumeRocketRequest();
+  bool ConsumeExtraUseRequest(ExtraSlot slot);
 
 protected:
 private:
   SDL_Event *sdl_events;
   bool quit;
   Directions current_direction;
-  bool place_dynamite_requested;
-  bool place_plastic_explosive_requested;
-  bool airstrike_requested;
-  bool rocket_requested;
+  ExtraSlot requested_extra;
   std::atomic<bool> gameplay_frozen;
 };
 

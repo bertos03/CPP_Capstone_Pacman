@@ -16,6 +16,29 @@
 
 #include "events.h"
 
+namespace {
+
+ExtraSlot KeycodeToExtraSlot(SDL_Keycode keycode) {
+  switch (keycode) {
+  case SDLK_1:
+  case SDLK_KP_1:
+    return ExtraSlot::Dynamite;
+  case SDLK_2:
+  case SDLK_KP_2:
+    return ExtraSlot::PlasticExplosive;
+  case SDLK_3:
+  case SDLK_KP_3:
+    return ExtraSlot::Airstrike;
+  case SDLK_4:
+  case SDLK_KP_4:
+    return ExtraSlot::Rocket;
+  default:
+    return ExtraSlot::None;
+  }
+}
+
+} // namespace
+
 /**
  * @brief Construct a new Events:: Events object
  * Events object takes care of all keyboard inputs which are required for the
@@ -25,10 +48,7 @@ Events::Events() {
   sdl_events = new SDL_Event;
   quit = false;
   current_direction = Directions::None;
-  place_dynamite_requested = false;
-  place_plastic_explosive_requested = false;
-  airstrike_requested = false;
-  rocket_requested = false;
+  requested_extra = ExtraSlot::None;
   gameplay_frozen.store(false, std::memory_order_relaxed);
 }
 
@@ -50,10 +70,7 @@ void Events::SetGameplayFrozen(bool frozen) {
   gameplay_frozen.store(frozen, std::memory_order_relaxed);
   if (frozen) {
     current_direction = Directions::None;
-    place_dynamite_requested = false;
-    place_plastic_explosive_requested = false;
-    airstrike_requested = false;
-    rocket_requested = false;
+    requested_extra = ExtraSlot::None;
   }
 }
 
@@ -61,28 +78,13 @@ bool Events::IsGameplayFrozen() const {
   return gameplay_frozen.load(std::memory_order_relaxed);
 }
 
-bool Events::ConsumePlaceDynamiteRequest() {
-  const bool was_requested = place_dynamite_requested;
-  place_dynamite_requested = false;
-  return was_requested;
-}
+bool Events::ConsumeExtraUseRequest(ExtraSlot slot) {
+  if (requested_extra != slot) {
+    return false;
+  }
 
-bool Events::ConsumePlacePlasticExplosiveRequest() {
-  const bool was_requested = place_plastic_explosive_requested;
-  place_plastic_explosive_requested = false;
-  return was_requested;
-}
-
-bool Events::ConsumeAirstrikeRequest() {
-  const bool was_requested = airstrike_requested;
-  airstrike_requested = false;
-  return was_requested;
-}
-
-bool Events::ConsumeRocketRequest() {
-  const bool was_requested = rocket_requested;
-  rocket_requested = false;
-  return was_requested;
+  requested_extra = ExtraSlot::None;
+  return true;
 }
 
 /**
@@ -104,6 +106,14 @@ void Events::update() {
       return;
     }
 
+    const ExtraSlot requested_slot =
+        KeycodeToExtraSlot(sdl_events->key.keysym.sym);
+    if (requested_slot != ExtraSlot::None) {
+      requested_extra = requested_slot;
+      current_direction = Directions::None;
+      return;
+    }
+
     switch (sdl_events->key.keysym.sym) {
     case SDLK_UP:
       current_direction = Directions::Up;
@@ -119,22 +129,6 @@ void Events::update() {
       break;
     case SDLK_ESCAPE: // Quit the program with escape key
       quit = true;
-      break;
-    case SDLK_b:
-      place_dynamite_requested = true;
-      current_direction = Directions::None;
-      break;
-    case SDLK_p:
-      place_plastic_explosive_requested = true;
-      current_direction = Directions::None;
-      break;
-    case SDLK_a:
-      airstrike_requested = true;
-      current_direction = Directions::None;
-      break;
-    case SDLK_r:
-      rocket_requested = true;
-      current_direction = Directions::None;
       break;
     default:
       current_direction = Directions::None;
