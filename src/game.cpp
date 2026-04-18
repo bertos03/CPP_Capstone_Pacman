@@ -60,7 +60,7 @@ Uint32 RandomInterval(Uint32 minimum, Uint32 maximum) {
 DifficultyTuning GetDifficultyTuning(Difficulty difficulty) {
   switch (difficulty) {
   case Difficulty::Training:
-    return {std::max(1, SPEED_MONSTER - 3), 1.5, 15000, 330, 60000, 0.75};
+    return {std::max(1, SPEED_MONSTER - 4), 1.5, 15000, 330, 60000, 0.75};
   case Difficulty::Easy:
     return {std::max(1, SPEED_MONSTER - 3), 1.0, 15000, 220, 60000, 0.75};
   case Difficulty::Hard:
