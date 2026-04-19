@@ -82,6 +82,7 @@ private:
   void drawFloorTile3D(int row, int col);
   void drawWallTile3D(int row, int col, bool has_wall_down);
   void drawWallTop3D(int row, int col);
+  SDL_Rect getWallTopRect(int row, int col) const;
   void drawWallFrontFace3D(int row, int col);
   SDL_Rect getWallFrontFaceRect(int row, int col) const;
   void drawWithWallOcclusion(const SDL_Rect &draw_bounds, double row_cells,
@@ -98,6 +99,7 @@ private:
                              double height_factor, double foot_row_factor,
                              double delta_col_cells = 0.0,
                              double delta_row_cells = 0.0) const;
+  int getNonCharacterSpriteLiftPixels() const;
   void drawLayout(const std::vector<std::string> &layout);
   void drawteleporters();
   void drawLayoutTeleporters(const std::vector<std::string> &layout);

@@ -79,6 +79,7 @@ constexpr double kFartCloudScalePulseAmplitude = 0.04;
 constexpr double kRocketSpriteAngleOffsetDegrees = 0.0;
 constexpr double kSpriteFootRowFactor = 0.65;
 constexpr double kFloorObjectDepthRowFactor = 0.55;
+constexpr double kNonCharacterSpriteLiftFactor = 0.25;
 
 struct MonsterSpriteDescriptor {
   char monster_char;
@@ -121,6 +122,10 @@ SDL_Rect intersectRects(const SDL_Rect &left, const SDL_Rect &right) {
 SDL_Rect expandRect(const SDL_Rect &rect, int padding) {
   return SDL_Rect{rect.x - padding, rect.y - padding, rect.w + padding * 2,
                   rect.h + padding * 2};
+}
+
+SDL_Rect offsetRectY(const SDL_Rect &rect, int delta_y) {
+  return SDL_Rect{rect.x, rect.y + delta_y, rect.w, rect.h};
 }
 
 void subtractRect(const SDL_Rect &source, const SDL_Rect &cut,
@@ -908,6 +913,8 @@ void Renderer::renderFrame(bool show_hud) {
 
             draw();
           };
+      const int non_character_sprite_lift_px =
+          getNonCharacterSpriteLiftPixels();
 
       for (size_t teleporter_index = 0;
            teleporter_index < map->get_teleporter_pairs().size();
@@ -949,8 +956,9 @@ void Renderer::renderFrame(bool show_hud) {
           }
 
           const MapCoord coord = goodie->map_coord;
-          const SDL_Rect rect =
-              makeFloorAlignedRect(coord.v, coord.u, 0.15, 0.15, 0.7, 0.7);
+          const SDL_Rect rect = offsetRectY(
+              makeFloorAlignedRect(coord.v, coord.u, 0.15, 0.15, 0.7, 0.7),
+              -non_character_sprite_lift_px);
           const double depth =
               projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
           push_depth_command(depth, [this, rect, coord,
@@ -990,7 +998,9 @@ void Renderer::renderFrame(bool show_hud) {
                         projectScene(coord.v + 0.5,
                                      coord.u + kFloorObjectDepthRowFactor, 0.0);
                     const int center_x = static_cast<int>(std::lround(center.x));
-                    const int center_y = static_cast<int>(std::lround(center.y));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
                     const double wobble_clock =
                         static_cast<double>(now + potion.animation_seed * 53) /
                         260.0;
@@ -1122,7 +1132,9 @@ void Renderer::renderFrame(bool show_hud) {
                         projectScene(coord.v + 0.5,
                                      coord.u + kFloorObjectDepthRowFactor, 0.0);
                     const int center_x = static_cast<int>(std::lround(center.x));
-                    const int center_y = static_cast<int>(std::lround(center.y));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
                     const double animation_clock =
                         static_cast<double>(now + dynamite.animation_seed * 41) /
                         180.0;
@@ -1185,7 +1197,8 @@ void Renderer::renderFrame(bool show_hud) {
                         const int center_x =
                             static_cast<int>(std::lround(center.x));
                         const int center_y =
-                            static_cast<int>(std::lround(center.y));
+                            static_cast<int>(std::lround(center.y)) -
+                            non_character_sprite_lift_px;
                         const double animation_clock =
                             static_cast<double>(
                                 now + plastic_explosive.animation_seed * 37) /
@@ -1244,7 +1257,9 @@ void Renderer::renderFrame(bool show_hud) {
                         projectScene(coord.v + 0.5,
                                      coord.u + kFloorObjectDepthRowFactor, 0.0);
                     const int center_x = static_cast<int>(std::lround(center.x));
-                    const int center_y = static_cast<int>(std::lround(center.y));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
                     const double animation_clock =
                         static_cast<double>(now + walkie.animation_seed * 29) /
                         210.0;
@@ -1300,7 +1315,9 @@ void Renderer::renderFrame(bool show_hud) {
                         projectScene(coord.v + 0.5,
                                      coord.u + kFloorObjectDepthRowFactor, 0.0);
                     const int center_x = static_cast<int>(std::lround(center.x));
-                    const int center_y = static_cast<int>(std::lround(center.y));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
                     const double animation_clock =
                         static_cast<double>(now + rocket.animation_seed * 31) /
                         190.0;
@@ -1575,7 +1592,9 @@ void Renderer::renderFrame(bool show_hud) {
                       projectScene(coord.v + 0.5,
                                    coord.u + kFloorObjectDepthRowFactor, 0.0);
                   const int center_x = static_cast<int>(std::lround(center.x));
-                  const int center_y = static_cast<int>(std::lround(center.y));
+                  const int center_y =
+                      static_cast<int>(std::lround(center.y)) -
+                      non_character_sprite_lift_px;
                   const Uint32 remaining_ms =
                       (placed_dynamite.explode_at_ticks > now)
                           ? (placed_dynamite.explode_at_ticks - now)
@@ -1639,7 +1658,9 @@ void Renderer::renderFrame(bool show_hud) {
                       projectScene(coord.v + 0.5,
                                    coord.u + kFloorObjectDepthRowFactor, 0.0);
                   const int center_x = static_cast<int>(std::lround(center.x));
-                  const int center_y = static_cast<int>(std::lround(center.y));
+                  const int center_y =
+                      static_cast<int>(std::lround(center.y)) -
+                      non_character_sprite_lift_px;
                   const double pulse_clock =
                       static_cast<double>(
                           now + placed_plastic_explosive.animation_seed * 31) /
@@ -1741,8 +1762,9 @@ void Renderer::renderFrame(bool show_hud) {
       } else {
         for (int i = 0; i < map->get_number_goodies(); i++) {
           const MapCoord coord = map->get_coord_goodie(i);
-          const SDL_Rect rect =
-              makeFloorAlignedRect(coord.v, coord.u, 0.15, 0.15, 0.7, 0.7);
+          const SDL_Rect rect = offsetRectY(
+              makeFloorAlignedRect(coord.v, coord.u, 0.15, 0.15, 0.7, 0.7),
+              -non_character_sprite_lift_px);
           const double depth =
               projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
           push_depth_command(depth, [this, rect, coord,
@@ -5008,6 +5030,7 @@ void Renderer::drawrockets() {
   }
 
   const Uint32 now = SDL_GetTicks();
+  const int non_character_sprite_lift_px = getNonCharacterSpriteLiftPixels();
   for (const auto &rocket : game->active_rockets) {
     const Uint32 step_duration_ms = std::max<Uint32>(1, rocket.step_duration_ms);
     const double progress = std::clamp(
@@ -5029,7 +5052,8 @@ void Renderer::drawrockets() {
         static_cast<float>(current_px.x + element_size / 2 +
                            (next_px.x - current_px.x) * rendered_progress),
         static_cast<float>(current_px.y + element_size / 2 +
-                           (next_px.y - current_px.y) * rendered_progress)};
+                           (next_px.y - current_px.y) * rendered_progress -
+                           non_character_sprite_lift_px)};
     const int frame_index =
         static_cast<int>((now / std::max<Uint32>(1, ROCKET_ANIMATION_FRAME_MS) +
                           static_cast<Uint32>(rocket.animation_seed)) %
@@ -5836,6 +5860,7 @@ void Renderer::drawslimeballs() {
   }
 
   const Uint32 now = SDL_GetTicks();
+  const int non_character_sprite_lift_px = getNonCharacterSpriteLiftPixels();
   for (const auto &slimeball : game->slimeballs) {
     const MapCoord next_coord = StepRenderCoord(slimeball.current_coord,
                                                 slimeball.direction);
@@ -5863,7 +5888,8 @@ void Renderer::drawslimeballs() {
         static_cast<int>((end_center_x - start_center_x) * rendered_progress);
     const int center_y =
         start_center_y +
-        static_cast<int>((end_center_y - start_center_y) * rendered_progress);
+        static_cast<int>((end_center_y - start_center_y) * rendered_progress) -
+        non_character_sprite_lift_px;
     const int max_dimension = std::max(
         1, static_cast<int>(std::lround(element_size * kSlimeBallRenderScale)));
     const int half_extent = std::max(6, max_dimension / 2) + 6;
@@ -5941,6 +5967,7 @@ void Renderer::drawgasclouds() {
   }
 
   const Uint32 now = SDL_GetTicks();
+  const int non_character_sprite_lift_px = getNonCharacterSpriteLiftPixels();
   for (const auto &cloud : game->gas_clouds) {
     double alpha_factor = 1.0;
     if (cloud.is_fading) {
@@ -5956,7 +5983,8 @@ void Renderer::drawgasclouds() {
 
     const PixelCoord cloud_px = getPixelCoord(cloud.coord, 0, 0);
     const int center_x = cloud_px.x + element_size / 2;
-    const int center_y = cloud_px.y + element_size / 2;
+    const int center_y =
+        cloud_px.y + element_size / 2 - non_character_sprite_lift_px;
     const auto draw_procedural_cloud = [&]() {
       const double wobble_clock =
           static_cast<double>(now + cloud.animation_seed * 67) / 210.0;
@@ -6406,10 +6434,6 @@ void Renderer::drawFloorTile3D(int row, int col) {
 }
 
 void Renderer::drawWallTop3D(int row, int col) {
-  const SDL_FPoint top_back_left = projectScene(col, row, 1.0);
-  const SDL_FPoint top_back_right = projectScene(col + 1.0, row, 1.0);
-  const SDL_FPoint top_front_left = projectScene(col, row + 1.0, 1.0);
-  const SDL_FPoint top_front_right = projectScene(col + 1.0, row + 1.0, 1.0);
   const auto has_wall = [&](int probe_row, int probe_col) {
     return probe_row >= 0 && probe_col >= 0 &&
            probe_row < static_cast<int>(rows) &&
@@ -6418,12 +6442,20 @@ void Renderer::drawWallTop3D(int row, int col) {
                           static_cast<size_t>(probe_col)) ==
                ElementType::TYPE_WALL;
   };
-  const SDL_Rect top_rect = makeProjectedFaceRect(
-      top_back_left, top_back_right, top_front_left, top_front_right);
+  const SDL_Rect top_rect = getWallTopRect(row, col);
   // The front edge of the top face meets the vertical wall face and should
   // stay closed to avoid notches between both faces.
   drawWallTile(top_rect, has_wall(row - 1, col), has_wall(row, col + 1),
                true, has_wall(row, col - 1));
+}
+
+SDL_Rect Renderer::getWallTopRect(int row, int col) const {
+  const SDL_FPoint top_back_left = projectScene(col, row, 1.0);
+  const SDL_FPoint top_back_right = projectScene(col + 1.0, row, 1.0);
+  const SDL_FPoint top_front_left = projectScene(col, row + 1.0, 1.0);
+  const SDL_FPoint top_front_right = projectScene(col + 1.0, row + 1.0, 1.0);
+  return makeProjectedFaceRect(top_back_left, top_back_right, top_front_left,
+                               top_front_right);
 }
 
 SDL_Rect Renderer::getWallFrontFaceRect(int row, int col) const {
@@ -6452,6 +6484,21 @@ void Renderer::drawWithWallOcclusion(const SDL_Rect &draw_bounds,
   const int search_start_row =
       std::max(0, static_cast<int>(std::floor(row_cells)) + 1);
   bool has_occluder = false;
+  const auto subtract_occluder = [&](const SDL_Rect &occluder_rect) {
+    const SDL_Rect clipped_occluder =
+        intersectRects(occluder_rect, clipped_bounds);
+    if (!hasVisibleArea(clipped_occluder)) {
+      return;
+    }
+
+    has_occluder = true;
+    std::vector<SDL_Rect> next_regions;
+    next_regions.reserve(visible_regions.size() * 4);
+    for (const SDL_Rect &region : visible_regions) {
+      subtractRect(region, clipped_occluder, next_regions);
+    }
+    visible_regions = std::move(next_regions);
+  };
 
   for (int wall_row = search_start_row; wall_row < static_cast<int>(rows);
        ++wall_row) {
@@ -6461,25 +6508,18 @@ void Renderer::drawWithWallOcclusion(const SDL_Rect &draw_bounds,
         continue;
       }
 
+      subtract_occluder(getWallTopRect(wall_row, col));
+      if (visible_regions.empty()) {
+        return;
+      }
+
       if (wall_row + 1 < static_cast<int>(rows) &&
           map->map_entry(static_cast<size_t>(wall_row + 1),
                          static_cast<size_t>(col)) == ElementType::TYPE_WALL) {
         continue;
       }
 
-      const SDL_Rect wall_rect =
-          intersectRects(getWallFrontFaceRect(wall_row, col), clipped_bounds);
-      if (!hasVisibleArea(wall_rect)) {
-        continue;
-      }
-
-      has_occluder = true;
-      std::vector<SDL_Rect> next_regions;
-      next_regions.reserve(visible_regions.size() * 4);
-      for (const SDL_Rect &region : visible_regions) {
-        subtractRect(region, wall_rect, next_regions);
-      }
-      visible_regions = std::move(next_regions);
+      subtract_occluder(getWallFrontFaceRect(wall_row, col));
       if (visible_regions.empty()) {
         return;
       }
@@ -6602,6 +6642,16 @@ SDL_Rect Renderer::makeBillboardRect(double col, double row,
       static_cast<int>(std::lround(static_cast<double>(foot.x) - width / 2.0)),
       static_cast<int>(std::lround(static_cast<double>(foot.y) - height)), width,
       height};
+}
+
+int Renderer::getNonCharacterSpriteLiftPixels() const {
+  if (!ENABLE_3D_VIEW) {
+    return 0;
+  }
+
+  return std::max(
+      1, static_cast<int>(std::lround(static_cast<double>(element_size) *
+                                      kNonCharacterSpriteLiftFactor)));
 }
 
 void Renderer::carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
