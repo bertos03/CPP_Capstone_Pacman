@@ -77,7 +77,7 @@ constexpr double kFartCloudDriftXFactor = 0.06;
 constexpr double kFartCloudDriftYFactor = 0.05;
 constexpr double kFartCloudScalePulseAmplitude = 0.04;
 constexpr double kRocketSpriteAngleOffsetDegrees = 0.0;
-constexpr double kSpriteFootRowFactor = 0.95;
+constexpr double kSpriteFootRowFactor = 0.65;
 constexpr double kFloorObjectDepthRowFactor = 0.55;
 
 struct MonsterSpriteDescriptor {
@@ -91,6 +91,68 @@ constexpr std::array<MonsterSpriteDescriptor, 4> kMonsterSpriteDescriptors{{
     {MONSTER_MANY, "red"},
     {MONSTER_EXTRA, "green"},
 }};
+
+SDL_Rect makeProjectedFaceRect(SDL_FPoint top_left, SDL_FPoint top_right,
+                               SDL_FPoint bottom_left, SDL_FPoint bottom_right) {
+  const int left = static_cast<int>(std::lround(std::min(
+      {top_left.x, top_right.x, bottom_left.x, bottom_right.x})));
+  const int right = static_cast<int>(std::lround(std::max(
+      {top_left.x, top_right.x, bottom_left.x, bottom_right.x})));
+  const int top = static_cast<int>(std::lround(std::min(
+      {top_left.y, top_right.y, bottom_left.y, bottom_right.y})));
+  const int bottom = static_cast<int>(std::lround(std::max(
+      {top_left.y, top_right.y, bottom_left.y, bottom_right.y})));
+  return SDL_Rect{left, top, std::max(1, right - left),
+                  std::max(1, bottom - top)};
+}
+
+bool hasVisibleArea(const SDL_Rect &rect) {
+  return rect.w > 0 && rect.h > 0;
+}
+
+SDL_Rect intersectRects(const SDL_Rect &left, const SDL_Rect &right) {
+  const int x1 = std::max(left.x, right.x);
+  const int y1 = std::max(left.y, right.y);
+  const int x2 = std::min(left.x + left.w, right.x + right.w);
+  const int y2 = std::min(left.y + left.h, right.y + right.h);
+  return SDL_Rect{x1, y1, std::max(0, x2 - x1), std::max(0, y2 - y1)};
+}
+
+SDL_Rect expandRect(const SDL_Rect &rect, int padding) {
+  return SDL_Rect{rect.x - padding, rect.y - padding, rect.w + padding * 2,
+                  rect.h + padding * 2};
+}
+
+void subtractRect(const SDL_Rect &source, const SDL_Rect &cut,
+                  std::vector<SDL_Rect> &out) {
+  const SDL_Rect overlap = intersectRects(source, cut);
+  if (!hasVisibleArea(overlap)) {
+    out.push_back(source);
+    return;
+  }
+
+  const SDL_Rect top_rect{source.x, source.y, source.w, overlap.y - source.y};
+  const SDL_Rect bottom_rect{source.x, overlap.y + overlap.h, source.w,
+                             source.y + source.h - (overlap.y + overlap.h)};
+  const SDL_Rect left_rect{source.x, overlap.y, overlap.x - source.x,
+                           overlap.h};
+  const SDL_Rect right_rect{overlap.x + overlap.w, overlap.y,
+                            source.x + source.w - (overlap.x + overlap.w),
+                            overlap.h};
+
+  if (hasVisibleArea(top_rect)) {
+    out.push_back(top_rect);
+  }
+  if (hasVisibleArea(bottom_rect)) {
+    out.push_back(bottom_rect);
+  }
+  if (hasVisibleArea(left_rect)) {
+    out.push_back(left_rect);
+  }
+  if (hasVisibleArea(right_rect)) {
+    out.push_back(right_rect);
+  }
+}
 
 void configureSmoothTextureSampling(SDL_Texture *texture) {
   if (texture == nullptr) {
@@ -805,6 +867,47 @@ void Renderer::renderFrame(bool show_hud) {
         depth_commands.push_back(DepthDrawCommand{
             static_cast<float>(depth), depth_commands.size(), std::move(draw)});
       };
+      const auto wall_occlusion_top_y = [&](double col_cells,
+                                            double row_cells) -> int {
+        const int column =
+            std::clamp(static_cast<int>(std::floor(col_cells)), 0,
+                       static_cast<int>(cols) - 1);
+        const int search_start_row =
+            std::max(0, static_cast<int>(std::floor(row_cells)) + 1);
+        for (int wall_row = search_start_row; wall_row < static_cast<int>(rows);
+             ++wall_row) {
+          if (map->map_entry(static_cast<size_t>(wall_row),
+                             static_cast<size_t>(column)) !=
+              ElementType::TYPE_WALL) {
+            continue;
+          }
+
+          return static_cast<int>(std::floor(
+              projectScene(static_cast<double>(column) + 0.5,
+                           static_cast<double>(wall_row), 1.0)
+                  .y));
+        }
+        return screen_res_y;
+      };
+      const auto draw_with_wall_occlusion =
+          [&](double col_cells, double row_cells,
+              const std::function<void()> &draw) {
+            const int clip_top_y = wall_occlusion_top_y(col_cells, row_cells);
+            if (clip_top_y <= 0) {
+              return;
+            }
+
+            if (clip_top_y < screen_res_y) {
+              const SDL_Rect clip_rect{0, 0, screen_res_x,
+                                       std::clamp(clip_top_y, 0, screen_res_y)};
+              SDL_RenderSetClipRect(sdl_renderer, &clip_rect);
+              draw();
+              SDL_RenderSetClipRect(sdl_renderer, nullptr);
+              return;
+            }
+
+            draw();
+          };
 
       for (size_t teleporter_index = 0;
            teleporter_index < map->get_teleporter_pairs().size();
@@ -821,10 +924,16 @@ void Renderer::renderFrame(bool show_hud) {
               projectScene(0.5, position.u + kFloorObjectDepthRowFactor, 0.0).y;
           push_depth_command(
               depth, [this, teleporter_rect, teleporter_pair, teleporter_index,
-                      position_index]() {
-                drawTeleporterGlyph(
-                    teleporter_rect, teleporter_pair.digit,
-                    static_cast<int>(teleporter_index * 19 + position_index * 7));
+                      position_index, position, &draw_with_wall_occlusion]() {
+                draw_with_wall_occlusion(
+                    static_cast<double>(position.v) + 0.5,
+                    static_cast<double>(position.u) + kFloorObjectDepthRowFactor,
+                    [&]() {
+                      drawTeleporterGlyph(
+                          teleporter_rect, teleporter_pair.digit,
+                          static_cast<int>(teleporter_index * 19 +
+                                           position_index * 7));
+                    });
               });
         }
       }
@@ -844,10 +953,17 @@ void Renderer::renderFrame(bool show_hud) {
               makeFloorAlignedRect(coord.v, coord.u, 0.15, 0.15, 0.7, 0.7);
           const double depth =
               projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
-          push_depth_command(depth, [this, rect]() {
-            if (sdl_goodie_texture != nullptr) {
-              SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr, &rect);
-            }
+          push_depth_command(depth, [this, rect, coord,
+                                     &draw_with_wall_occlusion]() {
+            draw_with_wall_occlusion(
+                static_cast<double>(coord.v) + 0.5,
+                static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                [&]() {
+                  if (sdl_goodie_texture != nullptr) {
+                    SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr,
+                                   &rect);
+                  }
+                });
           });
         }
 
@@ -866,103 +982,119 @@ void Renderer::renderFrame(bool show_hud) {
             const double depth =
                 projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
             push_depth_command(depth, [&, coord, potion, alpha_factor, now]() {
-              const SDL_FPoint center =
-                  projectScene(coord.v + 0.5,
-                               coord.u + kFloorObjectDepthRowFactor, 0.0);
-              const int center_x = static_cast<int>(std::lround(center.x));
-              const int center_y = static_cast<int>(std::lround(center.y));
-              const double wobble_clock =
-                  static_cast<double>(now + potion.animation_seed * 53) / 260.0;
-              const double pulse = 0.76 + 0.24 * std::sin(wobble_clock);
-              const Uint8 glow_alpha = static_cast<Uint8>(
-                  std::clamp(120.0 * alpha_factor, 0.0, 140.0));
-              const Uint8 glass_alpha = static_cast<Uint8>(
-                  std::clamp(175.0 * alpha_factor, 0.0, 200.0));
-              const Uint8 fluid_alpha = static_cast<Uint8>(
-                  std::clamp(210.0 * alpha_factor, 0.0, 230.0));
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y = static_cast<int>(std::lround(center.y));
+                    const double wobble_clock =
+                        static_cast<double>(now + potion.animation_seed * 53) /
+                        260.0;
+                    const double pulse = 0.76 + 0.24 * std::sin(wobble_clock);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(120.0 * alpha_factor, 0.0, 140.0));
+                    const Uint8 glass_alpha = static_cast<Uint8>(
+                        std::clamp(175.0 * alpha_factor, 0.0, 200.0));
+                    const Uint8 fluid_alpha = static_cast<Uint8>(
+                        std::clamp(210.0 * alpha_factor, 0.0, 230.0));
 
-              SDL_SetRenderDrawColor(sdl_renderer, 72, 164, 255,
-                                     glow_alpha / 2);
-              SDL_RenderFillCircle(
-                  sdl_renderer, center_x, center_y,
-                  std::max(6, static_cast<int>(element_size * 0.30 * pulse)));
-              SDL_SetRenderDrawColor(sdl_renderer, 124, 214, 255, glow_alpha);
-              SDL_RenderDrawCircle(
-                  sdl_renderer, center_x, center_y,
-                  std::max(8, static_cast<int>(element_size * 0.38 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 72, 164, 255,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(6,
+                                 static_cast<int>(element_size * 0.30 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 124, 214, 255,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(8,
+                                 static_cast<int>(element_size * 0.38 * pulse)));
 
-              const int flask_width =
-                  std::max(10, static_cast<int>(element_size * 0.34));
-              const int flask_body_height =
-                  std::max(12, static_cast<int>(element_size * 0.36));
-              const int flask_neck_width =
-                  std::max(5, static_cast<int>(flask_width * 0.42));
-              const int flask_neck_height =
-                  std::max(5, static_cast<int>(element_size * 0.16));
-              const int flask_top = center_y - flask_body_height / 2;
+                    const int flask_width =
+                        std::max(10, static_cast<int>(element_size * 0.34));
+                    const int flask_body_height =
+                        std::max(12, static_cast<int>(element_size * 0.36));
+                    const int flask_neck_width =
+                        std::max(5, static_cast<int>(flask_width * 0.42));
+                    const int flask_neck_height =
+                        std::max(5, static_cast<int>(element_size * 0.16));
+                    const int flask_top = center_y - flask_body_height / 2;
 
-              SDL_Rect neck_rect{center_x - flask_neck_width / 2,
-                                 flask_top - flask_neck_height / 2,
-                                 flask_neck_width, flask_neck_height};
-              SDL_Rect body_rect{center_x - flask_width / 2, flask_top,
-                                 flask_width, flask_body_height};
+                    SDL_Rect neck_rect{center_x - flask_neck_width / 2,
+                                       flask_top - flask_neck_height / 2,
+                                       flask_neck_width, flask_neck_height};
+                    SDL_Rect body_rect{center_x - flask_width / 2, flask_top,
+                                       flask_width, flask_body_height};
 
-              SDL_SetRenderDrawColor(sdl_renderer, 225, 245, 255,
-                                     glass_alpha / 4);
-              SDL_RenderFillRect(sdl_renderer, &neck_rect);
-              SDL_RenderFillRect(sdl_renderer, &body_rect);
-              SDL_RenderFillCircle(sdl_renderer, center_x,
-                                   body_rect.y + body_rect.h,
-                                   std::max(5, flask_width / 2));
+                    SDL_SetRenderDrawColor(sdl_renderer, 225, 245, 255,
+                                           glass_alpha / 4);
+                    SDL_RenderFillRect(sdl_renderer, &neck_rect);
+                    SDL_RenderFillRect(sdl_renderer, &body_rect);
+                    SDL_RenderFillCircle(sdl_renderer, center_x,
+                                         body_rect.y + body_rect.h,
+                                         std::max(5, flask_width / 2));
 
-              const int liquid_height = std::max(
-                  5, static_cast<int>(flask_body_height *
-                                      (0.42 + 0.10 * std::sin(wobble_clock))));
-              SDL_Rect liquid_rect{
-                  body_rect.x + 2, body_rect.y + body_rect.h - liquid_height,
-                  std::max(2, body_rect.w - 4), liquid_height};
-              SDL_SetRenderDrawColor(sdl_renderer, 44, 112, 255, fluid_alpha);
-              SDL_RenderFillRect(sdl_renderer, &liquid_rect);
-              SDL_SetRenderDrawColor(sdl_renderer, 118, 204, 255, fluid_alpha);
-              SDL_RenderFillCircle(
-                  sdl_renderer, center_x,
-                  body_rect.y + body_rect.h -
-                      std::max(2, liquid_height / 3),
-                  std::max(4, flask_width / 2 - 2));
+                    const int liquid_height =
+                        std::max(5, static_cast<int>(flask_body_height *
+                                                     (0.42 + 0.10 *
+                                                                 std::sin(
+                                                                     wobble_clock))));
+                    SDL_Rect liquid_rect{
+                        body_rect.x + 2,
+                        body_rect.y + body_rect.h - liquid_height,
+                        std::max(2, body_rect.w - 4), liquid_height};
+                    SDL_SetRenderDrawColor(sdl_renderer, 44, 112, 255,
+                                           fluid_alpha);
+                    SDL_RenderFillRect(sdl_renderer, &liquid_rect);
+                    SDL_SetRenderDrawColor(sdl_renderer, 118, 204, 255,
+                                           fluid_alpha);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x,
+                        body_rect.y + body_rect.h -
+                            std::max(2, liquid_height / 3),
+                        std::max(4, flask_width / 2 - 2));
 
-              for (int bubble = 0; bubble < 3; bubble++) {
-                const double bubble_phase = wobble_clock * 1.15 + bubble * 1.7;
-                const double bubble_progress =
-                    std::fmod(now / 900.0 + bubble * 0.31, 1.0);
-                const int bubble_x =
-                    center_x + static_cast<int>(std::sin(bubble_phase) *
-                                                flask_width * 0.16);
-                const int bubble_y =
-                    liquid_rect.y + liquid_rect.h -
-                    static_cast<int>(bubble_progress *
-                                     std::max(6, liquid_rect.h - 2));
-                const int bubble_radius =
-                    std::max(2, element_size / 14 + bubble % 2);
-                SDL_SetRenderDrawColor(sdl_renderer, 220, 245, 255,
-                                       glow_alpha);
-                SDL_RenderFillCircle(sdl_renderer, bubble_x, bubble_y,
-                                     bubble_radius);
-              }
+                    for (int bubble = 0; bubble < 3; bubble++) {
+                      const double bubble_phase =
+                          wobble_clock * 1.15 + bubble * 1.7;
+                      const double bubble_progress =
+                          std::fmod(now / 900.0 + bubble * 0.31, 1.0);
+                      const int bubble_x =
+                          center_x + static_cast<int>(std::sin(bubble_phase) *
+                                                      flask_width * 0.16);
+                      const int bubble_y =
+                          liquid_rect.y + liquid_rect.h -
+                          static_cast<int>(bubble_progress *
+                                           std::max(6, liquid_rect.h - 2));
+                      const int bubble_radius =
+                          std::max(2, element_size / 14 + bubble % 2);
+                      SDL_SetRenderDrawColor(sdl_renderer, 220, 245, 255,
+                                             glow_alpha);
+                      SDL_RenderFillCircle(sdl_renderer, bubble_x, bubble_y,
+                                           bubble_radius);
+                    }
 
-              SDL_SetRenderDrawColor(sdl_renderer, 224, 246, 255, glass_alpha);
-              SDL_RenderDrawRect(sdl_renderer, &neck_rect);
-              SDL_RenderDrawRect(sdl_renderer, &body_rect);
-              SDL_RenderDrawLine(
-                  sdl_renderer, body_rect.x, body_rect.y + body_rect.h,
-                  center_x - flask_width / 4,
-                  body_rect.y + body_rect.h + flask_width / 3);
-              SDL_RenderDrawLine(
-                  sdl_renderer, body_rect.x + body_rect.w,
-                  body_rect.y + body_rect.h, center_x + flask_width / 4,
-                  body_rect.y + body_rect.h + flask_width / 3);
-              SDL_RenderDrawCircle(sdl_renderer, center_x,
-                                   body_rect.y + body_rect.h,
-                                   std::max(5, flask_width / 2));
+                    SDL_SetRenderDrawColor(sdl_renderer, 224, 246, 255,
+                                           glass_alpha);
+                    SDL_RenderDrawRect(sdl_renderer, &neck_rect);
+                    SDL_RenderDrawRect(sdl_renderer, &body_rect);
+                    SDL_RenderDrawLine(
+                        sdl_renderer, body_rect.x, body_rect.y + body_rect.h,
+                        center_x - flask_width / 4,
+                        body_rect.y + body_rect.h + flask_width / 3);
+                    SDL_RenderDrawLine(
+                        sdl_renderer, body_rect.x + body_rect.w,
+                        body_rect.y + body_rect.h, center_x + flask_width / 4,
+                        body_rect.y + body_rect.h + flask_width / 3);
+                    SDL_RenderDrawCircle(sdl_renderer, center_x,
+                                         body_rect.y + body_rect.h,
+                                         std::max(5, flask_width / 2));
+                  });
             });
           }
         }
@@ -982,37 +1114,45 @@ void Renderer::renderFrame(bool show_hud) {
             const double depth =
                 projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
             push_depth_command(depth, [&, coord, dynamite, alpha_factor, now]() {
-              const SDL_FPoint center =
-                  projectScene(coord.v + 0.5,
-                               coord.u + kFloorObjectDepthRowFactor, 0.0);
-              const int center_x = static_cast<int>(std::lround(center.x));
-              const int center_y = static_cast<int>(std::lround(center.y));
-              const double animation_clock =
-                  static_cast<double>(now + dynamite.animation_seed * 41) /
-                  180.0;
-              const double pulse = 0.80 + 0.20 * std::sin(animation_clock);
-              const Uint8 glow_alpha = static_cast<Uint8>(
-                  std::clamp(96.0 * alpha_factor, 0.0, 140.0));
-              const Uint8 body_alpha = static_cast<Uint8>(
-                  std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y = static_cast<int>(std::lround(center.y));
+                    const double animation_clock =
+                        static_cast<double>(now + dynamite.animation_seed * 41) /
+                        180.0;
+                    const double pulse = 0.80 + 0.20 * std::sin(animation_clock);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(96.0 * alpha_factor, 0.0, 140.0));
+                    const Uint8 body_alpha = static_cast<Uint8>(
+                        std::clamp(255.0 * alpha_factor, 0.0, 255.0));
 
-              SDL_SetRenderDrawColor(sdl_renderer, 255, 118, 24,
-                                     glow_alpha / 2);
-              SDL_RenderFillCircle(
-                  sdl_renderer, center_x, center_y,
-                  std::max(7, static_cast<int>(element_size * 0.28 * pulse)));
-              SDL_SetRenderDrawColor(sdl_renderer, 255, 202, 110, glow_alpha);
-              SDL_RenderDrawCircle(
-                  sdl_renderer, center_x, center_y,
-                  std::max(9, static_cast<int>(element_size * 0.38 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 118, 24,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(7,
+                                 static_cast<int>(element_size * 0.28 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 202, 110,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(9,
+                                 static_cast<int>(element_size * 0.38 * pulse)));
 
-              const int icon_size =
-                  std::max(12, static_cast<int>(element_size * 0.74));
-              const SDL_Rect icon_rect{center_x - icon_size / 2,
-                                       center_y - icon_size / 2, icon_size,
-                                       icon_size};
-              drawDynamiteIcon(icon_rect, false, animation_clock, body_alpha,
-                               0.0);
+                    const int icon_size =
+                        std::max(12, static_cast<int>(element_size * 0.74));
+                    const SDL_Rect icon_rect{center_x - icon_size / 2,
+                                             center_y - icon_size / 2,
+                                             icon_size, icon_size};
+                    drawDynamiteIcon(icon_rect, false, animation_clock,
+                                     body_alpha, 0.0);
+                  });
             });
           }
         }
@@ -1034,41 +1174,50 @@ void Renderer::renderFrame(bool show_hud) {
                 projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
             push_depth_command(
                 depth, [&, coord, plastic_explosive, alpha_factor, now]() {
-                  const SDL_FPoint center =
-                      projectScene(coord.v + 0.5,
-                                   coord.u + kFloorObjectDepthRowFactor, 0.0);
-                  const int center_x =
-                      static_cast<int>(std::lround(center.x));
-                  const int center_y =
-                      static_cast<int>(std::lround(center.y));
-                  const double animation_clock =
-                      static_cast<double>(
-                          now + plastic_explosive.animation_seed * 37) /
-                      170.0;
-                  const double pulse = 0.78 + 0.22 * std::sin(animation_clock);
-                  const Uint8 glow_alpha = static_cast<Uint8>(
-                      std::clamp(88.0 * alpha_factor, 0.0, 136.0));
-                  const Uint8 body_alpha = static_cast<Uint8>(
-                      std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+                  draw_with_wall_occlusion(
+                      static_cast<double>(coord.v) + 0.5,
+                      static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                      [&]() {
+                        const SDL_FPoint center =
+                            projectScene(coord.v + 0.5,
+                                         coord.u + kFloorObjectDepthRowFactor,
+                                         0.0);
+                        const int center_x =
+                            static_cast<int>(std::lround(center.x));
+                        const int center_y =
+                            static_cast<int>(std::lround(center.y));
+                        const double animation_clock =
+                            static_cast<double>(
+                                now + plastic_explosive.animation_seed * 37) /
+                            170.0;
+                        const double pulse =
+                            0.78 + 0.22 * std::sin(animation_clock);
+                        const Uint8 glow_alpha = static_cast<Uint8>(
+                            std::clamp(88.0 * alpha_factor, 0.0, 136.0));
+                        const Uint8 body_alpha = static_cast<Uint8>(
+                            std::clamp(255.0 * alpha_factor, 0.0, 255.0));
 
-                  SDL_SetRenderDrawColor(sdl_renderer, 84, 214, 255,
-                                         glow_alpha / 2);
-                  SDL_RenderFillCircle(
-                      sdl_renderer, center_x, center_y,
-                      std::max(7, static_cast<int>(element_size * 0.26 * pulse)));
-                  SDL_SetRenderDrawColor(sdl_renderer, 190, 244, 255,
-                                         glow_alpha);
-                  SDL_RenderDrawCircle(
-                      sdl_renderer, center_x, center_y,
-                      std::max(9, static_cast<int>(element_size * 0.36 * pulse)));
+                        SDL_SetRenderDrawColor(sdl_renderer, 84, 214, 255,
+                                               glow_alpha / 2);
+                        SDL_RenderFillCircle(
+                            sdl_renderer, center_x, center_y,
+                            std::max(7, static_cast<int>(element_size * 0.26 *
+                                                         pulse)));
+                        SDL_SetRenderDrawColor(sdl_renderer, 190, 244, 255,
+                                               glow_alpha);
+                        SDL_RenderDrawCircle(
+                            sdl_renderer, center_x, center_y,
+                            std::max(9, static_cast<int>(element_size * 0.36 *
+                                                         pulse)));
 
-                  const int icon_size =
-                      std::max(12, static_cast<int>(element_size * 0.74));
-                  const SDL_Rect icon_rect{center_x - icon_size / 2,
-                                           center_y - icon_size / 2, icon_size,
-                                           icon_size};
-                  drawPlasticExplosiveIcon(icon_rect, animation_clock,
-                                           body_alpha, false);
+                        const int icon_size =
+                            std::max(12, static_cast<int>(element_size * 0.74));
+                        const SDL_Rect icon_rect{
+                            center_x - icon_size / 2,
+                            center_y - icon_size / 2, icon_size, icon_size};
+                        drawPlasticExplosiveIcon(icon_rect, animation_clock,
+                                                 body_alpha, false);
+                      });
                 });
           }
         }
@@ -1087,35 +1236,44 @@ void Renderer::renderFrame(bool show_hud) {
             const double depth =
                 projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
             push_depth_command(depth, [&, coord, walkie, alpha_factor, now]() {
-              const SDL_FPoint center =
-                  projectScene(coord.v + 0.5,
-                               coord.u + kFloorObjectDepthRowFactor, 0.0);
-              const int center_x = static_cast<int>(std::lround(center.x));
-              const int center_y = static_cast<int>(std::lround(center.y));
-              const double animation_clock =
-                  static_cast<double>(now + walkie.animation_seed * 29) / 210.0;
-              const double pulse = 0.82 + 0.18 * std::sin(animation_clock);
-              const Uint8 glow_alpha = static_cast<Uint8>(
-                  std::clamp(104.0 * alpha_factor, 0.0, 150.0));
-              const Uint8 body_alpha = static_cast<Uint8>(
-                  std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y = static_cast<int>(std::lround(center.y));
+                    const double animation_clock =
+                        static_cast<double>(now + walkie.animation_seed * 29) /
+                        210.0;
+                    const double pulse = 0.82 + 0.18 * std::sin(animation_clock);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(104.0 * alpha_factor, 0.0, 150.0));
+                    const Uint8 body_alpha = static_cast<Uint8>(
+                        std::clamp(255.0 * alpha_factor, 0.0, 255.0));
 
-              SDL_SetRenderDrawColor(sdl_renderer, 80, 255, 116,
-                                     glow_alpha / 2);
-              SDL_RenderFillCircle(
-                  sdl_renderer, center_x, center_y,
-                  std::max(7, static_cast<int>(element_size * 0.28 * pulse)));
-              SDL_SetRenderDrawColor(sdl_renderer, 194, 255, 214, glow_alpha);
-              SDL_RenderDrawCircle(
-                  sdl_renderer, center_x, center_y,
-                  std::max(10, static_cast<int>(element_size * 0.40 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 80, 255, 116,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(7,
+                                 static_cast<int>(element_size * 0.28 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 194, 255, 214,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(10,
+                                 static_cast<int>(element_size * 0.40 * pulse)));
 
-              const int icon_size =
-                  std::max(12, static_cast<int>(element_size * 0.76));
-              const SDL_Rect icon_rect{center_x - icon_size / 2,
-                                       center_y - icon_size / 2, icon_size,
-                                       icon_size};
-              drawWalkieTalkieIcon(icon_rect, body_alpha, animation_clock);
+                    const int icon_size =
+                        std::max(12, static_cast<int>(element_size * 0.76));
+                    const SDL_Rect icon_rect{center_x - icon_size / 2,
+                                             center_y - icon_size / 2,
+                                             icon_size, icon_size};
+                    drawWalkieTalkieIcon(icon_rect, body_alpha, animation_clock);
+                  });
             });
           }
         }
@@ -1134,35 +1292,44 @@ void Renderer::renderFrame(bool show_hud) {
             const double depth =
                 projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
             push_depth_command(depth, [&, coord, rocket, alpha_factor, now]() {
-              const SDL_FPoint center =
-                  projectScene(coord.v + 0.5,
-                               coord.u + kFloorObjectDepthRowFactor, 0.0);
-              const int center_x = static_cast<int>(std::lround(center.x));
-              const int center_y = static_cast<int>(std::lround(center.y));
-              const double animation_clock =
-                  static_cast<double>(now + rocket.animation_seed * 31) / 190.0;
-              const double pulse = 0.84 + 0.16 * std::sin(animation_clock);
-              const Uint8 glow_alpha = static_cast<Uint8>(
-                  std::clamp(118.0 * alpha_factor, 0.0, 156.0));
-              const Uint8 body_alpha = static_cast<Uint8>(
-                  std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y = static_cast<int>(std::lround(center.y));
+                    const double animation_clock =
+                        static_cast<double>(now + rocket.animation_seed * 31) /
+                        190.0;
+                    const double pulse = 0.84 + 0.16 * std::sin(animation_clock);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(118.0 * alpha_factor, 0.0, 156.0));
+                    const Uint8 body_alpha = static_cast<Uint8>(
+                        std::clamp(255.0 * alpha_factor, 0.0, 255.0));
 
-              SDL_SetRenderDrawColor(sdl_renderer, 255, 112, 46,
-                                     glow_alpha / 2);
-              SDL_RenderFillCircle(
-                  sdl_renderer, center_x, center_y,
-                  std::max(8, static_cast<int>(element_size * 0.29 * pulse)));
-              SDL_SetRenderDrawColor(sdl_renderer, 255, 210, 124, glow_alpha);
-              SDL_RenderDrawCircle(
-                  sdl_renderer, center_x, center_y,
-                  std::max(10, static_cast<int>(element_size * 0.40 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 112, 46,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(8,
+                                 static_cast<int>(element_size * 0.29 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 210, 124,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(10,
+                                 static_cast<int>(element_size * 0.40 * pulse)));
 
-              const int icon_size =
-                  std::max(12, static_cast<int>(element_size * 0.82));
-              const SDL_Rect icon_rect{center_x - icon_size / 2,
-                                       center_y - icon_size / 2, icon_size,
-                                       icon_size};
-              drawRocketIcon(icon_rect, body_alpha, animation_clock);
+                    const int icon_size =
+                        std::max(12, static_cast<int>(element_size * 0.82));
+                    const SDL_Rect icon_rect{center_x - icon_size / 2,
+                                             center_y - icon_size / 2,
+                                             icon_size, icon_size};
+                    drawRocketIcon(icon_rect, body_alpha, animation_clock);
+                  });
             });
           }
         }
@@ -1292,53 +1459,63 @@ void Renderer::renderFrame(bool show_hud) {
                   depth,
                   [&, animated_rect, rotation, pacman_texture, pacman_alpha,
                    potion_invulnerable, in_departure_phase, phase_progress,
-                   scale]() {
-                    if (potion_invulnerable) {
-                      drawPacmanShield(animated_rect.x + animated_rect.w / 2,
-                                       animated_rect.y + animated_rect.h / 2,
-                                       std::max(8, animated_rect.w / 2 + 5),
-                                       static_cast<double>(now) / 180.0);
-                    }
+                   scale, render_coord]() {
+                    drawWithWallOcclusion(
+                        expandRect(animated_rect, std::max(10, element_size / 3)),
+                        static_cast<double>(render_coord.u) + 0.5,
+                        [&]() {
+                          if (potion_invulnerable) {
+                            drawPacmanShield(
+                                animated_rect.x + animated_rect.w / 2,
+                                animated_rect.y + animated_rect.h / 2,
+                                std::max(8, animated_rect.w / 2 + 5),
+                                static_cast<double>(now) / 180.0);
+                          }
 
-                    const Uint8 spark_alpha = static_cast<Uint8>(std::clamp(
-                        (in_departure_phase ? (1.0 - phase_progress)
-                                            : (0.35 + 0.65 * phase_progress)) *
-                            170.0,
-                        0.0, 200.0));
-                    SDL_SetRenderDrawColor(sdl_renderer, 130, 214, 255,
-                                           spark_alpha / 2);
-                    SDL_RenderFillCircle(
-                        sdl_renderer,
-                        animated_rect.x + animated_rect.w / 2,
-                        animated_rect.y + animated_rect.h / 2,
-                        std::max(3, static_cast<int>(element_size * 0.42 * scale)));
-                    SDL_SetRenderDrawColor(sdl_renderer, 220, 245, 255,
-                                           spark_alpha);
-                    for (int spark = 0; spark < 5; spark++) {
-                      const double angle =
-                          (rotation / 180.0) * 3.1415926535 +
-                          spark * (2.0 * 3.1415926535 / 5.0);
-                      const int spark_length = std::max(
-                          4, static_cast<int>(element_size *
-                                              (0.10 + 0.14 * scale)));
-                      SDL_RenderDrawLine(
-                          sdl_renderer,
-                          animated_rect.x + animated_rect.w / 2,
-                          animated_rect.y + animated_rect.h / 2,
-                          animated_rect.x + animated_rect.w / 2 +
-                              static_cast<int>(std::cos(angle) * spark_length),
-                          animated_rect.y + animated_rect.h / 2 +
-                              static_cast<int>(std::sin(angle) * spark_length));
-                    }
+                          const Uint8 spark_alpha = static_cast<Uint8>(
+                              std::clamp((in_departure_phase
+                                              ? (1.0 - phase_progress)
+                                              : (0.35 + 0.65 * phase_progress)) *
+                                             170.0,
+                                         0.0, 200.0));
+                          SDL_SetRenderDrawColor(sdl_renderer, 130, 214, 255,
+                                                 spark_alpha / 2);
+                          SDL_RenderFillCircle(
+                              sdl_renderer,
+                              animated_rect.x + animated_rect.w / 2,
+                              animated_rect.y + animated_rect.h / 2,
+                              std::max(3, static_cast<int>(element_size * 0.42 *
+                                                           scale)));
+                          SDL_SetRenderDrawColor(sdl_renderer, 220, 245, 255,
+                                                 spark_alpha);
+                          for (int spark = 0; spark < 5; spark++) {
+                            const double angle =
+                                (rotation / 180.0) * 3.1415926535 +
+                                spark * (2.0 * 3.1415926535 / 5.0);
+                            const int spark_length = std::max(
+                                4, static_cast<int>(element_size *
+                                                    (0.10 + 0.14 * scale)));
+                            SDL_RenderDrawLine(
+                                sdl_renderer,
+                                animated_rect.x + animated_rect.w / 2,
+                                animated_rect.y + animated_rect.h / 2,
+                                animated_rect.x + animated_rect.w / 2 +
+                                    static_cast<int>(std::cos(angle) *
+                                                     spark_length),
+                                animated_rect.y + animated_rect.h / 2 +
+                                    static_cast<int>(std::sin(angle) *
+                                                     spark_length));
+                          }
 
-                    if (animated_rect.w > 1 && pacman_texture != nullptr) {
-                      SDL_SetTextureAlphaMod(pacman_texture, pacman_alpha);
-                      SDL_RenderCopyEx(sdl_renderer, pacman_texture, nullptr,
-                                       &animated_rect, rotation, nullptr,
-                                       SDL_FLIP_NONE);
-                      SDL_SetTextureAlphaMod(pacman_texture, 255);
-                    }
-                    draw_slime_overlay(animated_rect, rotation);
+                          if (animated_rect.w > 1 && pacman_texture != nullptr) {
+                            SDL_SetTextureAlphaMod(pacman_texture, pacman_alpha);
+                            SDL_RenderCopyEx(sdl_renderer, pacman_texture,
+                                             nullptr, &animated_rect, rotation,
+                                             nullptr, SDL_FLIP_NONE);
+                            SDL_SetTextureAlphaMod(pacman_texture, 255);
+                          }
+                          draw_slime_overlay(animated_rect, rotation);
+                        });
                   });
             } else {
               const double delta_col_cells =
@@ -1359,20 +1536,27 @@ void Renderer::renderFrame(bool show_hud) {
               push_depth_command(
                   depth,
                   [&, pacman_rect, pacman_texture, pacman_alpha,
-                   potion_invulnerable]() {
-                    if (potion_invulnerable) {
-                      drawPacmanShield(pacman_rect.x + pacman_rect.w / 2,
-                                       pacman_rect.y + pacman_rect.h / 2,
-                                       std::max(8, pacman_rect.w / 2 + 5),
-                                       static_cast<double>(now) / 180.0);
-                    }
-                    if (pacman_texture != nullptr) {
-                      SDL_SetTextureAlphaMod(pacman_texture, pacman_alpha);
-                      SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr,
-                                     &pacman_rect);
-                      SDL_SetTextureAlphaMod(pacman_texture, 255);
-                    }
-                    draw_slime_overlay(pacman_rect, 0.0);
+                   potion_invulnerable, delta_row_cells]() {
+                    drawWithWallOcclusion(
+                        expandRect(pacman_rect, std::max(10, element_size / 3)),
+                        static_cast<double>(game->pacman->map_coord.u) + 0.5 +
+                            delta_row_cells,
+                        [&]() {
+                          if (potion_invulnerable) {
+                            drawPacmanShield(
+                                pacman_rect.x + pacman_rect.w / 2,
+                                pacman_rect.y + pacman_rect.h / 2,
+                                std::max(8, pacman_rect.w / 2 + 5),
+                                static_cast<double>(now) / 180.0);
+                          }
+                          if (pacman_texture != nullptr) {
+                            SDL_SetTextureAlphaMod(pacman_texture, pacman_alpha);
+                            SDL_RenderCopy(sdl_renderer, pacman_texture,
+                                           nullptr, &pacman_rect);
+                            SDL_SetTextureAlphaMod(pacman_texture, 255);
+                          }
+                          draw_slime_overlay(pacman_rect, 0.0);
+                        });
                   });
             }
           }
@@ -1383,50 +1567,61 @@ void Renderer::renderFrame(bool show_hud) {
           const double depth =
               projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
           push_depth_command(depth, [&, coord, placed_dynamite, now]() {
-            const SDL_FPoint center =
-                projectScene(coord.v + 0.5,
-                             coord.u + kFloorObjectDepthRowFactor, 0.0);
-            const int center_x = static_cast<int>(std::lround(center.x));
-            const int center_y = static_cast<int>(std::lround(center.y));
-            const Uint32 remaining_ms =
-                (placed_dynamite.explode_at_ticks > now)
-                    ? (placed_dynamite.explode_at_ticks - now)
-                    : 0;
-            const double countdown_progress =
-                std::clamp(static_cast<double>(remaining_ms) /
-                               static_cast<double>(
-                                   std::max<Uint32>(1, DYNAMITE_COUNTDOWN_MS)),
-                           0.0, 1.0);
-            const double urgency = 1.0 - countdown_progress;
-            const double pulse_clock =
-                static_cast<double>(now + placed_dynamite.animation_seed * 29) /
-                130.0;
-            const double pulse =
-                0.88 + (0.12 + urgency * 0.22) * std::sin(pulse_clock);
+            draw_with_wall_occlusion(
+                static_cast<double>(coord.v) + 0.5,
+                static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                [&]() {
+                  const SDL_FPoint center =
+                      projectScene(coord.v + 0.5,
+                                   coord.u + kFloorObjectDepthRowFactor, 0.0);
+                  const int center_x = static_cast<int>(std::lround(center.x));
+                  const int center_y = static_cast<int>(std::lround(center.y));
+                  const Uint32 remaining_ms =
+                      (placed_dynamite.explode_at_ticks > now)
+                          ? (placed_dynamite.explode_at_ticks - now)
+                          : 0;
+                  const double countdown_progress =
+                      std::clamp(static_cast<double>(remaining_ms) /
+                                     static_cast<double>(std::max<Uint32>(
+                                         1, DYNAMITE_COUNTDOWN_MS)),
+                                 0.0, 1.0);
+                  const double urgency = 1.0 - countdown_progress;
+                  const double pulse_clock =
+                      static_cast<double>(
+                          now + placed_dynamite.animation_seed * 29) /
+                      130.0;
+                  const double pulse =
+                      0.88 + (0.12 + urgency * 0.22) * std::sin(pulse_clock);
 
-            SDL_SetRenderDrawColor(
-                sdl_renderer, 255, 88, 32,
-                static_cast<Uint8>(
-                    std::clamp(72.0 + urgency * 90.0, 0.0, 190.0)));
-            SDL_RenderFillCircle(
-                sdl_renderer, center_x,
-                center_y + static_cast<int>(std::lround(element_size * 0.08)),
-                std::max(6, static_cast<int>(element_size * 0.24 * pulse)));
+                  SDL_SetRenderDrawColor(
+                      sdl_renderer, 255, 88, 32,
+                      static_cast<Uint8>(
+                          std::clamp(72.0 + urgency * 90.0, 0.0, 190.0)));
+                  SDL_RenderFillCircle(
+                      sdl_renderer, center_x,
+                      center_y +
+                          static_cast<int>(std::lround(element_size * 0.08)),
+                      std::max(6,
+                               static_cast<int>(element_size * 0.24 * pulse)));
 
-            const int icon_size =
-                std::max(12, static_cast<int>(element_size * 0.78));
-            const SDL_Rect icon_rect{
-                center_x - icon_size / 2,
-                center_y - icon_size / 2 -
-                    static_cast<int>(std::lround(element_size * 0.10)),
-                icon_size, icon_size};
-            drawDynamiteIcon(icon_rect, true, pulse_clock, 255, urgency);
+                  const int icon_size =
+                      std::max(12, static_cast<int>(element_size * 0.78));
+                  const SDL_Rect icon_rect{
+                      center_x - icon_size / 2,
+                      center_y - icon_size / 2 -
+                          static_cast<int>(std::lround(element_size * 0.10)),
+                      icon_size, icon_size};
+                  drawDynamiteIcon(icon_rect, true, pulse_clock, 255, urgency);
 
-            const int remaining_seconds =
-                static_cast<int>((std::max<Uint32>(1, remaining_ms) + 999) / 1000);
-            renderSimpleText(sdl_font_hud, std::to_string(remaining_seconds),
-                             SDL_Color{255, 238, 206, 255}, center_x,
-                             center_y - TTF_FontHeight(sdl_font_hud));
+                  const int remaining_seconds =
+                      static_cast<int>((std::max<Uint32>(1, remaining_ms) +
+                                        999) /
+                                       1000);
+                  renderSimpleText(
+                      sdl_font_hud, std::to_string(remaining_seconds),
+                      SDL_Color{255, 238, 206, 255}, center_x,
+                      center_y - TTF_FontHeight(sdl_font_hud));
+                });
           });
         }
 
@@ -1436,34 +1631,41 @@ void Renderer::renderFrame(bool show_hud) {
           const double depth =
               projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
           push_depth_command(depth, [&, coord, placed_plastic_explosive, now]() {
-            const SDL_FPoint center =
-                projectScene(coord.v + 0.5,
-                             coord.u + kFloorObjectDepthRowFactor, 0.0);
-            const int center_x = static_cast<int>(std::lround(center.x));
-            const int center_y = static_cast<int>(std::lround(center.y));
-            const double pulse_clock =
-                static_cast<double>(
-                    now + placed_plastic_explosive.animation_seed * 31) /
-                130.0;
-            const double pulse = 0.84 + 0.28 * std::sin(pulse_clock);
+            draw_with_wall_occlusion(
+                static_cast<double>(coord.v) + 0.5,
+                static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                [&]() {
+                  const SDL_FPoint center =
+                      projectScene(coord.v + 0.5,
+                                   coord.u + kFloorObjectDepthRowFactor, 0.0);
+                  const int center_x = static_cast<int>(std::lround(center.x));
+                  const int center_y = static_cast<int>(std::lround(center.y));
+                  const double pulse_clock =
+                      static_cast<double>(
+                          now + placed_plastic_explosive.animation_seed * 31) /
+                      130.0;
+                  const double pulse = 0.84 + 0.28 * std::sin(pulse_clock);
 
-            SDL_SetRenderDrawColor(
-                sdl_renderer, 255, 72, 52,
-                static_cast<Uint8>(
-                    std::clamp(92.0 + pulse * 72.0, 0.0, 188.0)));
-            SDL_RenderFillCircle(
-                sdl_renderer, center_x,
-                center_y + static_cast<int>(std::lround(element_size * 0.08)),
-                std::max(6, static_cast<int>(element_size * 0.22 * pulse)));
+                  SDL_SetRenderDrawColor(
+                      sdl_renderer, 255, 72, 52,
+                      static_cast<Uint8>(
+                          std::clamp(92.0 + pulse * 72.0, 0.0, 188.0)));
+                  SDL_RenderFillCircle(
+                      sdl_renderer, center_x,
+                      center_y +
+                          static_cast<int>(std::lround(element_size * 0.08)),
+                      std::max(6,
+                               static_cast<int>(element_size * 0.22 * pulse)));
 
-            const int icon_size =
-                std::max(12, static_cast<int>(element_size * 0.76));
-            const SDL_Rect icon_rect{
-                center_x - icon_size / 2,
-                center_y - icon_size / 2 -
-                    static_cast<int>(std::lround(element_size * 0.08)),
-                icon_size, icon_size};
-            drawPlasticExplosiveIcon(icon_rect, pulse_clock, 255, true);
+                  const int icon_size =
+                      std::max(12, static_cast<int>(element_size * 0.76));
+                  const SDL_Rect icon_rect{
+                      center_x - icon_size / 2,
+                      center_y - icon_size / 2 -
+                          static_cast<int>(std::lround(element_size * 0.08)),
+                      icon_size, icon_size};
+                  drawPlasticExplosiveIcon(icon_rect, pulse_clock, 255, true);
+                });
           });
         }
 
@@ -1501,30 +1703,39 @@ void Renderer::renderFrame(bool show_hud) {
           push_depth_command(
               depth,
               [&, monster_texture, monster_rect, waiting_for_blast, now,
-               monster]() {
-                if (waiting_for_blast) {
-                  const Uint32 remaining_ticks =
-                      monster->scheduled_dynamite_blast_ticks - now;
-                  const double blink = std::sin(static_cast<double>(now) / 60.0);
-                  const Uint8 warning_alpha = static_cast<Uint8>(std::clamp(
-                      120.0 + 110.0 * std::max(0.0, blink), 0.0, 255.0));
-                  SDL_SetRenderDrawColor(
-                      sdl_renderer, 255, 120, 48, warning_alpha / 2);
-                  SDL_RenderFillCircle(
-                      sdl_renderer,
-                      monster_rect.x + monster_rect.w / 2,
-                      monster_rect.y + monster_rect.h / 2,
-                      std::max(7, static_cast<int>(element_size * 0.44)));
-                  const int alpha_mod =
-                      std::min(255, 170 + static_cast<int>(remaining_ticks % 80));
-                  SDL_SetTextureAlphaMod(
-                      monster_texture, static_cast<Uint8>(alpha_mod));
-                } else {
-                  SDL_SetTextureAlphaMod(monster_texture, 255);
-                }
-                SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
-                               &monster_rect);
-                SDL_SetTextureAlphaMod(monster_texture, 255);
+               monster, anchor_coord, delta_row_cells]() {
+                drawWithWallOcclusion(
+                    expandRect(monster_rect, std::max(8, element_size / 4)),
+                    static_cast<double>(anchor_coord.u) + 0.5 +
+                        delta_row_cells,
+                    [&]() {
+                      if (waiting_for_blast) {
+                        const Uint32 remaining_ticks =
+                            monster->scheduled_dynamite_blast_ticks - now;
+                        const double blink =
+                            std::sin(static_cast<double>(now) / 60.0);
+                        const Uint8 warning_alpha = static_cast<Uint8>(
+                            std::clamp(120.0 + 110.0 * std::max(0.0, blink),
+                                       0.0, 255.0));
+                        SDL_SetRenderDrawColor(sdl_renderer, 255, 120, 48,
+                                               warning_alpha / 2);
+                        SDL_RenderFillCircle(
+                            sdl_renderer,
+                            monster_rect.x + monster_rect.w / 2,
+                            monster_rect.y + monster_rect.h / 2,
+                            std::max(7,
+                                     static_cast<int>(element_size * 0.44)));
+                        const int alpha_mod = std::min(
+                            255, 170 + static_cast<int>(remaining_ticks % 80));
+                        SDL_SetTextureAlphaMod(
+                            monster_texture, static_cast<Uint8>(alpha_mod));
+                      } else {
+                        SDL_SetTextureAlphaMod(monster_texture, 255);
+                      }
+                      SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
+                                     &monster_rect);
+                      SDL_SetTextureAlphaMod(monster_texture, 255);
+                    });
               });
         }
       } else {
@@ -1534,10 +1745,17 @@ void Renderer::renderFrame(bool show_hud) {
               makeFloorAlignedRect(coord.v, coord.u, 0.15, 0.15, 0.7, 0.7);
           const double depth =
               projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
-          push_depth_command(depth, [this, rect]() {
-            if (sdl_goodie_texture != nullptr) {
-              SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr, &rect);
-            }
+          push_depth_command(depth, [this, rect, coord,
+                                     &draw_with_wall_occlusion]() {
+            draw_with_wall_occlusion(
+                static_cast<double>(coord.v) + 0.5,
+                static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                [&]() {
+                  if (sdl_goodie_texture != nullptr) {
+                    SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr,
+                                   &rect);
+                  }
+                });
           });
         }
 
@@ -1546,12 +1764,18 @@ void Renderer::renderFrame(bool show_hud) {
             pacman_coord.v, pacman_coord.u, 0.9, 0.9, kSpriteFootRowFactor);
         const double pacman_depth =
             projectScene(0.5, pacman_coord.u + kSpriteFootRowFactor, 0.0).y;
-        push_depth_command(pacman_depth, [this, pacman_rect]() {
-          SDL_Texture *pacman_texture =
-              getPacmanTexture(Directions::Down, false);
-          if (pacman_texture != nullptr) {
-            SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr, &pacman_rect);
-          }
+        push_depth_command(pacman_depth, [this, pacman_rect, pacman_coord]() {
+          drawWithWallOcclusion(
+              expandRect(pacman_rect, std::max(8, element_size / 4)),
+              static_cast<double>(pacman_coord.u) + 0.5,
+              [&]() {
+                SDL_Texture *pacman_texture =
+                    getPacmanTexture(Directions::Down, false);
+                if (pacman_texture != nullptr) {
+                  SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr,
+                                 &pacman_rect);
+                }
+              });
         });
 
         for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -1567,8 +1791,15 @@ void Renderer::renderFrame(bool show_hud) {
                                 kMonsterRenderScale, kSpriteFootRowFactor);
           const double depth =
               projectScene(0.5, coord.u + kSpriteFootRowFactor, 0.0).y;
-          push_depth_command(depth, [this, monster_texture, monster_rect]() {
-            SDL_RenderCopy(sdl_renderer, monster_texture, nullptr, &monster_rect);
+          push_depth_command(depth,
+                             [this, monster_texture, monster_rect, coord]() {
+            drawWithWallOcclusion(
+                expandRect(monster_rect, std::max(8, element_size / 4)),
+                static_cast<double>(coord.u) + 0.5,
+                [&]() {
+                  SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
+                                 &monster_rect);
+                });
           });
         }
       }
@@ -4783,24 +5014,48 @@ void Renderer::drawrockets() {
         static_cast<double>(now - rocket.segment_started_ticks) /
             static_cast<double>(step_duration_ms),
         0.0, 1.0);
-    const PixelCoord current_px = getPixelCoord(rocket.current_coord, 0, 0);
     const MapCoord next_coord = StepRenderCoord(rocket.current_coord, rocket.direction);
+    const bool next_is_wall =
+        ENABLE_3D_VIEW && map != nullptr && next_coord.u >= 0 &&
+        next_coord.v >= 0 && next_coord.u < static_cast<int>(rows) &&
+        next_coord.v < static_cast<int>(cols) &&
+        map->map_entry(static_cast<size_t>(next_coord.u),
+                       static_cast<size_t>(next_coord.v)) ==
+            ElementType::TYPE_WALL;
+    const double rendered_progress = progress * (next_is_wall ? 0.5 : 1.0);
+    const PixelCoord current_px = getPixelCoord(rocket.current_coord, 0, 0);
     const PixelCoord next_px = getPixelCoord(next_coord, 0, 0);
     const SDL_FPoint center{
         static_cast<float>(current_px.x + element_size / 2 +
-                           (next_px.x - current_px.x) * progress),
+                           (next_px.x - current_px.x) * rendered_progress),
         static_cast<float>(current_px.y + element_size / 2 +
-                           (next_px.y - current_px.y) * progress)};
+                           (next_px.y - current_px.y) * rendered_progress)};
     const int frame_index =
         static_cast<int>((now / std::max<Uint32>(1, ROCKET_ANIMATION_FRAME_MS) +
                           static_cast<Uint32>(rocket.animation_seed)) %
                          kRocketFlightFrames);
     const int glow_radius = std::max(7, static_cast<int>(element_size * 0.26));
-    SDL_SetRenderDrawColor(sdl_renderer, 255, 122, 38, 84);
-    SDL_RenderFillCircle(sdl_renderer, static_cast<int>(std::lround(center.x)),
-                         static_cast<int>(std::lround(center.y)), glow_radius);
-    drawRocketFlight(center, rocket.direction, std::max(28, element_size * 2),
-                     frame_index, 255);
+    const int max_dimension = std::max(28, element_size * 2);
+    const int half_extent = std::max(glow_radius, max_dimension / 2) + 6;
+    const SDL_Rect occlusion_bounds{
+        static_cast<int>(std::lround(center.x)) - half_extent,
+        static_cast<int>(std::lround(center.y)) - half_extent, half_extent * 2,
+        half_extent * 2};
+    const double center_row_cells =
+        static_cast<double>(rocket.current_coord.u) + 0.5 +
+        static_cast<double>(next_coord.u - rocket.current_coord.u) *
+            rendered_progress;
+    const auto draw_rocket = [&]() {
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 122, 38, 84);
+      SDL_RenderFillCircle(sdl_renderer, static_cast<int>(std::lround(center.x)),
+                           static_cast<int>(std::lround(center.y)), glow_radius);
+      drawRocketFlight(center, rocket.direction, max_dimension, frame_index, 255);
+    };
+    if (ENABLE_3D_VIEW) {
+      drawWithWallOcclusion(occlusion_bounds, center_row_cells, draw_rocket);
+      continue;
+    }
+    draw_rocket();
   }
 }
 
@@ -5584,75 +5839,99 @@ void Renderer::drawslimeballs() {
   for (const auto &slimeball : game->slimeballs) {
     const MapCoord next_coord = StepRenderCoord(slimeball.current_coord,
                                                 slimeball.direction);
-    const PixelCoord start_px = getPixelCoord(slimeball.current_coord, 0, 0);
-    const PixelCoord end_px = getPixelCoord(next_coord, 0, 0);
+    const bool next_is_wall =
+        ENABLE_3D_VIEW && map != nullptr && next_coord.u >= 0 &&
+        next_coord.v >= 0 && next_coord.u < static_cast<int>(rows) &&
+        next_coord.v < static_cast<int>(cols) &&
+        map->map_entry(static_cast<size_t>(next_coord.u),
+                       static_cast<size_t>(next_coord.v)) ==
+            ElementType::TYPE_WALL;
     const double progress = std::clamp(
         static_cast<double>(now - slimeball.segment_started_ticks) /
             static_cast<double>(std::max<Uint32>(1, slimeball.step_duration_ms)),
         0.0, 1.0);
+    const double rendered_progress = progress * (next_is_wall ? 0.5 : 1.0);
+    const PixelCoord start_px = getPixelCoord(slimeball.current_coord, 0, 0);
+    const PixelCoord end_px = getPixelCoord(next_coord, 0, 0);
 
     const int start_center_x = start_px.x + element_size / 2;
     const int start_center_y = start_px.y + element_size / 2;
     const int end_center_x = end_px.x + element_size / 2;
     const int end_center_y = end_px.y + element_size / 2;
     const int center_x =
-        start_center_x + static_cast<int>((end_center_x - start_center_x) * progress);
+        start_center_x +
+        static_cast<int>((end_center_x - start_center_x) * rendered_progress);
     const int center_y =
-        start_center_y + static_cast<int>((end_center_y - start_center_y) * progress);
-
-    if (sdl_slime_ball_texture != nullptr && sdl_slime_ball_size.x > 0 &&
-        sdl_slime_ball_size.y > 0) {
-      const int max_dimension = std::max(
-          1, static_cast<int>(std::lround(element_size * kSlimeBallRenderScale)));
-      const double scale =
-          static_cast<double>(max_dimension) /
-          static_cast<double>(
-              std::max(sdl_slime_ball_size.x, sdl_slime_ball_size.y));
-      const int draw_width = std::max(
-          1, static_cast<int>(std::lround(sdl_slime_ball_size.x * scale)));
-      const int draw_height = std::max(
-          1, static_cast<int>(std::lround(sdl_slime_ball_size.y * scale)));
-      const SDL_Rect draw_rect{center_x - draw_width / 2,
-                               center_y - draw_height / 2, draw_width,
-                               draw_height};
-
-      double angle_degrees = 0.0;
-      switch (slimeball.direction) {
-      case Directions::Up:
-        angle_degrees = -90.0;
-        break;
-      case Directions::Down:
-        angle_degrees = 90.0;
-        break;
-      case Directions::Left:
-        angle_degrees = 180.0;
-        break;
-      case Directions::Right:
-      case Directions::None:
-      default:
-        angle_degrees = 0.0;
-        break;
-      }
-
-      SDL_SetTextureAlphaMod(sdl_slime_ball_texture, kSlimeBallBaseAlpha);
-      SDL_RenderCopyEx(sdl_renderer, sdl_slime_ball_texture, nullptr,
-                       &draw_rect, angle_degrees, nullptr, SDL_FLIP_NONE);
-      SDL_SetTextureAlphaMod(sdl_slime_ball_texture, 255);
-      continue;
-    }
+        start_center_y +
+        static_cast<int>((end_center_y - start_center_y) * rendered_progress);
+    const int max_dimension = std::max(
+        1, static_cast<int>(std::lround(element_size * kSlimeBallRenderScale)));
+    const int half_extent = std::max(6, max_dimension / 2) + 6;
+    const SDL_Rect occlusion_bounds{center_x - half_extent, center_y - half_extent,
+                                    half_extent * 2, half_extent * 2};
+    const double center_row_cells =
+        static_cast<double>(slimeball.current_coord.u) + 0.5 +
+        static_cast<double>(next_coord.u - slimeball.current_coord.u) *
+            rendered_progress;
 
     const int trail_x =
         center_x - static_cast<int>((end_center_x - start_center_x) * 0.28);
     const int trail_y =
         center_y - static_cast<int>((end_center_y - start_center_y) * 0.28);
-    SDL_SetRenderDrawColor(sdl_renderer, 88, 255, 72, 90);
-    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
-                         std::max(4, element_size / 4));
-    SDL_SetRenderDrawColor(sdl_renderer, 174, 255, 112, 148);
-    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
-                         std::max(3, element_size / 6));
-    SDL_SetRenderDrawColor(sdl_renderer, 148, 240, 96, 165);
-    SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, center_x, center_y);
+    const auto draw_slimeball = [&]() {
+      if (sdl_slime_ball_texture != nullptr && sdl_slime_ball_size.x > 0 &&
+          sdl_slime_ball_size.y > 0) {
+        const double scale =
+            static_cast<double>(max_dimension) /
+            static_cast<double>(
+                std::max(sdl_slime_ball_size.x, sdl_slime_ball_size.y));
+        const int draw_width = std::max(
+            1, static_cast<int>(std::lround(sdl_slime_ball_size.x * scale)));
+        const int draw_height = std::max(
+            1, static_cast<int>(std::lround(sdl_slime_ball_size.y * scale)));
+        const SDL_Rect draw_rect{center_x - draw_width / 2,
+                                 center_y - draw_height / 2, draw_width,
+                                 draw_height};
+
+        double angle_degrees = 0.0;
+        switch (slimeball.direction) {
+        case Directions::Up:
+          angle_degrees = -90.0;
+          break;
+        case Directions::Down:
+          angle_degrees = 90.0;
+          break;
+        case Directions::Left:
+          angle_degrees = 180.0;
+          break;
+        case Directions::Right:
+        case Directions::None:
+        default:
+          angle_degrees = 0.0;
+          break;
+        }
+
+        SDL_SetTextureAlphaMod(sdl_slime_ball_texture, kSlimeBallBaseAlpha);
+        SDL_RenderCopyEx(sdl_renderer, sdl_slime_ball_texture, nullptr,
+                         &draw_rect, angle_degrees, nullptr, SDL_FLIP_NONE);
+        SDL_SetTextureAlphaMod(sdl_slime_ball_texture, 255);
+        return;
+      }
+
+      SDL_SetRenderDrawColor(sdl_renderer, 88, 255, 72, 90);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                           std::max(4, element_size / 4));
+      SDL_SetRenderDrawColor(sdl_renderer, 174, 255, 112, 148);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                           std::max(3, element_size / 6));
+      SDL_SetRenderDrawColor(sdl_renderer, 148, 240, 96, 165);
+      SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, center_x, center_y);
+    };
+    if (ENABLE_3D_VIEW) {
+      drawWithWallOcclusion(occlusion_bounds, center_row_cells, draw_slimeball);
+      continue;
+    }
+    draw_slimeball();
   }
 }
 
@@ -6131,27 +6410,92 @@ void Renderer::drawWallTop3D(int row, int col) {
   const SDL_FPoint top_back_right = projectScene(col + 1.0, row, 1.0);
   const SDL_FPoint top_front_left = projectScene(col, row + 1.0, 1.0);
   const SDL_FPoint top_front_right = projectScene(col + 1.0, row + 1.0, 1.0);
-  if (sdl_wall_texture != nullptr) {
-    drawTexturedQuad(top_back_left, top_back_right, top_front_left,
-                     top_front_right, sdl_wall_texture, 255);
-  } else {
-    const SDL_Color fallback{118, 84, 68, 255};
-    SDL_Vertex verts[4];
-    verts[0].position = top_back_left;
-    verts[0].color = fallback;
-    verts[0].tex_coord = SDL_FPoint{0.0f, 0.0f};
-    verts[1].position = top_back_right;
-    verts[1].color = fallback;
-    verts[1].tex_coord = SDL_FPoint{0.0f, 0.0f};
-    verts[2].position = top_front_left;
-    verts[2].color = fallback;
-    verts[2].tex_coord = SDL_FPoint{0.0f, 0.0f};
-    verts[3].position = top_front_right;
-    verts[3].color = fallback;
-    verts[3].tex_coord = SDL_FPoint{0.0f, 0.0f};
-    const int indices[6] = {0, 1, 2, 1, 3, 2};
-    SDL_RenderGeometry(sdl_renderer, nullptr, verts, 4, indices, 6);
+  const auto has_wall = [&](int probe_row, int probe_col) {
+    return probe_row >= 0 && probe_col >= 0 &&
+           probe_row < static_cast<int>(rows) &&
+           probe_col < static_cast<int>(cols) &&
+           map->map_entry(static_cast<size_t>(probe_row),
+                          static_cast<size_t>(probe_col)) ==
+               ElementType::TYPE_WALL;
+  };
+  const SDL_Rect top_rect = makeProjectedFaceRect(
+      top_back_left, top_back_right, top_front_left, top_front_right);
+  // The front edge of the top face meets the vertical wall face and should
+  // stay closed to avoid notches between both faces.
+  drawWallTile(top_rect, has_wall(row - 1, col), has_wall(row, col + 1),
+               true, has_wall(row, col - 1));
+}
+
+SDL_Rect Renderer::getWallFrontFaceRect(int row, int col) const {
+  const SDL_FPoint fl_top = projectScene(col, row + 1.0, 1.0);
+  const SDL_FPoint fr_top = projectScene(col + 1.0, row + 1.0, 1.0);
+  const SDL_FPoint fl_bot = projectScene(col, row + 1.0, 0.0);
+  const SDL_FPoint fr_bot = projectScene(col + 1.0, row + 1.0, 0.0);
+  return makeProjectedFaceRect(fl_top, fr_top, fl_bot, fr_bot);
+}
+
+void Renderer::drawWithWallOcclusion(const SDL_Rect &draw_bounds,
+                                     double row_cells,
+                                     const std::function<void()> &draw) {
+  if (!ENABLE_3D_VIEW || map == nullptr) {
+    draw();
+    return;
   }
+
+  const SDL_Rect screen_rect{0, 0, screen_res_x, screen_res_y};
+  const SDL_Rect clipped_bounds = intersectRects(draw_bounds, screen_rect);
+  if (!hasVisibleArea(clipped_bounds)) {
+    return;
+  }
+
+  std::vector<SDL_Rect> visible_regions{clipped_bounds};
+  const int search_start_row =
+      std::max(0, static_cast<int>(std::floor(row_cells)) + 1);
+  bool has_occluder = false;
+
+  for (int wall_row = search_start_row; wall_row < static_cast<int>(rows);
+       ++wall_row) {
+    for (int col = 0; col < static_cast<int>(cols); ++col) {
+      if (map->map_entry(static_cast<size_t>(wall_row),
+                         static_cast<size_t>(col)) != ElementType::TYPE_WALL) {
+        continue;
+      }
+
+      if (wall_row + 1 < static_cast<int>(rows) &&
+          map->map_entry(static_cast<size_t>(wall_row + 1),
+                         static_cast<size_t>(col)) == ElementType::TYPE_WALL) {
+        continue;
+      }
+
+      const SDL_Rect wall_rect =
+          intersectRects(getWallFrontFaceRect(wall_row, col), clipped_bounds);
+      if (!hasVisibleArea(wall_rect)) {
+        continue;
+      }
+
+      has_occluder = true;
+      std::vector<SDL_Rect> next_regions;
+      next_regions.reserve(visible_regions.size() * 4);
+      for (const SDL_Rect &region : visible_regions) {
+        subtractRect(region, wall_rect, next_regions);
+      }
+      visible_regions = std::move(next_regions);
+      if (visible_regions.empty()) {
+        return;
+      }
+    }
+  }
+
+  if (!has_occluder) {
+    draw();
+    return;
+  }
+
+  for (const SDL_Rect &region : visible_regions) {
+    SDL_RenderSetClipRect(sdl_renderer, &region);
+    draw();
+  }
+  SDL_RenderSetClipRect(sdl_renderer, nullptr);
 }
 
 void Renderer::drawWallFrontFace3D(int row, int col) {
@@ -6163,30 +6507,18 @@ void Renderer::drawWallFrontFace3D(int row, int col) {
     return;
   }
 
-  const SDL_FPoint fl_top = projectScene(col, row + 1.0, 1.0);
-  const SDL_FPoint fr_top = projectScene(col + 1.0, row + 1.0, 1.0);
-  const SDL_FPoint fl_bot = projectScene(col, row + 1.0, 0.0);
-  const SDL_FPoint fr_bot = projectScene(col + 1.0, row + 1.0, 0.0);
-  if (sdl_wall_texture != nullptr) {
-    drawTexturedQuad(fl_top, fr_top, fl_bot, fr_bot, sdl_wall_texture, 170);
-  } else {
-    const SDL_Color fallback{82, 58, 48, 255};
-    SDL_Vertex verts[4];
-    verts[0].position = fl_top;
-    verts[0].color = fallback;
-    verts[0].tex_coord = SDL_FPoint{0.0f, 0.0f};
-    verts[1].position = fr_top;
-    verts[1].color = fallback;
-    verts[1].tex_coord = SDL_FPoint{0.0f, 0.0f};
-    verts[2].position = fl_bot;
-    verts[2].color = fallback;
-    verts[2].tex_coord = SDL_FPoint{0.0f, 0.0f};
-    verts[3].position = fr_bot;
-    verts[3].color = fallback;
-    verts[3].tex_coord = SDL_FPoint{0.0f, 0.0f};
-    const int indices[6] = {0, 1, 2, 1, 3, 2};
-    SDL_RenderGeometry(sdl_renderer, nullptr, verts, 4, indices, 6);
-  }
+  const auto has_wall = [&](int probe_row, int probe_col) {
+    return probe_row >= 0 && probe_col >= 0 &&
+           probe_row < static_cast<int>(rows) &&
+           probe_col < static_cast<int>(cols) &&
+           map->map_entry(static_cast<size_t>(probe_row),
+                          static_cast<size_t>(probe_col)) ==
+               ElementType::TYPE_WALL;
+  };
+  const SDL_Rect front_rect = getWallFrontFaceRect(row, col);
+  // The top edge of the front face joins the top face and must not be carved.
+  drawWallTile(front_rect, true, has_wall(row, col + 1), false,
+               has_wall(row, col - 1), 170);
 }
 
 void Renderer::drawWallTile3D(int row, int col, bool has_wall_down) {
@@ -6300,11 +6632,18 @@ void Renderer::carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
 
 void Renderer::drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
                             bool has_wall_right, bool has_wall_down,
-                            bool has_wall_left) {
+                            bool has_wall_left, Uint8 shade) {
   if (sdl_wall_texture != nullptr) {
+    SDL_SetTextureColorMod(sdl_wall_texture, shade, shade, shade);
     SDL_RenderCopy(sdl_renderer, sdl_wall_texture, nullptr, &wall_rect);
+    SDL_SetTextureColorMod(sdl_wall_texture, 255, 255, 255);
   } else {
-    SDL_SetRenderDrawColor(sdl_renderer, 118, 84, 68, 0xFF);
+    const auto shade_channel = [&](Uint8 base) {
+      return static_cast<Uint8>(std::lround(
+          static_cast<double>(base) * static_cast<double>(shade) / 255.0));
+    };
+    SDL_SetRenderDrawColor(sdl_renderer, shade_channel(118), shade_channel(84),
+                           shade_channel(68), 0xFF);
     SDL_RenderFillRect(sdl_renderer, &wall_rect);
   }
 

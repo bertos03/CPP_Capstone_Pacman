@@ -21,6 +21,7 @@
 #include <SDL_image.h>
 #include <SDL_ttf.h>
 
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -72,7 +73,7 @@ private:
   void renderLayoutFrame(const std::vector<std::string> &layout);
   void drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
                     bool has_wall_right, bool has_wall_down,
-                    bool has_wall_left);
+                    bool has_wall_left, Uint8 shade = 255);
   void carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
                               bool align_left, bool align_top);
   void drawmap();
@@ -82,6 +83,9 @@ private:
   void drawWallTile3D(int row, int col, bool has_wall_down);
   void drawWallTop3D(int row, int col);
   void drawWallFrontFace3D(int row, int col);
+  SDL_Rect getWallFrontFaceRect(int row, int col) const;
+  void drawWithWallOcclusion(const SDL_Rect &draw_bounds, double row_cells,
+                             const std::function<void()> &draw);
   void drawTexturedQuad(SDL_FPoint tl, SDL_FPoint tr, SDL_FPoint bl,
                         SDL_FPoint br, SDL_Texture *texture, Uint8 shade);
   SDL_FPoint projectScene(double col, double row, double z_cells) const;
