@@ -19,6 +19,8 @@
 
 #include <SDL.h>
 
+#include <array>
+
 /**
  * @brief Compile-time feature toggles.
  *
@@ -54,6 +56,16 @@ inline constexpr const char *FONT_ASSET_PATH = "font.ttf";
 inline constexpr const char *APP_ICON_RGBA_ASSET_PATH = "app_icon_rgba.png";
 inline constexpr const char *APP_ICON_FALLBACK_ASSET_PATH = "app_icon.png";
 inline constexpr const char *WALL_TEXTURE_ASSET_PATH = "brick.bmp";
+inline constexpr int FLOOR_TEXTURE_OPTION_COUNT = 5;
+inline constexpr int FLOOR_TEXTURE_DEFAULT_INDEX = 0;
+inline constexpr std::array<const char *, FLOOR_TEXTURE_OPTION_COUNT>
+    FLOOR_TEXTURE_ASSET_PATHS{
+        "floor_textures/floor_texture_1.jpg",
+        "floor_textures/floor_texture_2.jpg",
+        "floor_textures/floor_texture_3.jpg",
+        "floor_textures/floor_texture_4.jpg",
+        "floor_textures/floor_texture_5.jpg",
+    };
 inline constexpr const char *GOODIE_TEXTURE_ASSET_PATH = "goodie.bmp";
 inline constexpr const char *LOGO_BRICK_TEXTURE_PATH = "brick.png";
 inline constexpr const char *START_MENU_MONSTER_ASSET_PATH =
@@ -304,7 +316,8 @@ inline constexpr SDL_Color TELEPORTER_YELLOW_COLOR{244, 214, 88, 255};
  *
  * Frame counts must match the shipped sprite sheets. Scale values are
  * multiplicative factors relative to one map cell. Alpha values control the
- * baseline opacity of overlays and particle sprites.
+ * baseline opacity of overlays and particle sprites. The floor and shadow
+ * settings below tune the visual depth of the tilted 3D gameplay view.
  */
 inline constexpr int PACMAN_FRAMES_PER_DIRECTION = 4;
 inline constexpr int MONSTER_FRAMES_PER_DIRECTION = 4;
@@ -331,6 +344,19 @@ inline constexpr double FART_CLOUD_DRIFT_X_FACTOR = 0.06;
 inline constexpr double FART_CLOUD_DRIFT_Y_FACTOR = 0.05;
 inline constexpr double FART_CLOUD_SCALE_PULSE_AMPLITUDE = 0.04;
 inline constexpr double ROCKET_SPRITE_ANGLE_OFFSET_DEGREES = 0.0;
+inline constexpr SDL_Color FLOOR_3D_NEAR_COLOR{62, 60, 72, 255};
+inline constexpr SDL_Color FLOOR_3D_FAR_COLOR{34, 34, 42, 255};
+inline constexpr SDL_Color FLOOR_3D_TEXTURE_NEAR_COLOR{228, 226, 220, 255};
+inline constexpr SDL_Color FLOOR_3D_TEXTURE_FAR_COLOR{178, 176, 170, 255};
+inline constexpr int FLOOR_TEXTURE_SAMPLE_SIZE_PX = 96;
+inline constexpr int FLOOR_TEXTURE_SAMPLE_STRIDE_PX = 48;
+inline constexpr double FLOOR_3D_TILE_VARIATION_STRENGTH = 0.08;
+inline constexpr double FLOOR_3D_WALL_OCCLUSION_STRENGTH = 0.14;
+inline constexpr double FLOOR_3D_OPEN_EDGE_HIGHLIGHT_STRENGTH = 0.09;
+inline constexpr Uint8 CHARACTER_GROUND_SHADOW_BASE_ALPHA = 108;
+inline constexpr double CHARACTER_GROUND_SHADOW_WIDTH_FACTOR = 0.32;
+inline constexpr double CHARACTER_GROUND_SHADOW_HEIGHT_FACTOR = 0.11;
+inline constexpr double CHARACTER_GROUND_SHADOW_Y_OFFSET_FACTOR = 0.03;
 inline constexpr Uint8 WALKIE_TALKIE_ICON_ALPHA = 255;
 inline constexpr Uint8 HUD_ICON_ALPHA = 255;
 

@@ -18,6 +18,7 @@ struct AppSettings {
   Difficulty difficulty{Difficulty::Medium};
   std::string selected_map_path;
   int player_lives{PLAYER_DEFAULT_LIVES};
+  int floor_texture_index{FLOOR_TEXTURE_DEFAULT_INDEX};
 };
 
 AppSettings LoadAppSettings();

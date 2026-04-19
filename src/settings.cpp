@@ -99,6 +99,20 @@ int ParsePlayerLives(const std::string &value) {
   }
 }
 
+int ParseFloorTextureIndex(const std::string &value) {
+  const std::string trimmed_value = TrimWhitespace(value);
+  if (trimmed_value.empty()) {
+    return FLOOR_TEXTURE_DEFAULT_INDEX;
+  }
+
+  try {
+    return std::clamp(std::stoi(trimmed_value), 0,
+                      FLOOR_TEXTURE_OPTION_COUNT - 1);
+  } catch (...) {
+    return FLOOR_TEXTURE_DEFAULT_INDEX;
+  }
+}
+
 fs::path GetSettingsFilePath() {
   const std::string preference_root =
       ConsumeSdlPath(SDL_GetPrefPath("BobMan", "BobMan"));
@@ -146,11 +160,15 @@ AppSettings LoadAppSettings() {
       settings.selected_map_path = value;
     } else if (key == "player_lives") {
       settings.player_lives = ParsePlayerLives(value);
+    } else if (key == "floor_texture_index") {
+      settings.floor_texture_index = ParseFloorTextureIndex(value);
     }
   }
 
   settings.player_lives =
       std::clamp(settings.player_lives, PLAYER_LIVES_MIN, PLAYER_LIVES_MAX);
+  settings.floor_texture_index =
+      std::clamp(settings.floor_texture_index, 0, FLOOR_TEXTURE_OPTION_COUNT - 1);
   return settings;
 }
 
@@ -167,6 +185,10 @@ bool SaveAppSettings(const AppSettings &settings) {
   output << "player_lives="
          << std::clamp(settings.player_lives, PLAYER_LIVES_MIN,
                        PLAYER_LIVES_MAX)
+         << "\n";
+  output << "floor_texture_index="
+         << std::clamp(settings.floor_texture_index, 0,
+                       FLOOR_TEXTURE_OPTION_COUNT - 1)
          << "\n";
 
   if (!output.good()) {

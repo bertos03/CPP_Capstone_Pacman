@@ -185,6 +185,38 @@ const char *DifficultyLabel(Difficulty difficulty) {
   }
 }
 
+int ClampFloorTextureIndex(int floor_texture_index) {
+  return std::clamp(floor_texture_index, 0, FLOOR_TEXTURE_OPTION_COUNT - 1);
+}
+
+std::string FloorTextureLabel(int floor_texture_index) {
+  return "Textur #" +
+         std::to_string(ClampFloorTextureIndex(floor_texture_index) + 1);
+}
+
+SDL_Rect MakeFloorTextureSampleRect(const SDL_Point &texture_size, int row,
+                                    int col) {
+  if (texture_size.x <= 0 || texture_size.y <= 0) {
+    return SDL_Rect{0, 0, 0, 0};
+  }
+
+  const int sample_width =
+      std::clamp(FLOOR_TEXTURE_SAMPLE_SIZE_PX, 1, texture_size.x);
+  const int sample_height =
+      std::clamp(FLOOR_TEXTURE_SAMPLE_SIZE_PX, 1, texture_size.y);
+  const int max_x = std::max(0, texture_size.x - sample_width);
+  const int max_y = std::max(0, texture_size.y - sample_height);
+  const int stride_x = std::max(
+      1, std::min(FLOOR_TEXTURE_SAMPLE_STRIDE_PX, std::max(1, sample_width)));
+  const int stride_y = std::max(
+      1, std::min(FLOOR_TEXTURE_SAMPLE_STRIDE_PX, std::max(1, sample_height)));
+  const int sample_x =
+      max_x > 0 ? (col * stride_x + row * 17) % (max_x + 1) : 0;
+  const int sample_y =
+      max_y > 0 ? (row * stride_y + col * 11) % (max_y + 1) : 0;
+  return SDL_Rect{sample_x, sample_y, sample_width, sample_height};
+}
+
 int MonsterSpriteVariantIndex(char monster_char) {
   for (size_t index = 0; index < kMonsterSpriteDescriptors.size(); ++index) {
     if (kMonsterSpriteDescriptors[index].monster_char == monster_char) {
@@ -278,6 +310,24 @@ SDL_Color WithAlpha(const SDL_Color &color, Uint8 alpha) {
   return SDL_Color{color.r, color.g, color.b, alpha};
 }
 
+SDL_Color ScaleColor(const SDL_Color &color, float factor) {
+  factor = std::max(0.0f, factor);
+  const auto scale_channel = [factor](Uint8 channel) -> Uint8 {
+    return static_cast<Uint8>(std::clamp(
+        static_cast<int>(std::lround(static_cast<float>(channel) * factor)), 0,
+        255));
+  };
+  return SDL_Color{scale_channel(color.r), scale_channel(color.g),
+                   scale_channel(color.b), color.a};
+}
+
+float TileNoise01(int row, int col) {
+  const double seed = std::sin(static_cast<double>(row) * 127.1 +
+                               static_cast<double>(col) * 311.7) *
+                      43758.5453123;
+  return static_cast<float>(seed - std::floor(seed));
+}
+
 SDL_Color SpectrumColor(float factor) {
   factor = std::clamp(factor, 0.0f, 1.0f);
   struct ColorStop {
@@ -356,7 +406,9 @@ Renderer::Renderer(Map *_map, Game *_game)
       offset_x(0), offset_y(0), scene_origin_y(0), wall_height_px(0),
       cos_tilt(1.0), sin_tilt(0.0), rows(0), cols(0), map(_map), game(_game),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
-      sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
+      sdl_wall_texture(nullptr),
+      selected_floor_texture_index(FLOOR_TEXTURE_DEFAULT_INDEX),
+      sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
       sdl_dynamite_texture(nullptr), sdl_dynamite_size{0, 0},
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
@@ -384,7 +436,9 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       cos_tilt(1.0), sin_tilt(0.0), rows(0), cols(0), map(nullptr),
       game(nullptr),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
-      sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
+      sdl_wall_texture(nullptr),
+      selected_floor_texture_index(FLOOR_TEXTURE_DEFAULT_INDEX),
+      sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
       sdl_dynamite_texture(nullptr), sdl_dynamite_size{0, 0},
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
@@ -421,9 +475,9 @@ void Renderer::initializeRenderer(size_t row_count_value,
     exit(1);
   }
 
-  const int image_flags = IMG_INIT_PNG;
+  const int image_flags = IMG_INIT_PNG | IMG_INIT_JPG;
   if ((IMG_Init(image_flags) & image_flags) != image_flags) {
-    std::cerr << "SDL_image PNG support not fully available: "
+    std::cerr << "SDL_image PNG/JPG support not fully available: "
               << IMG_GetError() << "\n";
   }
 
@@ -552,6 +606,22 @@ void Renderer::initializeRenderer(size_t row_count_value,
   sdl_wall_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_wall_surface);
   configureSmoothTextureSampling(sdl_wall_texture);
+  sdl_floor_textures.clear();
+  sdl_floor_texture_sizes.clear();
+  sdl_floor_textures.reserve(FLOOR_TEXTURE_ASSET_PATHS.size());
+  sdl_floor_texture_sizes.reserve(FLOOR_TEXTURE_ASSET_PATHS.size());
+  for (const char *relative_path : FLOOR_TEXTURE_ASSET_PATHS) {
+    SDL_Point floor_texture_size{0, 0};
+    SDL_Texture *floor_texture = loadTexturePreserveCanvas(
+        Paths::GetDataFilePath(relative_path), floor_texture_size);
+    if (floor_texture == nullptr) {
+      std::cerr << "Could not create floor texture from asset "
+                << relative_path << "\n";
+      exit(1);
+    }
+    sdl_floor_textures.push_back(floor_texture);
+    sdl_floor_texture_sizes.push_back(floor_texture_size);
+  }
   sdl_goodie_texture =
       SDL_CreateTextureFromSurface(sdl_renderer, sdl_goodie_surface);
   configureSmoothTextureSampling(sdl_goodie_texture);
@@ -653,6 +723,11 @@ void Renderer::initializeRenderer(size_t row_count_value,
 Renderer::~Renderer() {
   if (sdl_wall_texture != nullptr) {
     SDL_DestroyTexture(sdl_wall_texture);
+  }
+  for (SDL_Texture *floor_texture : sdl_floor_textures) {
+    if (floor_texture != nullptr) {
+      SDL_DestroyTexture(floor_texture);
+    }
   }
   if (sdl_goodie_texture != nullptr) {
     SDL_DestroyTexture(sdl_goodie_texture);
@@ -777,10 +852,11 @@ void Renderer::RenderStartMenu(int selected_item, const std::string &map_name,
 }
 
 void Renderer::RenderConfigMenu(int selected_item, Difficulty difficulty,
-                                int player_lives) {
+                                int player_lives, int floor_texture_index) {
   renderFrame(false);
   drawDimmer(120);
-  drawConfigMenuOverlay(selected_item, difficulty, player_lives);
+  drawConfigMenuOverlay(selected_item, difficulty, player_lives,
+                        floor_texture_index);
   SDL_RenderPresent(sdl_renderer);
 }
 
@@ -1492,6 +1568,14 @@ void Renderer::renderFrame(bool show_hud) {
                         expandRect(animated_rect, std::max(10, element_size / 3)),
                         static_cast<double>(render_coord.u) + 0.5,
                         [&]() {
+                          const Uint8 shadow_alpha = static_cast<Uint8>(
+                              std::clamp(static_cast<double>(
+                                             CHARACTER_GROUND_SHADOW_BASE_ALPHA) *
+                                             (0.35 + 0.65 * std::max(0.0, scale)),
+                                         0.0, 255.0));
+                          drawFloorSpriteShadow(
+                              animated_rect, shadow_alpha, scale,
+                              std::max(0.35, scale * 0.82));
                           if (potion_invulnerable) {
                             drawPacmanShield(
                                 animated_rect.x + animated_rect.w / 2,
@@ -1570,6 +1654,8 @@ void Renderer::renderFrame(bool show_hud) {
                         static_cast<double>(game->pacman->map_coord.u) + 0.5 +
                             delta_row_cells,
                         [&]() {
+                          drawFloorSpriteShadow(
+                              pacman_rect, CHARACTER_GROUND_SHADOW_BASE_ALPHA);
                           if (potion_invulnerable) {
                             drawPacmanShield(
                                 pacman_rect.x + pacman_rect.w / 2,
@@ -1741,6 +1827,9 @@ void Renderer::renderFrame(bool show_hud) {
                     static_cast<double>(anchor_coord.u) + 0.5 +
                         delta_row_cells,
                     [&]() {
+                      drawFloorSpriteShadow(
+                          monster_rect, CHARACTER_GROUND_SHADOW_BASE_ALPHA,
+                          waiting_for_blast ? 1.08 : 1.02, 1.0);
                       if (waiting_for_blast) {
                         const Uint32 remaining_ticks =
                             monster->scheduled_dynamite_blast_ticks - now;
@@ -1802,6 +1891,8 @@ void Renderer::renderFrame(bool show_hud) {
               expandRect(pacman_rect, std::max(8, element_size / 4)),
               static_cast<double>(pacman_coord.u) + 0.5,
               [&]() {
+                drawFloorSpriteShadow(pacman_rect,
+                                      CHARACTER_GROUND_SHADOW_BASE_ALPHA);
                 SDL_Texture *pacman_texture =
                     getPacmanTexture(Directions::Down, false);
                 if (pacman_texture != nullptr) {
@@ -1830,6 +1921,9 @@ void Renderer::renderFrame(bool show_hud) {
                 expandRect(monster_rect, std::max(8, element_size / 4)),
                 static_cast<double>(coord.u) + 0.5,
                 [&]() {
+                  drawFloorSpriteShadow(monster_rect,
+                                        CHARACTER_GROUND_SHADOW_BASE_ALPHA, 1.02,
+                                        1.0);
                   SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
                                  &monster_rect);
                 });
@@ -1978,6 +2072,10 @@ void Renderer::SetScene(Map *new_map, Game *new_game) {
   if (map != nullptr) {
     updateSceneLayout(map->get_map_rows(), map->get_map_cols());
   }
+}
+
+void Renderer::SetFloorTextureIndex(int floor_texture_index) {
+  selected_floor_texture_index = ClampFloorTextureIndex(floor_texture_index);
 }
 
 void Renderer::renderLayoutFrame(const std::vector<std::string> &layout) {
@@ -2526,7 +2624,7 @@ void Renderer::drawStartMenuOverlay(int selected_item,
 }
 
 void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty,
-                                     int player_lives) {
+                                     int player_lives, int floor_texture_index) {
   const int logo_top = screen_res_y / 18;
   renderBrickText(sdl_font_logo, "BobMan", screen_res_x / 2, logo_top,
                   kBrickOutlineColor);
@@ -2535,7 +2633,7 @@ void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty,
                    logo_top + TTF_FontHeight(sdl_font_logo) - 4);
 
   const int panel_width = std::min(860, screen_res_x * 52 / 100);
-  const int panel_height = std::max(330, screen_res_y * 38 / 100);
+  const int panel_height = std::max(392, screen_res_y * 42 / 100);
   const int panel_top =
       std::min(screen_res_y - panel_height - 70,
                logo_top + TTF_FontHeight(sdl_font_logo) + screen_res_y / 14);
@@ -2545,9 +2643,11 @@ void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty,
   drawPanel(panel, kPanelFillColor, kPanelBorderColor);
 
   const std::vector<std::string> menu_items{
-      "Schwierigkeitsgrad", "Leben", "Zurueck"};
+      "Schwierigkeitsgrad", "Leben", "Bodentextur", "Zurueck"};
   const std::vector<std::string> value_items{DifficultyLabel(difficulty),
-                                             std::to_string(player_lives), ""};
+                                             std::to_string(player_lives),
+                                             FloorTextureLabel(floor_texture_index),
+                                             ""};
   const int item_height = std::max(62, TTF_FontHeight(sdl_font_menu) + 24);
   const int highlight_width = panel.w - 56;
   const int item_start_y =
@@ -2571,7 +2671,7 @@ void Renderer::drawConfigMenuOverlay(int selected_item, Difficulty difficulty,
         highlight_rect.y +
         (highlight_rect.h - TTF_FontHeight(sdl_font_menu)) / 2 - 2;
 
-    if (i < 2) {
+    if (i < 3) {
       renderSimpleText(sdl_font_menu, menu_items[i], item_color,
                        panel.x + panel.w / 3, text_top);
       renderSimpleText(sdl_font_menu, value_items[i], item_color,
@@ -6593,6 +6693,8 @@ void Renderer::drawmap() {
   SDL_Rect block;
   block.w = element_size;
   block.h = element_size;
+  SDL_Texture *floor_texture = getSelectedFloorTexture();
+  const SDL_Point floor_texture_size = getSelectedFloorTextureSize();
   SDL_SetRenderDrawColor(sdl_renderer, 50, 50, 50, 0xFF);
 
   for (size_t i = 0; i < cols; i++) {
@@ -6618,10 +6720,16 @@ void Renderer::drawmap() {
       case ElementType::TYPE_PACMAN:
       case ElementType::TYPE_MONSTER:
       default:
-        SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
         block.x = x;
         block.y = y;
-        SDL_RenderFillRect(sdl_renderer, &block);
+        if (floor_texture != nullptr) {
+          const SDL_Rect source_rect = MakeFloorTextureSampleRect(
+              floor_texture_size, static_cast<int>(j), static_cast<int>(i));
+          SDL_RenderCopy(sdl_renderer, floor_texture, &source_rect, &block);
+        } else {
+          SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
+          SDL_RenderFillRect(sdl_renderer, &block);
+        }
         break;
       }
     }
@@ -6663,26 +6771,113 @@ void Renderer::drawTexturedQuad(SDL_FPoint tl, SDL_FPoint tr, SDL_FPoint bl,
 }
 
 void Renderer::drawFloorTile3D(int row, int col) {
+  SDL_Texture *floor_texture = getSelectedFloorTexture();
+  const SDL_Point floor_texture_size = getSelectedFloorTextureSize();
   const SDL_FPoint tl = projectScene(col, row, 0.0);
   const SDL_FPoint tr = projectScene(col + 1.0, row, 0.0);
   const SDL_FPoint bl = projectScene(col, row + 1.0, 0.0);
   const SDL_FPoint br = projectScene(col + 1.0, row + 1.0, 0.0);
-  const SDL_Color path_color{40, 40, 40, 255};
+  const auto has_wall = [&](int probe_row, int probe_col) {
+    return map != nullptr && probe_row >= 0 && probe_col >= 0 &&
+           probe_row < static_cast<int>(rows) &&
+           probe_col < static_cast<int>(cols) &&
+           map->map_entry(static_cast<size_t>(probe_row),
+                          static_cast<size_t>(probe_col)) ==
+               ElementType::TYPE_WALL;
+  };
+
+  const bool wall_up = has_wall(row - 1, col);
+  const bool wall_right = has_wall(row, col + 1);
+  const bool wall_down = has_wall(row + 1, col);
+  const bool wall_left = has_wall(row, col - 1);
+  const bool wall_up_left = has_wall(row - 1, col - 1);
+  const bool wall_up_right = has_wall(row - 1, col + 1);
+  const bool wall_down_left = has_wall(row + 1, col - 1);
+  const bool wall_down_right = has_wall(row + 1, col + 1);
+
+  const float row_factor =
+      rows > 1 ? static_cast<float>(row) / static_cast<float>(rows - 1) : 0.0f;
+  const float tile_variation =
+      (TileNoise01(row, col) * 2.0f - 1.0f) *
+      static_cast<float>(FLOOR_3D_TILE_VARIATION_STRENGTH);
+  const SDL_Color top_base =
+      floor_texture != nullptr
+          ? LerpColor(FLOOR_3D_TEXTURE_NEAR_COLOR, FLOOR_3D_TEXTURE_FAR_COLOR,
+                      row_factor)
+          : LerpColor(FLOOR_3D_NEAR_COLOR, FLOOR_3D_FAR_COLOR, row_factor);
+  const SDL_Color bottom_base =
+      ScaleColor(top_base, floor_texture != nullptr ? 0.90f : 0.82f);
+
+  const auto vertex_factor = [&](float open_bonus, float occlusion) -> float {
+    return std::clamp(1.0f + tile_variation + open_bonus -
+                          occlusion *
+                              static_cast<float>(FLOOR_3D_WALL_OCCLUSION_STRENGTH),
+                      0.55f, 1.24f);
+  };
+  const float edge_highlight =
+      static_cast<float>(FLOOR_3D_OPEN_EDGE_HIGHLIGHT_STRENGTH);
+  const float top_left_occlusion =
+      (wall_up ? 1.0f : 0.0f) + (wall_left ? 1.0f : 0.0f) +
+      (wall_up_left ? 0.65f : 0.0f);
+  const float top_right_occlusion =
+      (wall_up ? 1.0f : 0.0f) + (wall_right ? 1.0f : 0.0f) +
+      (wall_up_right ? 0.65f : 0.0f);
+  const float bottom_left_occlusion =
+      (wall_down ? 0.60f : 0.0f) + (wall_left ? 1.0f : 0.0f) +
+      (wall_down_left ? 0.45f : 0.0f);
+  const float bottom_right_occlusion =
+      (wall_down ? 0.60f : 0.0f) + (wall_right ? 1.0f : 0.0f) +
+      (wall_down_right ? 0.45f : 0.0f);
+
+  const SDL_Color top_left_color = ScaleColor(
+      top_base, vertex_factor((!wall_up ? edge_highlight : 0.0f) +
+                                  (!wall_left ? edge_highlight * 0.45f : 0.0f),
+                              top_left_occlusion));
+  const SDL_Color top_right_color = ScaleColor(
+      top_base, vertex_factor((!wall_up ? edge_highlight : 0.0f) +
+                                  (!wall_right ? edge_highlight * 0.45f : 0.0f),
+                              top_right_occlusion));
+  const SDL_Color bottom_left_color = ScaleColor(
+      bottom_base,
+      vertex_factor(-0.05f + (!wall_down ? edge_highlight * 0.20f : 0.0f) +
+                        (!wall_left ? edge_highlight * 0.15f : 0.0f),
+                    bottom_left_occlusion));
+  const SDL_Color bottom_right_color = ScaleColor(
+      bottom_base,
+      vertex_factor(-0.05f + (!wall_down ? edge_highlight * 0.20f : 0.0f) +
+                        (!wall_right ? edge_highlight * 0.15f : 0.0f),
+                    bottom_right_occlusion));
+  const SDL_Rect source_rect =
+      MakeFloorTextureSampleRect(floor_texture_size, row, col);
+  const float inv_texture_width =
+      floor_texture != nullptr && floor_texture_size.x > 0
+          ? 1.0f / static_cast<float>(floor_texture_size.x)
+          : 0.0f;
+  const float inv_texture_height =
+      floor_texture != nullptr && floor_texture_size.y > 0
+          ? 1.0f / static_cast<float>(floor_texture_size.y)
+          : 0.0f;
+  const float u0 = static_cast<float>(source_rect.x) * inv_texture_width;
+  const float v0 = static_cast<float>(source_rect.y) * inv_texture_height;
+  const float u1 =
+      static_cast<float>(source_rect.x + source_rect.w) * inv_texture_width;
+  const float v1 =
+      static_cast<float>(source_rect.y + source_rect.h) * inv_texture_height;
   SDL_Vertex verts[4];
   verts[0].position = tl;
-  verts[0].color = path_color;
-  verts[0].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  verts[0].color = top_left_color;
+  verts[0].tex_coord = SDL_FPoint{u0, v0};
   verts[1].position = tr;
-  verts[1].color = path_color;
-  verts[1].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  verts[1].color = top_right_color;
+  verts[1].tex_coord = SDL_FPoint{u1, v0};
   verts[2].position = bl;
-  verts[2].color = path_color;
-  verts[2].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  verts[2].color = bottom_left_color;
+  verts[2].tex_coord = SDL_FPoint{u0, v1};
   verts[3].position = br;
-  verts[3].color = path_color;
-  verts[3].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  verts[3].color = bottom_right_color;
+  verts[3].tex_coord = SDL_FPoint{u1, v1};
   const int indices[6] = {0, 1, 2, 1, 3, 2};
-  SDL_RenderGeometry(sdl_renderer, nullptr, verts, 4, indices, 6);
+  SDL_RenderGeometry(sdl_renderer, floor_texture, verts, 4, indices, 6);
 }
 
 void Renderer::drawWallTop3D(int row, int col) {
@@ -6906,6 +7101,76 @@ int Renderer::getNonCharacterSpriteLiftPixels() const {
                                       kNonCharacterSpriteLiftFactor)));
 }
 
+SDL_Texture *Renderer::getSelectedFloorTexture() const {
+  if (sdl_floor_textures.empty()) {
+    return nullptr;
+  }
+
+  const int clamped_index = ClampFloorTextureIndex(selected_floor_texture_index);
+  if (clamped_index >= static_cast<int>(sdl_floor_textures.size())) {
+    return nullptr;
+  }
+  return sdl_floor_textures[clamped_index];
+}
+
+SDL_Point Renderer::getSelectedFloorTextureSize() const {
+  if (sdl_floor_texture_sizes.empty()) {
+    return SDL_Point{0, 0};
+  }
+
+  const int clamped_index = ClampFloorTextureIndex(selected_floor_texture_index);
+  if (clamped_index >= static_cast<int>(sdl_floor_texture_sizes.size())) {
+    return SDL_Point{0, 0};
+  }
+  return sdl_floor_texture_sizes[clamped_index];
+}
+
+void Renderer::drawFloorSpriteShadow(const SDL_Rect &sprite_rect, Uint8 alpha,
+                                     double width_scale,
+                                     double height_scale) {
+  if (!ENABLE_3D_VIEW || alpha == 0 || sprite_rect.w <= 0 || sprite_rect.h <= 0) {
+    return;
+  }
+
+  const int center_x = sprite_rect.x + sprite_rect.w / 2;
+  const int center_y =
+      sprite_rect.y + sprite_rect.h -
+      std::max(1, static_cast<int>(std::lround(
+                      static_cast<double>(element_size) *
+                      CHARACTER_GROUND_SHADOW_Y_OFFSET_FACTOR)));
+  const double clamped_width_scale = std::max(0.2, width_scale);
+  const double clamped_height_scale = std::max(0.2, height_scale);
+  const int outer_radius_x = std::max(
+      4, static_cast<int>(std::lround(static_cast<double>(sprite_rect.w) *
+                                      CHARACTER_GROUND_SHADOW_WIDTH_FACTOR *
+                                      clamped_width_scale)));
+  const int outer_radius_y = std::max(
+      2, static_cast<int>(std::lround(static_cast<double>(sprite_rect.h) *
+                                      CHARACTER_GROUND_SHADOW_HEIGHT_FACTOR *
+                                      clamped_height_scale)));
+  const int inner_radius_x =
+      std::max(3, static_cast<int>(std::lround(outer_radius_x * 0.68)));
+  const int inner_radius_y =
+      std::max(1, static_cast<int>(std::lround(outer_radius_y * 0.65)));
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  SDL_SetRenderDrawColor(
+      sdl_renderer, 0, 0, 0,
+      static_cast<Uint8>(std::clamp(static_cast<double>(alpha) * 0.42, 0.0,
+                                    255.0)));
+  SDL_RenderFillEllipse(sdl_renderer, center_x, center_y, outer_radius_x,
+                        outer_radius_y);
+
+  SDL_SetRenderDrawColor(sdl_renderer, 10, 8, 16, alpha);
+  SDL_RenderFillEllipse(sdl_renderer, center_x, center_y, inner_radius_x,
+                        inner_radius_y);
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
 void Renderer::carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
                                       bool align_left, bool align_top) {
   if (radius <= 0) {
@@ -6999,6 +7264,8 @@ void Renderer::drawLayout(const std::vector<std::string> &layout) {
   SDL_Rect block;
   block.w = element_size;
   block.h = element_size;
+  SDL_Texture *floor_texture = getSelectedFloorTexture();
+  const SDL_Point floor_texture_size = getSelectedFloorTextureSize();
 
   for (size_t row = 0; row < layout.size(); row++) {
     for (size_t col = 0; col < layout[row].size(); col++) {
@@ -7021,10 +7288,16 @@ void Renderer::drawLayout(const std::vector<std::string> &layout) {
                      has_layout_wall(static_cast<int>(row),
                                      static_cast<int>(col) - 1));
       } else {
-        SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
         block.x = x;
         block.y = y;
-        SDL_RenderFillRect(sdl_renderer, &block);
+        if (floor_texture != nullptr) {
+          const SDL_Rect source_rect = MakeFloorTextureSampleRect(
+              floor_texture_size, static_cast<int>(row), static_cast<int>(col));
+          SDL_RenderCopy(sdl_renderer, floor_texture, &source_rect, &block);
+        } else {
+          SDL_SetRenderDrawColor(sdl_renderer, COLOR_PATH, 0xFF);
+          SDL_RenderFillRect(sdl_renderer, &block);
+        }
       }
     }
   }
@@ -7260,6 +7533,30 @@ int Renderer::SDL_RenderFillCircle(SDL_Renderer *renderer, int x, int y,
       d += 2 * (offsety - offsetx - 1);
       offsety -= 1;
       offsetx += 1;
+    }
+  }
+
+  return status;
+}
+
+int Renderer::SDL_RenderFillEllipse(SDL_Renderer *renderer, int x, int y,
+                                    int radius_x, int radius_y) {
+  if (radius_x <= 0 || radius_y <= 0) {
+    return 0;
+  }
+
+  int status = 0;
+  for (int offset_y = -radius_y; offset_y <= radius_y; ++offset_y) {
+    const double normalized_y =
+        static_cast<double>(offset_y) / static_cast<double>(radius_y);
+    const double horizontal_radius =
+        static_cast<double>(radius_x) *
+        std::sqrt(std::max(0.0, 1.0 - normalized_y * normalized_y));
+    const int span = static_cast<int>(std::lround(horizontal_radius));
+    status +=
+        SDL_RenderDrawLine(renderer, x - span, y + offset_y, x + span, y + offset_y);
+    if (status < 0) {
+      return -1;
     }
   }
 

@@ -52,7 +52,8 @@ enum MenuSelection {
 enum ConfigSelection {
   CONFIG_DIFFICULTY = 0,
   CONFIG_LIVES = 1,
-  CONFIG_BACK = 2,
+  CONFIG_TEXTURE = 2,
+  CONFIG_BACK = 3,
 };
 
 enum class MenuScreen {
@@ -132,6 +133,15 @@ Difficulty NextDifficulty(Difficulty difficulty) {
   }
 }
 
+int ClampFloorTextureIndex(int floor_texture_index) {
+  return std::clamp(floor_texture_index, 0, FLOOR_TEXTURE_OPTION_COUNT - 1);
+}
+
+int NextFloorTextureIndex(int floor_texture_index) {
+  return (ClampFloorTextureIndex(floor_texture_index) + 1) %
+         FLOOR_TEXTURE_OPTION_COUNT;
+}
+
 std::vector<std::string>
 GetMapDisplayNames(const std::vector<MapDefinition> &available_maps) {
   std::vector<std::string> names;
@@ -177,12 +187,14 @@ void RefreshSelectedMap(const std::vector<MapDefinition> &available_maps,
 
 void PersistAppSettings(Difficulty difficulty,
                         const std::string &selected_map_path,
-                        int player_lives) {
+                        int player_lives,
+                        int floor_texture_index) {
   AppSettings settings;
   settings.difficulty = difficulty;
   settings.selected_map_path = selected_map_path;
   settings.player_lives =
       std::clamp(player_lives, PLAYER_LIVES_MIN, PLAYER_LIVES_MAX);
+  settings.floor_texture_index = ClampFloorTextureIndex(floor_texture_index);
   SaveAppSettings(settings);
 }
 
@@ -807,9 +819,10 @@ void processMainMenuEvents(int &selected_item, MenuScreen &menu_screen,
 }
 
 void processConfigMenuEvents(int &selected_item, Difficulty &difficulty,
-                             int &player_lives,
+                             int &player_lives, int &floor_texture_index,
                              MenuScreen &menu_screen, bool &quit_requested,
                              Audio *audio) {
+  constexpr int kConfigMenuItemCount = CONFIG_BACK + 1;
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
@@ -824,11 +837,12 @@ void processConfigMenuEvents(int &selected_item, Difficulty &difficulty,
 
     switch (event.key.keysym.sym) {
     case SDLK_UP:
-      selected_item = (selected_item + 2) % 3;
+      selected_item =
+          (selected_item + kConfigMenuItemCount - 1) % kConfigMenuItemCount;
       audio->PlayMenuMove();
       break;
     case SDLK_DOWN:
-      selected_item = (selected_item + 1) % 3;
+      selected_item = (selected_item + 1) % kConfigMenuItemCount;
       audio->PlayMenuMove();
       break;
     case SDLK_RETURN:
@@ -840,6 +854,8 @@ void processConfigMenuEvents(int &selected_item, Difficulty &difficulty,
         player_lives = (player_lives < PLAYER_LIVES_MAX)
                            ? (player_lives + 1)
                            : PLAYER_LIVES_MIN;
+      } else if (selected_item == CONFIG_TEXTURE) {
+        floor_texture_index = NextFloorTextureIndex(floor_texture_index);
       } else if (selected_item == CONFIG_BACK) {
         menu_screen = MenuScreen::Main;
       }
@@ -1042,6 +1058,8 @@ int BobManApp::Run() {
   Difficulty difficulty = app_settings.difficulty;
   int player_lives =
       std::clamp(app_settings.player_lives, PLAYER_LIVES_MIN, PLAYER_LIVES_MAX);
+  int floor_texture_index =
+      ClampFloorTextureIndex(app_settings.floor_texture_index);
   std::string preferred_selected_map_path = app_settings.selected_map_path;
   int selected_map_index = 0;
   int active_map_index = 0;
@@ -1055,8 +1073,10 @@ int BobManApp::Run() {
                      selected_map_index, active_map_index);
   preferred_selected_map_path = available_maps[selected_map_index].file_path;
   if (app_settings.selected_map_path != preferred_selected_map_path ||
-      app_settings.player_lives != player_lives) {
-    PersistAppSettings(difficulty, preferred_selected_map_path, player_lives);
+      app_settings.player_lives != player_lives ||
+      app_settings.floor_texture_index != floor_texture_index) {
+    PersistAppSettings(difficulty, preferred_selected_map_path, player_lives,
+                       floor_texture_index);
   }
 
   while (!quit_application) {
@@ -1074,7 +1094,7 @@ int BobManApp::Run() {
       if (preferred_selected_map_path != resolved_selected_map_path) {
         preferred_selected_map_path = resolved_selected_map_path;
         PersistAppSettings(difficulty, preferred_selected_map_path,
-                           player_lives);
+                           player_lives, floor_texture_index);
       }
       editor_selected_item =
           std::clamp(editor_selected_item, 0,
@@ -1088,12 +1108,14 @@ int BobManApp::Run() {
         new Game(map.get(), events.get(), audio.get(), difficulty,
                  player_lives));
     Renderer renderer(map.get(), game.get());
+    renderer.SetFloorTextureIndex(floor_texture_index);
     auto refreshPreview = [&]() {
       map.reset(new Map(available_maps[active_map_index].file_path));
       events.reset(new Events());
       game.reset(new Game(map.get(), events.get(), audio.get(), difficulty,
                           player_lives));
       renderer.SetScene(map.get(), game.get());
+      renderer.SetFloorTextureIndex(floor_texture_index);
     };
 
     bool start_requested = false;
@@ -1123,16 +1145,19 @@ int BobManApp::Run() {
       } else if (menu_screen == MenuScreen::Config) {
         const Difficulty previous_difficulty = difficulty;
         const int previous_player_lives = player_lives;
+        const int previous_floor_texture_index = floor_texture_index;
         processConfigMenuEvents(config_selected_item, difficulty, player_lives,
-                                menu_screen, quit_application, audio.get());
+                                floor_texture_index, menu_screen,
+                                quit_application, audio.get());
         if (difficulty != previous_difficulty ||
-            player_lives != previous_player_lives) {
+            player_lives != previous_player_lives ||
+            floor_texture_index != previous_floor_texture_index) {
           PersistAppSettings(difficulty, preferred_selected_map_path,
-                             player_lives);
+                             player_lives, floor_texture_index);
           refreshPreview();
         }
         renderer.RenderConfigMenu(config_selected_item, difficulty,
-                                  player_lives);
+                                  player_lives, floor_texture_index);
       } else if (menu_screen == MenuScreen::MapSelection) {
         const int previous_selected_map_index = selected_map_index;
         const int previous_active_map_index = active_map_index;
@@ -1143,7 +1168,7 @@ int BobManApp::Run() {
           preferred_selected_map_path =
               available_maps[selected_map_index].file_path;
           PersistAppSettings(difficulty, preferred_selected_map_path,
-                             player_lives);
+                             player_lives, floor_texture_index);
         }
         if (active_map_index != previous_active_map_index) {
           refreshPreview();
@@ -1182,7 +1207,7 @@ int BobManApp::Run() {
       if (!editor_result.preferred_map_path.empty()) {
         preferred_selected_map_path = editor_result.preferred_map_path;
         PersistAppSettings(difficulty, preferred_selected_map_path,
-                           player_lives);
+                           player_lives, floor_texture_index);
       }
       continue;
     }

@@ -39,6 +39,7 @@ public:
   Renderer(size_t rows, size_t cols);
   ~Renderer();
   void SetScene(Map *map, Game *game);
+  void SetFloorTextureIndex(int floor_texture_index);
 
   // Main render path for the running game.
   void Render(bool show_pause_overlay = false,
@@ -48,7 +49,7 @@ public:
   void RenderStartMenu(int selected_item, const std::string &map_name,
                        const std::string &status_message);
   void RenderConfigMenu(int selected_item, Difficulty difficulty,
-                        int player_lives);
+                        int player_lives, int floor_texture_index);
   void RenderMapSelectionMenu(const std::vector<std::string> &map_names,
                               int selected_index);
   void RenderEditorSelectionMenu(const std::vector<std::string> &items,
@@ -100,6 +101,11 @@ private:
                              double delta_col_cells = 0.0,
                              double delta_row_cells = 0.0) const;
   int getNonCharacterSpriteLiftPixels() const;
+  SDL_Texture *getSelectedFloorTexture() const;
+  SDL_Point getSelectedFloorTextureSize() const;
+  void drawFloorSpriteShadow(const SDL_Rect &sprite_rect, Uint8 alpha,
+                             double width_scale = 1.0,
+                             double height_scale = 1.0);
   void drawLayout(const std::vector<std::string> &layout);
   void drawteleporters();
   void drawLayoutTeleporters(const std::vector<std::string> &layout);
@@ -159,7 +165,7 @@ private:
                             const std::string &map_name,
                             const std::string &status_message);
   void drawConfigMenuOverlay(int selected_item, Difficulty difficulty,
-                             int player_lives);
+                             int player_lives, int floor_texture_index);
   void drawMapSelectionOverlay(const std::vector<std::string> &map_names,
                                int selected_index);
   void drawEditorSelectionOverlay(const std::vector<std::string> &items,
@@ -210,6 +216,7 @@ private:
 
   int SDL_RenderDrawCircle(SDL_Renderer *, int, int, int);
   int SDL_RenderFillCircle(SDL_Renderer *, int, int, int);
+  int SDL_RenderFillEllipse(SDL_Renderer *, int, int, int, int);
   PixelCoord getPixelCoord(MapCoord, int, int);
 
   int screen_res_x;
@@ -232,6 +239,9 @@ private:
   SDL_Surface *sdl_wall_surface;
   SDL_Texture *sdl_wall_texture;
   SDL_Rect sdl_wall_rect;
+  std::vector<SDL_Texture *> sdl_floor_textures;
+  std::vector<SDL_Point> sdl_floor_texture_sizes;
+  int selected_floor_texture_index;
 
   SDL_Surface *sdl_goodie_surface;
   SDL_Texture *sdl_goodie_texture;
