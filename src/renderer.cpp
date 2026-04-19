@@ -828,7 +828,7 @@ void Renderer::updateSceneLayout(size_t row_count_value,
   const int content_top = std::max(0, (screen_res_y - content_height) / 2);
 
   offset_x = (screen_res_x - grid_width) / 2;
-  offset_y = content_top + reserved_top_space;
+  offset_y = std::max(0, content_top + reserved_top_space - element_size / 2);
   hud_top_y = content_top + std::max(4, hud_fontsize / 5);
 }
 
