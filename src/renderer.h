@@ -77,11 +77,23 @@ private:
                               bool align_left, bool align_top);
   void drawmap();
   void drawmap3D();
+  void drawmap3DBase();
   void drawFloorTile3D(int row, int col);
   void drawWallTile3D(int row, int col, bool has_wall_down);
+  void drawWallTop3D(int row, int col);
+  void drawWallFrontFace3D(int row, int col);
   void drawTexturedQuad(SDL_FPoint tl, SDL_FPoint tr, SDL_FPoint bl,
                         SDL_FPoint br, SDL_Texture *texture, Uint8 shade);
   SDL_FPoint projectScene(double col, double row, double z_cells) const;
+  SDL_Rect makeFloorAlignedRect(double col, double row, double x_offset_factor,
+                                double y_offset_factor, double width_factor,
+                                double height_factor,
+                                double delta_col_cells = 0.0,
+                                double delta_row_cells = 0.0) const;
+  SDL_Rect makeBillboardRect(double col, double row, double width_factor,
+                             double height_factor, double foot_row_factor,
+                             double delta_col_cells = 0.0,
+                             double delta_row_cells = 0.0) const;
   void drawLayout(const std::vector<std::string> &layout);
   void drawteleporters();
   void drawLayoutTeleporters(const std::vector<std::string> &layout);
