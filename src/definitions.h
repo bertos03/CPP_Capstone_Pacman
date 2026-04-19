@@ -176,13 +176,13 @@ inline constexpr Uint32 FINAL_LOSS_SOUND_LEAD_IN_MS = 2000;
  */
 inline constexpr Uint32 MONSTER_ANIMATION_FRAME_MS = 180;
 inline constexpr Uint32 FIREBALL_STEP_DURATION_MS = 160;
-inline constexpr Uint32 MONSTER_GAS_MIN_INTERVAL_MS = 20000;
+inline constexpr Uint32 MONSTER_GAS_MIN_INTERVAL_MS = 40000;
 inline constexpr Uint32 MONSTER_GAS_MAX_INTERVAL_MS = 60000;
 inline constexpr Uint32 GAS_CLOUD_ACTIVE_MS = 30000;
 inline constexpr Uint32 GAS_CLOUD_FADE_MS = 1000;
-inline constexpr Uint32 BLUE_POTION_SPAWN_MIN_INTERVAL_MS = 10000;
-inline constexpr Uint32 BLUE_POTION_SPAWN_MAX_INTERVAL_MS = 30000;
-inline constexpr Uint32 BLUE_POTION_VISIBLE_MS = 10000;
+inline constexpr Uint32 BLUE_POTION_SPAWN_MIN_INTERVAL_MS = 20000;
+inline constexpr Uint32 BLUE_POTION_SPAWN_MAX_INTERVAL_MS = 60000;
+inline constexpr Uint32 BLUE_POTION_VISIBLE_MS = 15000;
 inline constexpr Uint32 BLUE_POTION_FADE_MS = 1000;
 inline constexpr Uint32 DYNAMITE_SPAWN_MIN_INTERVAL_MS = 5000;
 inline constexpr Uint32 DYNAMITE_SPAWN_MAX_INTERVAL_MS = 10000;
