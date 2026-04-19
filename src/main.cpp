@@ -439,6 +439,7 @@ void RevalidateEditor(EditorState &editor_state) {
 }
 
 bool IsEditorInteriorCoord(const EditorState &editor_state, MapCoord coord) {
+  if (editor_state.map_file.layout_rows.empty()) return false;
   const int row_count =
       static_cast<int>(editor_state.map_file.layout_rows.size());
   const int col_count =
@@ -448,6 +449,7 @@ bool IsEditorInteriorCoord(const EditorState &editor_state, MapCoord coord) {
 }
 
 void MoveEditorCursor(EditorState &editor_state, int row_delta, int col_delta) {
+  if (editor_state.map_file.layout_rows.empty()) return;
   const int max_row =
       static_cast<int>(editor_state.map_file.layout_rows.size()) - 2;
   const int max_col =
