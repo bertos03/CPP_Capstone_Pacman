@@ -2317,13 +2317,21 @@ void Game::EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now) {
     return;
   }
 
+  SDL_FPoint sprite_center = MakeCellCenter(monster->map_coord);
+  sprite_center.x += static_cast<float>(monster->px_delta.x) / 100.0f;
+  sprite_center.y += static_cast<float>(monster->px_delta.y) / 100.0f;
+
   monster->is_alive = false;
   monster->px_delta.x = 0;
   monster->px_delta.y = 0;
   monster->scheduled_dynamite_blast_ticks = 0;
   monster->death_coord = monster->map_coord;
   monster->death_started_ticks = now;
-  effects.push_back({monster->death_coord, now, EffectType::MonsterExplosion, 1});
+  GameEffect explosion_effect{monster->death_coord, now,
+                              EffectType::MonsterExplosion, 1};
+  explosion_effect.has_precise_world_center = true;
+  explosion_effect.precise_world_center = sprite_center;
+  effects.push_back(explosion_effect);
 #ifdef AUDIO
   audio->PlayDynamiteExplosion();
 #endif
@@ -2334,14 +2342,21 @@ void Game::EliminateMonster(Monster *monster, Uint32 now) {
     return;
   }
 
+  SDL_FPoint sprite_center = MakeCellCenter(monster->map_coord);
+  sprite_center.x += static_cast<float>(monster->px_delta.x) / 100.0f;
+  sprite_center.y += static_cast<float>(monster->px_delta.y) / 100.0f;
+
   monster->is_alive = false;
   monster->px_delta.x = 0;
   monster->px_delta.y = 0;
   monster->scheduled_dynamite_blast_ticks = 0;
   monster->death_coord = monster->map_coord;
   monster->death_started_ticks = now;
-  effects.push_back(
-      {monster->death_coord, now, EffectType::MonsterExplosion, 1});
+  GameEffect explosion_effect{monster->death_coord, now,
+                              EffectType::MonsterExplosion, 1};
+  explosion_effect.has_precise_world_center = true;
+  explosion_effect.precise_world_center = sprite_center;
+  effects.push_back(explosion_effect);
 #ifdef AUDIO
   audio->PlayMonsterExplosion();
 #endif

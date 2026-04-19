@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 
 #include "game.h"
@@ -970,7 +971,7 @@ void Renderer::renderFrame(bool show_hud) {
               -non_character_sprite_lift_px);
           const double depth =
               projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
-          push_depth_command(depth, [this, rect, coord,
+          push_depth_command(depth, [this, rect, coord, goodie, now,
                                      &draw_with_wall_occlusion]() {
             draw_with_wall_occlusion(
                 static_cast<double>(coord.v) + 0.5,
@@ -980,6 +981,7 @@ void Renderer::renderFrame(bool show_hud) {
                     SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr,
                                    &rect);
                   }
+                  renderGoodieSparkle(goodie, rect, now);
                 });
           });
         }
@@ -5797,17 +5799,106 @@ void Renderer::drawgoodies() {
     return;
   }
 
+  const Uint32 now = SDL_GetTicks();
+
   for (auto goodie : game->goodies) {
-    if (goodie->is_active) {
-      goodie->px_coord = getPixelCoord(goodie->map_coord, 0, 0);
-      sdl_goodie_rect =
-          SDL_Rect{goodie->px_coord.x + int(element_size * 0.15),
-                   goodie->px_coord.y + int(element_size * 0.15),
-                   int(element_size * 0.7), int(element_size * 0.7)};
-      SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr,
-                     &sdl_goodie_rect);
+    if (!goodie->is_active) {
+      continue;
     }
+
+    goodie->px_coord = getPixelCoord(goodie->map_coord, 0, 0);
+    sdl_goodie_rect =
+        SDL_Rect{goodie->px_coord.x + int(element_size * 0.15),
+                 goodie->px_coord.y + int(element_size * 0.15),
+                 int(element_size * 0.7), int(element_size * 0.7)};
+    SDL_RenderCopy(sdl_renderer, sdl_goodie_texture, nullptr,
+                   &sdl_goodie_rect);
+    renderGoodieSparkle(goodie, sdl_goodie_rect, now);
   }
+}
+
+void Renderer::renderGoodieSparkle(Goodie *goodie, const SDL_Rect &sprite_rect,
+                                   Uint32 now) {
+  if (goodie == nullptr) {
+    return;
+  }
+
+  const Uint32 sparkle_interval_range =
+      GOODIE_SPARKLE_MAX_INTERVAL_MS - GOODIE_SPARKLE_MIN_INTERVAL_MS;
+
+  if (goodie->next_sparkle_ticks == 0) {
+    goodie->next_sparkle_ticks =
+        now + GOODIE_SPARKLE_MIN_INTERVAL_MS +
+        static_cast<Uint32>(rand() % (sparkle_interval_range + 1));
+  }
+
+  if (goodie->sparkle_started_ticks == 0 &&
+      now >= goodie->next_sparkle_ticks) {
+    goodie->sparkle_started_ticks = now;
+    goodie->sparkle_offset_x =
+        0.10f + (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) *
+                    0.80f;
+    goodie->sparkle_offset_y =
+        0.10f + (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) *
+                    0.80f;
+  }
+
+  if (goodie->sparkle_started_ticks == 0) {
+    return;
+  }
+
+  const Uint32 sparkle_age = now - goodie->sparkle_started_ticks;
+  if (sparkle_age >= GOODIE_SPARKLE_DURATION_MS) {
+    goodie->sparkle_started_ticks = 0;
+    goodie->next_sparkle_ticks =
+        now + GOODIE_SPARKLE_MIN_INTERVAL_MS +
+        static_cast<Uint32>(rand() % (sparkle_interval_range + 1));
+    return;
+  }
+
+  const double progress = static_cast<double>(sparkle_age) /
+                          static_cast<double>(GOODIE_SPARKLE_DURATION_MS);
+  const double envelope = std::sin(progress * 3.14159265358979323846);
+  const int sparkle_center_x =
+      sprite_rect.x +
+      static_cast<int>(goodie->sparkle_offset_x * sprite_rect.w);
+  const int sparkle_center_y =
+      sprite_rect.y +
+      static_cast<int>(goodie->sparkle_offset_y * sprite_rect.h);
+  const int reference_size = std::max(sprite_rect.w, sprite_rect.h);
+  const int core_radius =
+      std::max(1, static_cast<int>(reference_size * 0.09 * envelope));
+  const int arm_length =
+      std::max(2, static_cast<int>(reference_size * 0.38 * envelope));
+  const Uint8 alpha =
+      static_cast<Uint8>(std::clamp(255.0 * envelope, 0.0, 255.0));
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, alpha);
+  SDL_RenderDrawLine(sdl_renderer, sparkle_center_x - arm_length,
+                     sparkle_center_y, sparkle_center_x + arm_length,
+                     sparkle_center_y);
+  SDL_RenderDrawLine(sdl_renderer, sparkle_center_x,
+                     sparkle_center_y - arm_length, sparkle_center_x,
+                     sparkle_center_y + arm_length);
+  SDL_RenderDrawLine(sdl_renderer, sparkle_center_x - arm_length,
+                     sparkle_center_y - arm_length,
+                     sparkle_center_x + arm_length,
+                     sparkle_center_y + arm_length);
+  SDL_RenderDrawLine(sdl_renderer, sparkle_center_x - arm_length,
+                     sparkle_center_y + arm_length,
+                     sparkle_center_x + arm_length,
+                     sparkle_center_y - arm_length);
+
+  if (core_radius > 0) {
+    SDL_RenderFillCircle(sdl_renderer, sparkle_center_x, sparkle_center_y,
+                         core_radius);
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
 void Renderer::drawmonsters() {

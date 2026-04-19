@@ -17,6 +17,8 @@
 #ifndef GOODIE_H
 #define GOODIE_H
 
+#include <SDL.h>
+
 #include "mapelement.h"
 #include "map.h"
 #include "globaltypes.h"
@@ -35,6 +37,11 @@ public:
 
 protected:
 private:
+  Uint32 next_sparkle_ticks = 0;
+  Uint32 sparkle_started_ticks = 0;
+  float sparkle_offset_x = 0.0f;
+  float sparkle_offset_y = 0.0f;
+
 friend class Renderer;
 friend class Game;
 };

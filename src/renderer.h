@@ -113,6 +113,8 @@ private:
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
+  void renderGoodieSparkle(class Goodie *goodie, const SDL_Rect &sprite_rect,
+                           Uint32 now);
   void drawplaceddynamites();
   void drawplacedplasticexplosive();
   void drawactiveairstrike();
