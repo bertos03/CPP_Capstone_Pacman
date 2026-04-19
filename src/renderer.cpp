@@ -1827,9 +1827,6 @@ void Renderer::renderFrame(bool show_hud) {
                     static_cast<double>(anchor_coord.u) + 0.5 +
                         delta_row_cells,
                     [&]() {
-                      drawFloorSpriteShadow(
-                          monster_rect, CHARACTER_GROUND_SHADOW_BASE_ALPHA,
-                          waiting_for_blast ? 1.08 : 1.02, 1.0);
                       if (waiting_for_blast) {
                         const Uint32 remaining_ticks =
                             monster->scheduled_dynamite_blast_ticks - now;
@@ -1921,9 +1918,6 @@ void Renderer::renderFrame(bool show_hud) {
                 expandRect(monster_rect, std::max(8, element_size / 4)),
                 static_cast<double>(coord.u) + 0.5,
                 [&]() {
-                  drawFloorSpriteShadow(monster_rect,
-                                        CHARACTER_GROUND_SHADOW_BASE_ALPHA, 1.02,
-                                        1.0);
                   SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
                                  &monster_rect);
                 });
@@ -7158,13 +7152,13 @@ void Renderer::drawFloorSpriteShadow(const SDL_Rect &sprite_rect, Uint8 alpha,
   SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
 
   SDL_SetRenderDrawColor(
-      sdl_renderer, 0, 0, 0,
-      static_cast<Uint8>(std::clamp(static_cast<double>(alpha) * 0.42, 0.0,
+      sdl_renderer, 90, 88, 100,
+      static_cast<Uint8>(std::clamp(static_cast<double>(alpha) * 0.55, 0.0,
                                     255.0)));
   SDL_RenderFillEllipse(sdl_renderer, center_x, center_y, outer_radius_x,
                         outer_radius_y);
 
-  SDL_SetRenderDrawColor(sdl_renderer, 10, 8, 16, alpha);
+  SDL_SetRenderDrawColor(sdl_renderer, 70, 68, 82, alpha);
   SDL_RenderFillEllipse(sdl_renderer, center_x, center_y, inner_radius_x,
                         inner_radius_y);
 
