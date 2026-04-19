@@ -281,7 +281,8 @@ double DirectionAngleDegrees(Directions direction) {
 
 Renderer::Renderer(Map *_map, Game *_game)
     : screen_res_x(0), screen_res_y(0), element_size(0), hud_top_y(0),
-      offset_x(0), offset_y(0), rows(0), cols(0), map(_map), game(_game),
+      offset_x(0), offset_y(0), scene_origin_y(0), wall_height_px(0),
+      cos_tilt(1.0), sin_tilt(0.0), rows(0), cols(0), map(_map), game(_game),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
@@ -306,7 +307,9 @@ Renderer::Renderer(Map *_map, Game *_game)
 
 Renderer::Renderer(size_t row_count, size_t col_count)
     : screen_res_x(0), screen_res_y(0), element_size(0), hud_top_y(0),
-      offset_x(0), offset_y(0), rows(0), cols(0), map(nullptr), game(nullptr),
+      offset_x(0), offset_y(0), scene_origin_y(0), wall_height_px(0),
+      cos_tilt(1.0), sin_tilt(0.0), rows(0), cols(0), map(nullptr),
+      game(nullptr),
       sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr), sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
@@ -811,25 +814,52 @@ void Renderer::updateSceneLayout(size_t row_count_value,
   rows = row_count_value;
   cols = col_count_value;
 
+  constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+  cos_tilt = ENABLE_3D_VIEW ? std::cos(VIEW_3D_TILT_DEGREES * kDegToRad) : 1.0;
+  sin_tilt = ENABLE_3D_VIEW ? std::sin(VIEW_3D_TILT_DEGREES * kDegToRad) : 0.0;
+
   const int row_count = static_cast<int>(rows);
   const int col_count = static_cast<int>(cols);
   const int hud_fontsize = std::max(22, screen_res_y / 35);
   const int reserved_top_space = hud_fontsize * 3 + 24;
-  const int element_size_x =
+  // Vertical footprint in 3D = floor compressed by cos_tilt, plus the wall
+  // extrusion that sticks up above the top row by wall_height_px * sin_tilt.
+  const double row_span_factor =
+      ENABLE_3D_VIEW
+          ? row_count * cos_tilt + VIEW_3D_WALL_HEIGHT_FACTOR * sin_tilt
+          : static_cast<double>(row_count);
+  const int element_size_x = static_cast<int>(
       (screen_res_y - reserved_top_space - row_count - 1) /
-      std::max(1, row_count);
+      std::max(1.0, row_span_factor));
   const int element_size_y =
       (screen_res_x - col_count - 1) / std::max(1, col_count);
   element_size = std::max(8, std::min(element_size_x, element_size_y));
 
+  wall_height_px =
+      ENABLE_3D_VIEW
+          ? static_cast<int>(std::lround((element_size + 1) *
+                                         VIEW_3D_WALL_HEIGHT_FACTOR))
+          : 0;
+
   const int grid_width = col_count * (element_size + 1) + 1;
-  const int grid_height = row_count * (element_size + 1) + 1;
+  const int grid_height =
+      ENABLE_3D_VIEW
+          ? static_cast<int>(std::lround(row_count * (element_size + 1) *
+                                             cos_tilt +
+                                         wall_height_px * sin_tilt)) +
+                1
+          : row_count * (element_size + 1) + 1;
   const int content_height = reserved_top_space + grid_height;
   const int content_top = std::max(0, (screen_res_y - content_height) / 2);
 
   offset_x = (screen_res_x - grid_width) / 2;
   offset_y = std::max(0, content_top + reserved_top_space - element_size / 2);
   hud_top_y = content_top + std::max(4, hud_fontsize / 5);
+
+  const int extrusion_headroom =
+      ENABLE_3D_VIEW ? static_cast<int>(std::lround(wall_height_px * sin_tilt))
+                     : 0;
+  scene_origin_y = offset_y + 1 + extrusion_headroom;
 }
 
 void Renderer::SetScene(Map *new_map, Game *new_game) {
@@ -5151,6 +5181,11 @@ void Renderer::drawmap() {
     return;
   }
 
+  if (ENABLE_3D_VIEW) {
+    drawmap3D();
+    return;
+  }
+
   SDL_Rect block;
   block.w = element_size;
   block.h = element_size;
@@ -5185,6 +5220,151 @@ void Renderer::drawmap() {
         SDL_RenderFillRect(sdl_renderer, &block);
         break;
       }
+    }
+  }
+}
+
+SDL_FPoint Renderer::projectScene(double col, double row,
+                                  double z_cells) const {
+  const double tile = static_cast<double>(element_size) + 1.0;
+  const double world_x = col * tile;
+  const double world_y = row * tile;
+  const double world_z = z_cells * static_cast<double>(wall_height_px);
+  SDL_FPoint out;
+  out.x = static_cast<float>(offset_x + 1.0 + world_x);
+  out.y = static_cast<float>(
+      static_cast<double>(scene_origin_y) + world_y * cos_tilt - world_z * sin_tilt);
+  return out;
+}
+
+void Renderer::drawTexturedQuad(SDL_FPoint tl, SDL_FPoint tr, SDL_FPoint bl,
+                                SDL_FPoint br, SDL_Texture *texture,
+                                Uint8 shade) {
+  const SDL_Color tint{shade, shade, shade, 255};
+  SDL_Vertex verts[4];
+  verts[0].position = tl;
+  verts[0].color = tint;
+  verts[0].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  verts[1].position = tr;
+  verts[1].color = tint;
+  verts[1].tex_coord = SDL_FPoint{1.0f, 0.0f};
+  verts[2].position = bl;
+  verts[2].color = tint;
+  verts[2].tex_coord = SDL_FPoint{0.0f, 1.0f};
+  verts[3].position = br;
+  verts[3].color = tint;
+  verts[3].tex_coord = SDL_FPoint{1.0f, 1.0f};
+  const int indices[6] = {0, 1, 2, 1, 3, 2};
+  SDL_RenderGeometry(sdl_renderer, texture, verts, 4, indices, 6);
+}
+
+void Renderer::drawFloorTile3D(int row, int col) {
+  const SDL_FPoint tl = projectScene(col, row, 0.0);
+  const SDL_FPoint tr = projectScene(col + 1.0, row, 0.0);
+  const SDL_FPoint bl = projectScene(col, row + 1.0, 0.0);
+  const SDL_FPoint br = projectScene(col + 1.0, row + 1.0, 0.0);
+  const SDL_Color path_color{40, 40, 40, 255};
+  SDL_Vertex verts[4];
+  verts[0].position = tl;
+  verts[0].color = path_color;
+  verts[0].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  verts[1].position = tr;
+  verts[1].color = path_color;
+  verts[1].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  verts[2].position = bl;
+  verts[2].color = path_color;
+  verts[2].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  verts[3].position = br;
+  verts[3].color = path_color;
+  verts[3].tex_coord = SDL_FPoint{0.0f, 0.0f};
+  const int indices[6] = {0, 1, 2, 1, 3, 2};
+  SDL_RenderGeometry(sdl_renderer, nullptr, verts, 4, indices, 6);
+}
+
+void Renderer::drawWallTile3D(int row, int col, bool has_wall_down) {
+  // Top face (z = 1) covers the tile footprint one wall-height above the floor.
+  const SDL_FPoint top_back_left = projectScene(col, row, 1.0);
+  const SDL_FPoint top_back_right = projectScene(col + 1.0, row, 1.0);
+  const SDL_FPoint top_front_left = projectScene(col, row + 1.0, 1.0);
+  const SDL_FPoint top_front_right = projectScene(col + 1.0, row + 1.0, 1.0);
+  if (sdl_wall_texture != nullptr) {
+    drawTexturedQuad(top_back_left, top_back_right, top_front_left,
+                     top_front_right, sdl_wall_texture, 255);
+  } else {
+    const SDL_Color fallback{118, 84, 68, 255};
+    SDL_Vertex verts[4];
+    verts[0].position = top_back_left;
+    verts[0].color = fallback;
+    verts[0].tex_coord = SDL_FPoint{0.0f, 0.0f};
+    verts[1].position = top_back_right;
+    verts[1].color = fallback;
+    verts[1].tex_coord = SDL_FPoint{0.0f, 0.0f};
+    verts[2].position = top_front_left;
+    verts[2].color = fallback;
+    verts[2].tex_coord = SDL_FPoint{0.0f, 0.0f};
+    verts[3].position = top_front_right;
+    verts[3].color = fallback;
+    verts[3].tex_coord = SDL_FPoint{0.0f, 0.0f};
+    const int indices[6] = {0, 1, 2, 1, 3, 2};
+    SDL_RenderGeometry(sdl_renderer, nullptr, verts, 4, indices, 6);
+  }
+
+  // Front (south-facing) face is only visible when there is no neighbour
+  // directly in front of the tile. With a purely y-tilted oblique projection
+  // the east/west/back faces are edge-on and contribute zero screen area, so
+  // the front face is the only vertical surface that needs to be rendered.
+  if (!has_wall_down) {
+    const SDL_FPoint fl_top = projectScene(col, row + 1.0, 1.0);
+    const SDL_FPoint fr_top = projectScene(col + 1.0, row + 1.0, 1.0);
+    const SDL_FPoint fl_bot = projectScene(col, row + 1.0, 0.0);
+    const SDL_FPoint fr_bot = projectScene(col + 1.0, row + 1.0, 0.0);
+    if (sdl_wall_texture != nullptr) {
+      drawTexturedQuad(fl_top, fr_top, fl_bot, fr_bot, sdl_wall_texture, 170);
+    } else {
+      const SDL_Color fallback{82, 58, 48, 255};
+      SDL_Vertex verts[4];
+      verts[0].position = fl_top;
+      verts[0].color = fallback;
+      verts[0].tex_coord = SDL_FPoint{0.0f, 0.0f};
+      verts[1].position = fr_top;
+      verts[1].color = fallback;
+      verts[1].tex_coord = SDL_FPoint{0.0f, 0.0f};
+      verts[2].position = fl_bot;
+      verts[2].color = fallback;
+      verts[2].tex_coord = SDL_FPoint{0.0f, 0.0f};
+      verts[3].position = fr_bot;
+      verts[3].color = fallback;
+      verts[3].tex_coord = SDL_FPoint{0.0f, 0.0f};
+      const int indices[6] = {0, 1, 2, 1, 3, 2};
+      SDL_RenderGeometry(sdl_renderer, nullptr, verts, 4, indices, 6);
+    }
+  }
+}
+
+void Renderer::drawmap3D() {
+  if (map == nullptr) {
+    return;
+  }
+
+  // Paint the floor first, then the walls row-by-row from back to front so
+  // that front faces of near-row walls correctly overdraw anything behind.
+  for (size_t u = 0; u < rows; ++u) {
+    for (size_t v = 0; v < cols; ++v) {
+      if (map->map_entry(u, v) != ElementType::TYPE_WALL) {
+        drawFloorTile3D(static_cast<int>(u), static_cast<int>(v));
+      }
+    }
+  }
+
+  for (size_t u = 0; u < rows; ++u) {
+    for (size_t v = 0; v < cols; ++v) {
+      if (map->map_entry(u, v) != ElementType::TYPE_WALL) {
+        continue;
+      }
+      const bool has_wall_down =
+          u + 1 < rows &&
+          map->map_entry(u + 1, v) == ElementType::TYPE_WALL;
+      drawWallTile3D(static_cast<int>(u), static_cast<int>(v), has_wall_down);
     }
   }
 }
@@ -5546,6 +5726,12 @@ PixelCoord Renderer::getPixelCoord(MapCoord in_coord, int delta_x,
                                    int delta_y) {
   PixelCoord out;
   out.x = offset_x + 1 + in_coord.v * (element_size + 1) + delta_x;
-  out.y = offset_y + 1 + in_coord.u * (element_size + 1) + delta_y;
+  if (ENABLE_3D_VIEW) {
+    const double world_y =
+        in_coord.u * (element_size + 1) + static_cast<double>(delta_y);
+    out.y = scene_origin_y + static_cast<int>(std::lround(world_y * cos_tilt));
+  } else {
+    out.y = offset_y + 1 + in_coord.u * (element_size + 1) + delta_y;
+  }
   return out;
 }

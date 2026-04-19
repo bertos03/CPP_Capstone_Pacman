@@ -76,6 +76,12 @@ private:
   void carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
                               bool align_left, bool align_top);
   void drawmap();
+  void drawmap3D();
+  void drawFloorTile3D(int row, int col);
+  void drawWallTile3D(int row, int col, bool has_wall_down);
+  void drawTexturedQuad(SDL_FPoint tl, SDL_FPoint tr, SDL_FPoint bl,
+                        SDL_FPoint br, SDL_Texture *texture, Uint8 shade);
+  SDL_FPoint projectScene(double col, double row, double z_cells) const;
   void drawLayout(const std::vector<std::string> &layout);
   void drawteleporters();
   void drawLayoutTeleporters(const std::vector<std::string> &layout);
@@ -190,6 +196,10 @@ private:
   int hud_top_y;
   int offset_x;
   int offset_y;
+  int scene_origin_y;
+  int wall_height_px;
+  double cos_tilt;
+  double sin_tilt;
   size_t rows;
   size_t cols;
   Map *map;

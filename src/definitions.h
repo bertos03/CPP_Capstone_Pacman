@@ -353,4 +353,19 @@ inline constexpr char MONSTER_MEDIUM = 'N';
 inline constexpr char MONSTER_MANY = 'O';
 inline constexpr char MONSTER_EXTRA = 'K';
 
+/**
+ * @brief Tilted 3D gameplay projection.
+ *
+ * When enabled, the gameplay renderer uses an oblique parallel projection:
+ * walls are extruded upward from the map as textured cuboids while entities
+ * remain billboarded 2D sprites drawn on top of the tilted floor. The tilt
+ * angle rotates the camera backward around the horizontal axis (0 degrees =
+ * classic top-down, 90 degrees = side view). The wall-height factor sets
+ * the extrusion height as a multiple of one map tile. Menus, HUD, and the
+ * map editor continue to render in pure 2D and are unaffected by this flag.
+ */
+inline constexpr bool ENABLE_3D_VIEW = true;
+inline constexpr double VIEW_3D_TILT_DEGREES = 30.0;
+inline constexpr double VIEW_3D_WALL_HEIGHT_FACTOR = 1.0;
+
 #endif
