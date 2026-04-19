@@ -5820,37 +5820,64 @@ void Renderer::drawfireballs() {
     return;
   }
 
+  const Uint32 now = SDL_GetTicks();
+  const int non_character_sprite_lift_px = getNonCharacterSpriteLiftPixels();
   for (const auto &fireball : game->fireballs) {
     const MapCoord next_coord = StepRenderCoord(fireball.current_coord,
                                                 fireball.direction);
+    const bool next_is_wall =
+        ENABLE_3D_VIEW && map != nullptr && next_coord.u >= 0 &&
+        next_coord.v >= 0 && next_coord.u < static_cast<int>(rows) &&
+        next_coord.v < static_cast<int>(cols) &&
+        map->map_entry(static_cast<size_t>(next_coord.u),
+                       static_cast<size_t>(next_coord.v)) ==
+            ElementType::TYPE_WALL;
     const PixelCoord start_px = getPixelCoord(fireball.current_coord, 0, 0);
     const PixelCoord end_px = getPixelCoord(next_coord, 0, 0);
     const double progress = std::clamp(
-        static_cast<double>(SDL_GetTicks() - fireball.segment_started_ticks) /
+        static_cast<double>(now - fireball.segment_started_ticks) /
             static_cast<double>(std::max<Uint32>(1, fireball.step_duration_ms)),
         0.0, 1.0);
+    const double rendered_progress = progress * (next_is_wall ? 0.5 : 1.0);
 
     const int start_center_x = start_px.x + element_size / 2;
     const int start_center_y = start_px.y + element_size / 2;
     const int end_center_x = end_px.x + element_size / 2;
     const int end_center_y = end_px.y + element_size / 2;
     const int center_x =
-        start_center_x + static_cast<int>((end_center_x - start_center_x) * progress);
+        start_center_x +
+        static_cast<int>((end_center_x - start_center_x) * rendered_progress);
     const int center_y =
-        start_center_y + static_cast<int>((end_center_y - start_center_y) * progress);
+        start_center_y +
+        static_cast<int>((end_center_y - start_center_y) * rendered_progress) -
+        non_character_sprite_lift_px;
     const int trail_x =
         center_x - static_cast<int>((end_center_x - start_center_x) * 0.28);
     const int trail_y =
         center_y - static_cast<int>((end_center_y - start_center_y) * 0.28);
+    const int half_extent = std::max(8, element_size / 3);
+    const SDL_Rect occlusion_bounds{center_x - half_extent, center_y - half_extent,
+                                    half_extent * 2, half_extent * 2};
+    const double center_row_cells =
+        static_cast<double>(fireball.current_coord.u) + 0.5 +
+        static_cast<double>(next_coord.u - fireball.current_coord.u) *
+            rendered_progress;
 
-    SDL_SetRenderDrawColor(sdl_renderer, 255, 110, 24, 120);
-    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
-                         std::max(4, element_size / 4));
-    SDL_SetRenderDrawColor(sdl_renderer, 255, 190, 70, 175);
-    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
-                         std::max(3, element_size / 6));
-    SDL_SetRenderDrawColor(sdl_renderer, 255, 230, 140, 220);
-    SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, center_x, center_y);
+    const auto draw_fireball = [&]() {
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 110, 24, 120);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                           std::max(4, element_size / 4));
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 190, 70, 175);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                           std::max(3, element_size / 6));
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 230, 140, 220);
+      SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, center_x, center_y);
+    };
+    if (ENABLE_3D_VIEW) {
+      drawWithWallOcclusion(occlusion_bounds, center_row_cells, draw_fireball);
+      continue;
+    }
+    draw_fireball();
   }
 }
 
@@ -5985,6 +6012,9 @@ void Renderer::drawgasclouds() {
     const int center_x = cloud_px.x + element_size / 2;
     const int center_y =
         cloud_px.y + element_size / 2 - non_character_sprite_lift_px;
+    const bool has_cloud_texture =
+        sdl_fart_cloud_texture != nullptr && sdl_fart_cloud_size.x > 0 &&
+        sdl_fart_cloud_size.y > 0;
     const auto draw_procedural_cloud = [&]() {
       const double wobble_clock =
           static_cast<double>(now + cloud.animation_seed * 67) / 210.0;
@@ -6021,26 +6051,7 @@ void Renderer::drawgasclouds() {
                            std::max(7, static_cast<int>(element_size * 0.34)));
     };
 
-    if (sdl_fart_cloud_texture == nullptr || sdl_fart_cloud_size.x <= 0 ||
-        sdl_fart_cloud_size.y <= 0) {
-      draw_procedural_cloud();
-      continue;
-    }
-
     const Uint32 elapsed = now - cloud.started_ticks;
-    const int frame_index =
-        std::clamp(static_cast<int>(elapsed / std::max<Uint32>(1, kFartCloudFrameMs)),
-                   0, kFartCloudFrames - 1);
-    const int src_x = (frame_index * sdl_fart_cloud_size.x) / kFartCloudFrames;
-    const int src_x_next =
-        ((frame_index + 1) * sdl_fart_cloud_size.x) / kFartCloudFrames;
-    const SDL_Rect src_rect{src_x, 0, std::max(1, src_x_next - src_x),
-                            sdl_fart_cloud_size.y};
-    if (src_rect.w <= 0 || src_rect.h <= 0) {
-      draw_procedural_cloud();
-      continue;
-    }
-
     double scale_multiplier = 1.0;
     int drift_x = 0;
     int drift_y = 0;
@@ -6064,23 +6075,57 @@ void Renderer::drawgasclouds() {
                                                  kFartCloudRenderScale)));
     const int max_dimension = std::max(
         1, static_cast<int>(std::lround(base_max_dimension * scale_multiplier)));
-    const double scale =
-        static_cast<double>(max_dimension) /
-        static_cast<double>(std::max(src_rect.w, src_rect.h));
-    const int draw_width =
-        std::max(1, static_cast<int>(std::lround(src_rect.w * scale)));
-    const int draw_height =
-        std::max(1, static_cast<int>(std::lround(src_rect.h * scale)));
-    SDL_Rect destination{center_x - draw_width / 2 + drift_x,
-                         center_y - draw_height / 2 + drift_y, draw_width,
-                         draw_height};
+    const int render_center_x = has_cloud_texture ? center_x + drift_x : center_x;
+    const int render_center_y = has_cloud_texture ? center_y + drift_y : center_y;
+    const int half_extent = std::max(8, max_dimension / 2) + 4;
+    const SDL_Rect occlusion_bounds{render_center_x - half_extent,
+                                    render_center_y - half_extent,
+                                    half_extent * 2, half_extent * 2};
+    const auto draw_cloud = [&]() {
+      if (!has_cloud_texture) {
+        draw_procedural_cloud();
+        return;
+      }
 
-    SDL_SetTextureAlphaMod(
-        sdl_fart_cloud_texture,
-        static_cast<Uint8>(std::clamp(255.0 * alpha_factor, 0.0, 255.0)));
-    SDL_RenderCopy(sdl_renderer, sdl_fart_cloud_texture, &src_rect,
-                   &destination);
-    SDL_SetTextureAlphaMod(sdl_fart_cloud_texture, 255);
+      const int frame_index =
+          std::clamp(static_cast<int>(elapsed /
+                                      std::max<Uint32>(1, kFartCloudFrameMs)),
+                     0, kFartCloudFrames - 1);
+      const int src_x =
+          (frame_index * sdl_fart_cloud_size.x) / kFartCloudFrames;
+      const int src_x_next =
+          ((frame_index + 1) * sdl_fart_cloud_size.x) / kFartCloudFrames;
+      const SDL_Rect src_rect{src_x, 0, std::max(1, src_x_next - src_x),
+                              sdl_fart_cloud_size.y};
+      if (src_rect.w <= 0 || src_rect.h <= 0) {
+        draw_procedural_cloud();
+        return;
+      }
+
+      const double scale =
+          static_cast<double>(max_dimension) /
+          static_cast<double>(std::max(src_rect.w, src_rect.h));
+      const int draw_width =
+          std::max(1, static_cast<int>(std::lround(src_rect.w * scale)));
+      const int draw_height =
+          std::max(1, static_cast<int>(std::lround(src_rect.h * scale)));
+      const SDL_Rect destination{render_center_x - draw_width / 2,
+                                 render_center_y - draw_height / 2,
+                                 draw_width, draw_height};
+
+      SDL_SetTextureAlphaMod(
+          sdl_fart_cloud_texture,
+          static_cast<Uint8>(std::clamp(255.0 * alpha_factor, 0.0, 255.0)));
+      SDL_RenderCopy(sdl_renderer, sdl_fart_cloud_texture, &src_rect,
+                     &destination);
+      SDL_SetTextureAlphaMod(sdl_fart_cloud_texture, 255);
+    };
+    if (ENABLE_3D_VIEW) {
+      drawWithWallOcclusion(
+          occlusion_bounds, static_cast<double>(cloud.coord.u) + 0.5, draw_cloud);
+      continue;
+    }
+    draw_cloud();
   }
 }
 
@@ -6097,7 +6142,16 @@ void Renderer::draweffects() {
 
     int center_x = 0;
     int center_y = 0;
-    if (effect.has_precise_world_center) {
+    if (ENABLE_3D_VIEW) {
+      const SDL_FPoint world_center =
+          effect.has_precise_world_center
+              ? projectScene(effect.precise_world_center.x,
+                             effect.precise_world_center.y, 0.0)
+              : projectScene(static_cast<double>(effect.coord.v) + 0.5,
+                             static_cast<double>(effect.coord.u) + 0.5, 0.0);
+      center_x = static_cast<int>(std::lround(world_center.x));
+      center_y = static_cast<int>(std::lround(world_center.y));
+    } else if (effect.has_precise_world_center) {
       center_x = static_cast<int>(
           std::lround(static_cast<double>(offset_x) +
                       static_cast<double>(effect.precise_world_center.x) *
