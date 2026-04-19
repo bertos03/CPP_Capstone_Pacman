@@ -23,7 +23,7 @@
 
 namespace {
 
-constexpr Uint32 kMonsterExplosionDurationMs = 900;
+constexpr Uint32 kMonsterExplosionDurationMs = MONSTER_EXPLOSION_DURATION_MS;
 constexpr Uint32 kWallImpactDurationMs = 180;
 constexpr Uint32 kSlimeSplashDurationMs =
     SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT + SLIME_SPLASH_FADE_MS;

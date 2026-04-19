@@ -58,6 +58,7 @@ constexpr int kPacmanFramesPerDirection = 4;
 constexpr int kMonsterFramesPerDirection = 4;
 constexpr int kRocketFlightFrames = 2;
 constexpr int kAirstrikeExplosionFrames = 5;
+constexpr int kMonsterExplosionFrames = MONSTER_EXPLOSION_FRAME_COUNT;
 constexpr int kFartCloudFrames = 4;
 constexpr int kSlimeSplashGridColumns = 3;
 constexpr int kSlimeSplashGridRows = 3;
@@ -365,6 +366,7 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_rocket_texture(nullptr), sdl_rocket_size{0, 0},
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
+      sdl_monster_explosion_texture(nullptr), sdl_monster_explosion_size{0, 0},
       sdl_fart_cloud_texture(nullptr), sdl_fart_cloud_size{0, 0},
       sdl_slime_ball_texture(nullptr), sdl_slime_ball_size{0, 0},
       sdl_slime_overlay_texture(nullptr), sdl_slime_overlay_size{0, 0},
@@ -392,6 +394,7 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_rocket_texture(nullptr), sdl_rocket_size{0, 0},
       sdl_airstrike_plane_texture(nullptr), sdl_airstrike_plane_size{0, 0},
       sdl_airstrike_explosion_texture(nullptr), sdl_airstrike_explosion_size{0, 0},
+      sdl_monster_explosion_texture(nullptr), sdl_monster_explosion_size{0, 0},
       sdl_fart_cloud_texture(nullptr), sdl_fart_cloud_size{0, 0},
       sdl_slime_ball_texture(nullptr), sdl_slime_ball_size{0, 0},
       sdl_slime_overlay_texture(nullptr), sdl_slime_overlay_size{0, 0},
@@ -631,6 +634,9 @@ void Renderer::initializeRenderer(size_t row_count_value,
   sdl_airstrike_explosion_texture = loadTrimmedChromaKeyTexture(
       Paths::GetDataFilePath("airstrike_explosion_sheet.png"),
       sdl_airstrike_explosion_size, 12);
+  sdl_monster_explosion_texture = loadTexturePreserveCanvas(
+      Paths::GetDataFilePath(MONSTER_EXPLOSION_SHEET_ASSET_PATH),
+      sdl_monster_explosion_size);
   sdl_fart_cloud_texture = loadTrimmedTexture(
       Paths::GetDataFilePath("fart_cloud_sheet.png"), sdl_fart_cloud_size);
   sdl_slime_ball_texture = loadTrimmedTexture(
@@ -688,6 +694,9 @@ Renderer::~Renderer() {
   }
   if (sdl_airstrike_explosion_texture != nullptr) {
     SDL_DestroyTexture(sdl_airstrike_explosion_texture);
+  }
+  if (sdl_monster_explosion_texture != nullptr) {
+    SDL_DestroyTexture(sdl_monster_explosion_texture);
   }
   if (sdl_fart_cloud_texture != nullptr) {
     SDL_DestroyTexture(sdl_fart_cloud_texture);
@@ -3585,6 +3594,40 @@ SDL_Texture *Renderer::loadTrimmedTexture(const std::string &path,
   return texture;
 }
 
+SDL_Texture *Renderer::loadTexturePreserveCanvas(const std::string &path,
+                                                 SDL_Point &texture_size) {
+  texture_size = SDL_Point{0, 0};
+  SDL_Surface *raw_surface = IMG_Load(path.c_str());
+  if (raw_surface == nullptr) {
+    std::cerr << "Could not open texture sheet " << path << ": "
+              << IMG_GetError() << "\n";
+    return nullptr;
+  }
+
+  SDL_Surface *rgba_surface =
+      SDL_ConvertSurfaceFormat(raw_surface, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_FreeSurface(raw_surface);
+  if (rgba_surface == nullptr) {
+    std::cerr << "Could not convert texture sheet " << path << ": "
+              << SDL_GetError() << "\n";
+    return nullptr;
+  }
+
+  SDL_Texture *texture =
+      SDL_CreateTextureFromSurface(sdl_renderer, rgba_surface);
+  if (texture == nullptr) {
+    std::cerr << "Could not create texture sheet " << path << ": "
+              << SDL_GetError() << "\n";
+  } else {
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    configureSmoothTextureSampling(texture);
+    texture_size = SDL_Point{rgba_surface->w, rgba_surface->h};
+  }
+
+  SDL_FreeSurface(rgba_surface);
+  return texture;
+}
+
 void Renderer::renderDecorativeTexture(SDL_Texture *texture,
                                        const SDL_Rect &destination,
                                        const SDL_Color &glow_color,
@@ -6274,31 +6317,95 @@ void Renderer::draweffects() {
       SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
                            std::max(outer_radius - element_size / 4, mid_radius + 1));
     } else if (effect.type == EffectType::MonsterExplosion) {
-      const double progress =
-          std::clamp(static_cast<double>(elapsed) /
-                         static_cast<double>(900.0),
-                     0.0, 1.0);
-      const int effect_radius = std::max(1, effect.radius_cells);
-      const int outer_radius = std::max(
-          5, static_cast<int>(element_size * effect_radius * (0.18 + 0.42 * progress)));
-      const int inner_radius = std::max(
-          3, static_cast<int>(element_size * effect_radius * (0.10 + 0.22 * progress)));
-      const Uint8 alpha =
-          static_cast<Uint8>(std::clamp(210.0 * (1.0 - progress), 0.0, 210.0));
-      SDL_SetRenderDrawColor(sdl_renderer, 255, 88, 40, alpha / 2);
-      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
-      SDL_SetRenderDrawColor(sdl_renderer, 255, 180, 72, alpha);
-      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, inner_radius);
+      const int frame_index = std::clamp(
+          static_cast<int>(elapsed / std::max<Uint32>(1, MONSTER_EXPLOSION_FRAME_MS)),
+          0, kMonsterExplosionFrames - 1);
+      const double fade_in_progress = std::clamp(
+          static_cast<double>(elapsed) /
+              static_cast<double>(
+                  std::max<Uint32>(1, MONSTER_EXPLOSION_FADE_IN_DURATION_MS)),
+          0.0, 1.0);
+      const double fade_in_opacity =
+          MONSTER_EXPLOSION_INITIAL_OPACITY +
+          (1.0 - MONSTER_EXPLOSION_INITIAL_OPACITY) * fade_in_progress;
+      const int fade_out_tail_frames = std::clamp(
+          MONSTER_EXPLOSION_FADE_OUT_TAIL_FRAME_COUNT, 1, kMonsterExplosionFrames);
+      const int fade_out_start_frame =
+          kMonsterExplosionFrames - fade_out_tail_frames;
+      double fade_out_opacity = 1.0;
+      if (frame_index >= fade_out_start_frame) {
+        const int tail_frame_index = frame_index - fade_out_start_frame;
+        const double tail_progress =
+            (fade_out_tail_frames <= 1)
+                ? 1.0
+                : std::clamp(
+                      static_cast<double>(tail_frame_index) /
+                          static_cast<double>(fade_out_tail_frames - 1),
+                      0.0, 1.0);
+        fade_out_opacity =
+            1.0 + (MONSTER_EXPLOSION_FINAL_OPACITY - 1.0) * tail_progress;
+      }
+      const double visible_opacity =
+          std::clamp(fade_in_opacity * fade_out_opacity, 0.0, 1.0);
 
-      for (int spark = 0; spark < 6; spark++) {
-        const double angle =
-            progress * 4.0 + spark * (2.0 * 3.1415926535 / 6.0);
-        const int length =
-            std::max(4, static_cast<int>(element_size * (0.20 + 0.35 * progress)));
-        const int x2 = center_x + static_cast<int>(std::cos(angle) * length);
-        const int y2 = center_y + static_cast<int>(std::sin(angle) * length);
-        SDL_SetRenderDrawColor(sdl_renderer, 255, 220, 120, alpha);
-        SDL_RenderDrawLine(sdl_renderer, center_x, center_y, x2, y2);
+      if (sdl_monster_explosion_texture != nullptr &&
+          sdl_monster_explosion_size.x > 0 &&
+          sdl_monster_explosion_size.y > 0) {
+        const int src_x =
+            (frame_index * sdl_monster_explosion_size.x) /
+            kMonsterExplosionFrames;
+        const int src_x_next =
+            ((frame_index + 1) * sdl_monster_explosion_size.x) /
+            kMonsterExplosionFrames;
+        const SDL_Rect src_rect{src_x, 0, std::max(1, src_x_next - src_x),
+                                sdl_monster_explosion_size.y};
+        const int effect_radius = std::max(1, effect.radius_cells);
+        const int render_size = std::max(
+            element_size,
+            static_cast<int>(std::lround(element_size *
+                                         MONSTER_EXPLOSION_RENDER_SCALE *
+                                         effect_radius)));
+        const int anchor_y =
+            center_y + static_cast<int>(std::lround(element_size * 0.18));
+        const int glow_radius =
+            std::max(8, static_cast<int>(std::lround(render_size * 0.22)));
+        SDL_SetRenderDrawColor(
+            sdl_renderer, 255, 118, 46,
+            static_cast<Uint8>(
+                std::clamp(92.0 * visible_opacity, 0.0, 92.0)));
+        SDL_RenderFillCircle(
+            sdl_renderer, center_x,
+            anchor_y - static_cast<int>(std::lround(render_size * 0.08)),
+            glow_radius);
+
+        const SDL_Rect dest_rect{center_x - render_size / 2,
+                                 anchor_y - render_size, render_size,
+                                 render_size};
+        SDL_SetTextureAlphaMod(
+            sdl_monster_explosion_texture,
+            static_cast<Uint8>(
+                std::clamp(255.0 * visible_opacity, 0.0, 255.0)));
+        SDL_RenderCopy(sdl_renderer, sdl_monster_explosion_texture, &src_rect,
+                       &dest_rect);
+        SDL_SetTextureAlphaMod(sdl_monster_explosion_texture, 255);
+      } else {
+        const double progress =
+            std::clamp(static_cast<double>(elapsed) /
+                           static_cast<double>(MONSTER_EXPLOSION_DURATION_MS),
+                       0.0, 1.0);
+        const int effect_radius = std::max(1, effect.radius_cells);
+        const int outer_radius = std::max(
+            5, static_cast<int>(element_size * effect_radius *
+                                (0.22 + 0.50 * progress)));
+        const int inner_radius = std::max(
+            3, static_cast<int>(element_size * effect_radius *
+                                (0.12 + 0.26 * progress)));
+        const Uint8 alpha = static_cast<Uint8>(
+            std::clamp(210.0 * visible_opacity, 0.0, 210.0));
+        SDL_SetRenderDrawColor(sdl_renderer, 255, 88, 40, alpha / 2);
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
+        SDL_SetRenderDrawColor(sdl_renderer, 255, 180, 72, alpha);
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y, inner_radius);
       }
     } else if (effect.type == EffectType::SlimeSplash) {
       const Uint32 animation_duration_ms =

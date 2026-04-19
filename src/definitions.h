@@ -68,6 +68,8 @@ inline constexpr const char *AIRSTRIKE_PLANE_ASSET_PATH =
     "airstrike_plane.png";
 inline constexpr const char *AIRSTRIKE_EXPLOSION_SHEET_ASSET_PATH =
     "airstrike_explosion_sheet.png";
+inline constexpr const char *MONSTER_EXPLOSION_SHEET_ASSET_PATH =
+    "monster_explosion_sheet.png";
 inline constexpr const char *FART_CLOUD_SHEET_ASSET_PATH =
     "fart_cloud_sheet.png";
 inline constexpr const char *SLIME_BALL_ASSET_PATH = "slime_ball.png";
@@ -205,10 +207,17 @@ inline constexpr Uint32 DYNAMITE_EXPLOSION_DURATION_MS = 2000;
 inline constexpr int DYNAMITE_EXPLOSION_RADIUS_CELLS = 3;
 inline constexpr Uint32 DYNAMITE_CHAIN_BASE_DELAY_MS = 140;
 inline constexpr Uint32 DYNAMITE_CHAIN_STEP_DELAY_MS = 80;
+inline constexpr Uint32 MONSTER_EXPLOSION_FRAME_MS = 35;
+inline constexpr int MONSTER_EXPLOSION_FRAME_COUNT = 24;
+inline constexpr Uint32 MONSTER_EXPLOSION_FADE_IN_DURATION_MS =
+    MONSTER_EXPLOSION_FRAME_MS * 2;
+inline constexpr int MONSTER_EXPLOSION_FADE_OUT_TAIL_FRAME_COUNT = 5;
+inline constexpr Uint32 MONSTER_EXPLOSION_DURATION_MS =
+    MONSTER_EXPLOSION_FRAME_MS * MONSTER_EXPLOSION_FRAME_COUNT;
 inline constexpr Uint32 ROCKET_STEP_DURATION_MS = 90;
 inline constexpr Uint32 ROCKET_ANIMATION_FRAME_MS = 90;
 inline constexpr int AIRSTRIKE_BOMB_COUNT = 10;
-inline constexpr Uint32 AIRSTRIKE_RADIO_DELAY_MS = 4000;
+inline constexpr Uint32 AIRSTRIKE_RADIO_DELAY_MS = 2000;
 inline constexpr Uint32 AIRSTRIKE_BOMB_FALL_MS = 320;
 inline constexpr Uint32 AIRSTRIKE_PLANE_CELL_TRAVEL_MS = 105;
 inline constexpr Uint32 AIRSTRIKE_PLANE_MIN_FLIGHT_MS = 2200;
@@ -227,7 +236,8 @@ inline constexpr Uint32 SLIME_SPLASH_FADE_MS = 1000;
 inline constexpr Uint32 SLIME_SPLASH_TOTAL_DURATION_MS =
     SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT + SLIME_SPLASH_FADE_MS;
 inline constexpr Uint32 TELEPORT_ANIMATION_PHASE_MS = 1000;
-inline constexpr Uint32 MONSTER_EXPLOSION_EFFECT_DURATION_MS = 900;
+inline constexpr Uint32 MONSTER_EXPLOSION_EFFECT_DURATION_MS =
+    MONSTER_EXPLOSION_DURATION_MS;
 inline constexpr Uint32 WALL_IMPACT_EFFECT_DURATION_MS = 180;
 inline constexpr double PLASTIC_EXPLOSIVE_MONSTER_HIT_RADIUS_CELLS = 0.72;
 inline constexpr float AIRSTRIKE_PLANE_MARGIN_CELLS = 2.0f;
@@ -307,6 +317,9 @@ inline constexpr Uint8 SLIME_BALL_BASE_ALPHA = 176;
 inline constexpr Uint8 SLIME_OVERLAY_BASE_ALPHA = 140;
 inline constexpr Uint8 SLIME_SPLASH_BASE_ALPHA = 176;
 inline constexpr double MONSTER_RENDER_SCALE = 1.19;
+inline constexpr double MONSTER_EXPLOSION_RENDER_SCALE = 2.10;
+inline constexpr double MONSTER_EXPLOSION_INITIAL_OPACITY = 0.60;
+inline constexpr double MONSTER_EXPLOSION_FINAL_OPACITY = 0.10;
 inline constexpr double FART_CLOUD_RENDER_SCALE = 1.20;
 inline constexpr double SLIME_BALL_RENDER_SCALE = 1.00;
 inline constexpr double SLIME_OVERLAY_RENDER_SCALE = 1.22;

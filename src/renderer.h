@@ -181,6 +181,8 @@ private:
                        int top_y, const SDL_Color &outline_color);
   SDL_Texture *loadTrimmedTexture(const std::string &path,
                                   SDL_Point &trimmed_size);
+  SDL_Texture *loadTexturePreserveCanvas(const std::string &path,
+                                         SDL_Point &texture_size);
   SDL_Texture *loadTrimmedChromaKeyTexture(const std::string &path,
                                            SDL_Point &trimmed_size,
                                            Uint8 tolerance);
@@ -262,6 +264,8 @@ private:
   SDL_Point sdl_airstrike_plane_size;
   SDL_Texture *sdl_airstrike_explosion_texture;
   SDL_Point sdl_airstrike_explosion_size;
+  SDL_Texture *sdl_monster_explosion_texture;
+  SDL_Point sdl_monster_explosion_size;
   SDL_Texture *sdl_fart_cloud_texture;
   SDL_Point sdl_fart_cloud_size;
   SDL_Texture *sdl_slime_ball_texture;
