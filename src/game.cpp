@@ -2191,19 +2191,28 @@ void Game::UpdateElectrifiedMonsters(Uint32 now) {
 
       const SDL_FPoint monster_center = get_monster_world_center(monster);
       const SDL_FPoint other_center = get_monster_world_center(other);
+      const SDL_FPoint shared_center =
+          ScalePoint(AddPoint(monster_center, other_center), 0.5f);
       GameEffect shockwave_effect{monster->map_coord, now,
                                   EffectType::PlasmaShockwave,
                                   PLASMA_SHOCKWAVE_RADIUS_CELLS};
       shockwave_effect.has_precise_world_center = true;
-      shockwave_effect.precise_world_center =
-          ScalePoint(AddPoint(monster_center, other_center), 0.5f);
+      shockwave_effect.precise_world_center = shared_center;
       effects.push_back(shockwave_effect);
 #ifdef AUDIO
       audio->PlayElectrifiedMonsterImpact();
 #endif
 
+      const size_t effect_count_before = effects.size();
       EliminateMonster(monster, now);
       EliminateMonster(other, now);
+      for (size_t effect_index = effect_count_before;
+           effect_index < effects.size(); ++effect_index) {
+        if (effects[effect_index].type == EffectType::MonsterExplosion) {
+          effects[effect_index].has_precise_world_center = true;
+          effects[effect_index].precise_world_center = shared_center;
+        }
+      }
       break;
     }
   }
