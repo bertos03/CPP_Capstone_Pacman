@@ -558,10 +558,15 @@ void Renderer::initializeRenderer(size_t row_count_value,
 
   sdl_font_color = kHudTextColor;
 
-  const std::string wall_path = Paths::GetDataFilePath("brick.bmp");
+  const std::string wall_path =
+      Paths::GetDataFilePath(WALL_TEXTURE_ASSET_PATH);
+  const std::string fallback_wall_path = Paths::GetDataFilePath("brick.bmp");
   const std::string goodie_path = Paths::GetDataFilePath("goodie.bmp");
 
-  sdl_wall_surface = SDL_LoadBMP(wall_path.c_str());
+  sdl_wall_surface = IMG_Load(wall_path.c_str());
+  if (sdl_wall_surface == nullptr) {
+    sdl_wall_surface = SDL_LoadBMP(fallback_wall_path.c_str());
+  }
   sdl_goodie_surface = SDL_LoadBMP(goodie_path.c_str());
 
   for (const auto &monster_descriptor : kMonsterSpriteDescriptors) {
@@ -667,7 +672,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
   const std::string logo_brick_path = Paths::GetDataFilePath("brick.png");
   SDL_Surface *brick_surface = IMG_Load(logo_brick_path.c_str());
   if (brick_surface == nullptr) {
-    brick_surface = SDL_LoadBMP(wall_path.c_str());
+    brick_surface = SDL_LoadBMP(fallback_wall_path.c_str());
   }
   if (brick_surface == nullptr) {
     std::cerr << "Could not open brick texture for logo: " << IMG_GetError()
