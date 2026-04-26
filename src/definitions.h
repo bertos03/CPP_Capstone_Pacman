@@ -55,7 +55,7 @@ inline constexpr const char *MAPS_SUBDIRECTORY = "maps";
 inline constexpr const char *FONT_ASSET_PATH = "font.ttf";
 inline constexpr const char *APP_ICON_RGBA_ASSET_PATH = "app_icon_rgba.png";
 inline constexpr const char *APP_ICON_FALLBACK_ASSET_PATH = "app_icon.png";
-inline constexpr const char *WALL_TEXTURE_ASSET_PATH = "brick.bmp";
+inline constexpr const char *WALL_TEXTURE_ASSET_PATH = "brick.png";
 inline constexpr int FLOOR_TEXTURE_OPTION_COUNT = 5;
 inline constexpr int FLOOR_TEXTURE_DEFAULT_INDEX = 0;
 inline constexpr std::array<const char *, FLOOR_TEXTURE_OPTION_COUNT>
@@ -382,6 +382,8 @@ inline constexpr double CHARACTER_GROUND_SHADOW_HEIGHT_FACTOR = 0.15;
 inline constexpr double CHARACTER_GROUND_SHADOW_Y_OFFSET_FACTOR = 0.06;
 inline constexpr Uint8 WALKIE_TALKIE_ICON_ALPHA = 255;
 inline constexpr Uint8 HUD_ICON_ALPHA = 255;
+inline constexpr bool RENDER_ENABLE_SUPERSAMPLING_AA = true;
+inline constexpr int RENDER_SUPERSAMPLING_FACTOR = 2;
 
 /**
  * @brief Audio mixer and spectrum-analyser configuration.

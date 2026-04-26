@@ -415,7 +415,10 @@ Renderer::Renderer(Map *_map, Game *_game)
     : screen_res_x(0), screen_res_y(0), element_size(0), hud_top_y(0),
       offset_x(0), offset_y(0), scene_origin_y(0), wall_height_px(0),
       cos_tilt(1.0), sin_tilt(0.0), rows(0), cols(0), map(_map), game(_game),
-      sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
+      sdl_window(nullptr), sdl_renderer(nullptr), sdl_antialias_target(nullptr),
+      antialias_target_width(0),
+      antialias_target_height(0),
+      sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr),
       selected_floor_texture_index(FLOOR_TEXTURE_DEFAULT_INDEX),
       sdl_goodie_surface(nullptr),
@@ -445,7 +448,10 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       offset_x(0), offset_y(0), scene_origin_y(0), wall_height_px(0),
       cos_tilt(1.0), sin_tilt(0.0), rows(0), cols(0), map(nullptr),
       game(nullptr),
-      sdl_window(nullptr), sdl_renderer(nullptr), sdl_wall_surface(nullptr),
+      sdl_window(nullptr), sdl_renderer(nullptr), sdl_antialias_target(nullptr),
+      antialias_target_width(0),
+      antialias_target_height(0),
+      sdl_wall_surface(nullptr),
       sdl_wall_texture(nullptr),
       selected_floor_texture_index(FLOOR_TEXTURE_DEFAULT_INDEX),
       sdl_goodie_surface(nullptr),
@@ -552,10 +558,15 @@ void Renderer::initializeRenderer(size_t row_count_value,
 
   sdl_font_color = kHudTextColor;
 
-  const std::string wall_path = Paths::GetDataFilePath("brick.bmp");
+  const std::string wall_path =
+      Paths::GetDataFilePath(WALL_TEXTURE_ASSET_PATH);
+  const std::string fallback_wall_path = Paths::GetDataFilePath("brick.bmp");
   const std::string goodie_path = Paths::GetDataFilePath("goodie.bmp");
 
-  sdl_wall_surface = SDL_LoadBMP(wall_path.c_str());
+  sdl_wall_surface = IMG_Load(wall_path.c_str());
+  if (sdl_wall_surface == nullptr) {
+    sdl_wall_surface = SDL_LoadBMP(fallback_wall_path.c_str());
+  }
   sdl_goodie_surface = SDL_LoadBMP(goodie_path.c_str());
 
   for (const auto &monster_descriptor : kMonsterSpriteDescriptors) {
@@ -661,7 +672,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
   const std::string logo_brick_path = Paths::GetDataFilePath("brick.png");
   SDL_Surface *brick_surface = IMG_Load(logo_brick_path.c_str());
   if (brick_surface == nullptr) {
-    brick_surface = SDL_LoadBMP(wall_path.c_str());
+    brick_surface = SDL_LoadBMP(fallback_wall_path.c_str());
   }
   if (brick_surface == nullptr) {
     std::cerr << "Could not open brick texture for logo: " << IMG_GetError()
@@ -815,6 +826,9 @@ Renderer::~Renderer() {
       SDL_DestroyTexture(keycap_texture);
     }
   }
+  if (sdl_antialias_target != nullptr) {
+    SDL_DestroyTexture(sdl_antialias_target);
+  }
   if (sdl_renderer != nullptr) {
     SDL_DestroyRenderer(sdl_renderer);
   }
@@ -866,7 +880,7 @@ void Renderer::Render(bool show_pause_overlay, bool show_exit_dialog,
   if (show_pause_overlay || show_exit_dialog) {
     drawGameplayPauseOverlay(show_exit_dialog, exit_dialog_selected);
   }
-  SDL_RenderPresent(sdl_renderer);
+  presentFrame();
 }
 
 void Renderer::RenderStartMenu(int selected_item, const std::string &map_name,
@@ -874,7 +888,7 @@ void Renderer::RenderStartMenu(int selected_item, const std::string &map_name,
   renderFrame(false);
   drawDimmer(120);
   drawStartMenuOverlay(selected_item, map_name, status_message);
-  SDL_RenderPresent(sdl_renderer);
+  presentFrame();
 }
 
 void Renderer::RenderConfigMenu(int selected_item, Difficulty difficulty,
@@ -883,7 +897,7 @@ void Renderer::RenderConfigMenu(int selected_item, Difficulty difficulty,
   drawDimmer(120);
   drawConfigMenuOverlay(selected_item, difficulty, player_lives,
                         floor_texture_index);
-  SDL_RenderPresent(sdl_renderer);
+  presentFrame();
 }
 
 void Renderer::RenderMapSelectionMenu(const std::vector<std::string> &map_names,
@@ -891,7 +905,7 @@ void Renderer::RenderMapSelectionMenu(const std::vector<std::string> &map_names,
   renderFrame(false);
   drawDimmer(120);
   drawMapSelectionOverlay(map_names, selected_index);
-  SDL_RenderPresent(sdl_renderer);
+  presentFrame();
 }
 
 void Renderer::RenderEditorSelectionMenu(const std::vector<std::string> &items,
@@ -899,14 +913,14 @@ void Renderer::RenderEditorSelectionMenu(const std::vector<std::string> &items,
   renderFrame(false);
   drawDimmer(120);
   drawEditorSelectionOverlay(items, selected_index);
-  SDL_RenderPresent(sdl_renderer);
+  presentFrame();
 }
 
 void Renderer::RenderEditorSizeSelectionMenu(int selected_index) {
   renderFrame(false);
   drawDimmer(120);
   drawEditorSizeSelectionOverlay(selected_index);
-  SDL_RenderPresent(sdl_renderer);
+  presentFrame();
 }
 
 void Renderer::RenderEditor(const std::vector<std::string> &layout,
@@ -921,14 +935,14 @@ void Renderer::RenderEditor(const std::vector<std::string> &layout,
   drawEditorOverlay(map_name, cursor, warning_message, show_exit_dialog,
                     exit_dialog_selected, show_name_dialog, name_input,
                     name_dialog_message);
-  SDL_RenderPresent(sdl_renderer);
+  presentFrame();
 }
 
 void Renderer::RenderCountdown(int seconds_left) {
   renderFrame(false);
   drawDimmer(145);
   drawCountdownOverlay(seconds_left);
-  SDL_RenderPresent(sdl_renderer);
+  presentFrame();
 }
 
 bool Renderer::TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
@@ -959,7 +973,83 @@ bool Renderer::TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
   return true;
 }
 
+void Renderer::ensureAntialiasRenderTarget() {
+  if (!RENDER_ENABLE_SUPERSAMPLING_AA || sdl_renderer == nullptr) {
+    return;
+  }
+
+  const int supersampling_factor = std::max(1, RENDER_SUPERSAMPLING_FACTOR);
+  const int target_width =
+      std::max(screen_res_x, screen_res_x * supersampling_factor);
+  const int target_height =
+      std::max(screen_res_y, screen_res_y * supersampling_factor);
+  if (target_width <= 0 || target_height <= 0) {
+    return;
+  }
+
+  if (sdl_antialias_target != nullptr &&
+      antialias_target_width == target_width &&
+      antialias_target_height == target_height) {
+    return;
+  }
+
+  if (sdl_antialias_target != nullptr) {
+    SDL_DestroyTexture(sdl_antialias_target);
+    sdl_antialias_target = nullptr;
+  }
+
+  SDL_Texture *target = SDL_CreateTexture(
+      sdl_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET,
+      target_width, target_height);
+  if (target == nullptr) {
+    std::cerr << "Could not create supersampling render target: "
+              << SDL_GetError() << "\n";
+    antialias_target_width = 0;
+    antialias_target_height = 0;
+    return;
+  }
+
+  configureSmoothTextureSampling(target);
+  SDL_SetTextureBlendMode(target, SDL_BLENDMODE_BLEND);
+  sdl_antialias_target = target;
+  antialias_target_width = target_width;
+  antialias_target_height = target_height;
+}
+
+void Renderer::beginFrameRenderTarget() {
+  if (sdl_renderer == nullptr) {
+    return;
+  }
+  ensureAntialiasRenderTarget();
+  if (sdl_antialias_target != nullptr) {
+    const float supersampling_scale =
+        static_cast<float>(std::max(1, RENDER_SUPERSAMPLING_FACTOR));
+    SDL_SetRenderTarget(sdl_renderer, sdl_antialias_target);
+    SDL_RenderSetScale(sdl_renderer, supersampling_scale, supersampling_scale);
+  } else {
+    SDL_SetRenderTarget(sdl_renderer, nullptr);
+    SDL_RenderSetScale(sdl_renderer, 1.0f, 1.0f);
+  }
+}
+
+void Renderer::presentFrame() {
+  if (sdl_renderer == nullptr) {
+    return;
+  }
+
+  if (sdl_antialias_target != nullptr) {
+    SDL_SetRenderTarget(sdl_renderer, nullptr);
+    SDL_RenderSetScale(sdl_renderer, 1.0f, 1.0f);
+    SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
+    SDL_RenderClear(sdl_renderer);
+    SDL_RenderCopy(sdl_renderer, sdl_antialias_target, nullptr, nullptr);
+  }
+
+  SDL_RenderPresent(sdl_renderer);
+}
+
 void Renderer::renderFrame(bool show_hud) {
+  beginFrameRenderTarget();
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
   if (ENABLE_3D_VIEW) {
@@ -2168,6 +2258,7 @@ void Renderer::SetFloorTextureIndex(int floor_texture_index) {
 }
 
 void Renderer::renderLayoutFrame(const std::vector<std::string> &layout) {
+  beginFrameRenderTarget();
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
   drawLayout(layout);
