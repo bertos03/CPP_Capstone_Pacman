@@ -281,6 +281,8 @@ private:
   std::vector<SDL_Point> sdl_rocket_flight_sizes;
   SDL_Texture *sdl_airstrike_plane_texture;
   SDL_Point sdl_airstrike_plane_size;
+  std::array<SDL_Texture *, HUD_KEYCAP_ASSET_COUNT> sdl_hud_keycap_textures{};
+  std::array<SDL_Point, HUD_KEYCAP_ASSET_COUNT> sdl_hud_keycap_sizes{};
   SDL_Texture *sdl_airstrike_explosion_texture;
   SDL_Point sdl_airstrike_explosion_size;
   SDL_Texture *sdl_monster_explosion_texture;

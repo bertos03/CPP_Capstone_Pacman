@@ -728,6 +728,17 @@ void Renderer::initializeRenderer(size_t row_count_value,
       Paths::GetDataFilePath("slime_splash_sheet.png"), sdl_slime_splash_size);
   sdl_dynamite_texture = loadTrimmedTexture(Paths::GetDataFilePath("dynamite.png"),
                                             sdl_dynamite_size);
+  for (size_t index = 0; index < sdl_hud_keycap_textures.size(); ++index) {
+    sdl_hud_keycap_sizes[index] = SDL_Point{0, 0};
+    sdl_hud_keycap_textures[index] = loadTexturePreserveCanvas(
+        Paths::GetDataFilePath(HUD_KEYCAP_ASSET_PATHS[index]),
+        sdl_hud_keycap_sizes[index]);
+    if (sdl_hud_keycap_textures[index] == nullptr) {
+      std::cerr << "Could not load HUD keycap asset "
+                << HUD_KEYCAP_ASSET_PATHS[index] << ": " << IMG_GetError()
+                << "\n";
+    }
+  }
 }
 
 Renderer::~Renderer() {
@@ -798,6 +809,11 @@ Renderer::~Renderer() {
   }
   if (sdl_dynamite_texture != nullptr) {
     SDL_DestroyTexture(sdl_dynamite_texture);
+  }
+  for (SDL_Texture *keycap_texture : sdl_hud_keycap_textures) {
+    if (keycap_texture != nullptr) {
+      SDL_DestroyTexture(keycap_texture);
+    }
   }
   if (sdl_renderer != nullptr) {
     SDL_DestroyRenderer(sdl_renderer);
@@ -2227,13 +2243,12 @@ void Renderer::drawhud() {
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
 
   const int hud_font_height = TTF_FontHeight(sdl_font_hud);
-  const int keycap_height =
-      std::max(12, static_cast<int>(std::lround(std::max(20, hud_font_height + 2) *
-                                                0.60)));
-  const int keycap_width =
-      std::max(16, static_cast<int>(std::lround(std::max(26, keycap_height + 14) *
-                                                0.60)));
-  const int keycap_gap = std::max(2, hud_font_height / 8);
+  const int keycap_size =
+      std::max(20, static_cast<int>(std::lround(std::max(26, hud_font_height + 6) *
+                                                0.86)));
+  const int keycap_height = keycap_size;
+  const int keycap_width = keycap_size;
+  const int keycap_gap = std::max(4, hud_font_height / 6);
   const int line_top = hud_top_y + keycap_height + keycap_gap;
   const int keycap_top = line_top - keycap_height - keycap_gap;
   const int hud_gap = std::max(14, element_size / 2);
@@ -2276,6 +2291,24 @@ void Renderer::drawhud() {
 
   auto draw_keycap = [&](const SDL_Rect &key_rect, char key_label,
                          bool enabled) {
+    const int key_index = static_cast<int>(key_label - '1');
+    if (key_index >= 0 &&
+        key_index < static_cast<int>(sdl_hud_keycap_textures.size())) {
+      SDL_Texture *keycap_texture =
+          sdl_hud_keycap_textures[static_cast<size_t>(key_index)];
+      if (keycap_texture != nullptr) {
+        const Uint8 alpha = enabled ? 255 : 152;
+        const Uint8 tone = enabled ? 255 : 172;
+        SDL_SetTextureBlendMode(keycap_texture, SDL_BLENDMODE_BLEND);
+        SDL_SetTextureColorMod(keycap_texture, tone, tone, tone);
+        SDL_SetTextureAlphaMod(keycap_texture, alpha);
+        SDL_RenderCopy(sdl_renderer, keycap_texture, nullptr, &key_rect);
+        SDL_SetTextureColorMod(keycap_texture, 255, 255, 255);
+        SDL_SetTextureAlphaMod(keycap_texture, 255);
+        return;
+      }
+    }
+
     const Uint8 outline_alpha = enabled ? 255 : 136;
     const Uint8 label_alpha = enabled ? 255 : 150;
     const int key_depth = std::max(1, key_rect.h / 5);
@@ -2337,8 +2370,9 @@ void Renderer::drawhud() {
     const Uint8 icon_alpha = slot.emphasize_slot ? 255 : 120;
     const SDL_Color text_color =
         slot.emphasize_slot ? sdl_font_color : kDisabledHudTextColor;
+    const bool keycap_enabled = slot.key_enabled || slot.active;
 
-    draw_keycap(key_rect, slot.key_label, slot.key_enabled);
+    draw_keycap(key_rect, slot.key_label, keycap_enabled);
 
     switch (slot.slot) {
     case ExtraSlot::Dynamite:
@@ -5511,7 +5545,19 @@ void Renderer::drawbiohazardbeam() {
             ElementType::TYPE_WALL) {
       break;
     }
+    bool monster_blocks = false;
+    for (const Monster *monster : game->monsters) {
+      if (monster != nullptr && monster->is_alive &&
+          monster->map_coord.u == next_coord.u &&
+          monster->map_coord.v == next_coord.v) {
+        monster_blocks = true;
+        break;
+      }
+    }
     beam_end_coord = next_coord;
+    if (monster_blocks) {
+      break;
+    }
   }
 
   const PixelCoord end_px = getPixelCoord(beam_end_coord, 0, 0);
@@ -5558,32 +5604,51 @@ void Renderer::drawbiohazardbeam() {
   SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
   SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
 
-  const std::array<SDL_Color, 6> beam_colors{{
-      SDL_Color{38, 122, 255, 114},
-      SDL_Color{58, 162, 255, 132},
-      SDL_Color{74, 208, 255, 150},
-      SDL_Color{90, 238, 255, 170},
-      SDL_Color{162, 248, 255, 196},
-      SDL_Color{224, 252, 255, 220},
+  struct BeamWave {
+    SDL_Color color;
+    double amplitude_factor;
+    double frequency;
+    double frequency_secondary;
+    double secondary_weight;
+    double phase_speed;
+    double phase_offset;
+  };
+
+  const std::array<BeamWave, 11> beam_waves{{
+      {SDL_Color{12, 58, 200, 96}, 0.18, 0.7, 1.9, 0.30, 1.4, 0.0},
+      {SDL_Color{24, 90, 230, 110}, 0.15, 0.95, 2.6, 0.34, 1.7, 0.6},
+      {SDL_Color{38, 122, 255, 124}, 0.12, 1.25, 3.4, 0.36, 2.0, 1.2},
+      {SDL_Color{58, 162, 255, 142}, 0.105, 1.55, 4.1, 0.40, 2.2, 1.8},
+      {SDL_Color{74, 198, 255, 158}, 0.090, 1.85, 4.8, 0.42, 2.4, 2.4},
+      {SDL_Color{90, 224, 255, 174}, 0.078, 2.20, 5.5, 0.44, 2.6, 3.0},
+      {SDL_Color{120, 232, 255, 188}, 0.065, 2.55, 6.2, 0.46, 2.85, 3.6},
+      {SDL_Color{162, 244, 255, 200}, 0.054, 2.90, 7.0, 0.48, 3.05, 4.2},
+      {SDL_Color{198, 248, 255, 212}, 0.043, 3.30, 7.9, 0.50, 3.30, 4.8},
+      {SDL_Color{224, 252, 255, 224}, 0.034, 3.80, 8.9, 0.52, 3.55, 5.4},
+      {SDL_Color{244, 254, 255, 236}, 0.025, 4.40, 10.1, 0.55, 3.85, 6.0},
   }};
 
-  for (size_t wave_index = 0; wave_index < beam_colors.size(); ++wave_index) {
-    const SDL_Color color = beam_colors[wave_index];
+  constexpr double kPi = 3.14159265358979323846;
+
+  for (size_t wave_index = 0; wave_index < beam_waves.size(); ++wave_index) {
+    const BeamWave &wave_def = beam_waves[wave_index];
+    const SDL_Color color = wave_def.color;
     const double amplitude =
-        std::max(4.0, element_size * (0.07 + wave_index * 0.013));
-    const double frequency = 1.2 + wave_index * 0.28;
-    const double phase = beam_clock * (2.1 + wave_index * 0.11) +
-                         static_cast<double>(wave_index) * 0.9;
+        std::max(3.0, element_size * wave_def.amplitude_factor);
+    const double phase =
+        beam_clock * wave_def.phase_speed + wave_def.phase_offset;
     SDL_FPoint previous = start;
 
     SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, color.a);
-    for (int sample = 1; sample <= 48; ++sample) {
-      const double t = static_cast<double>(sample) / 48.0;
-      const double envelope = std::sin(t * 3.14159265358979323846);
+    for (int sample = 1; sample <= 72; ++sample) {
+      const double t = static_cast<double>(sample) / 72.0;
+      const double envelope = std::sin(t * kPi);
       const double wave =
-          std::sin(t * frequency * 2.0 * 3.14159265358979323846 + phase) +
-          0.38 * std::sin(t * frequency * 5.0 * 3.14159265358979323846 -
-                          phase * 0.7);
+          std::sin(t * wave_def.frequency * 2.0 * kPi + phase) +
+          wave_def.secondary_weight *
+              std::sin(t * wave_def.frequency_secondary * 2.0 * kPi -
+                       phase * 0.7) +
+          0.18 * std::sin(t * wave_def.frequency * 9.0 * kPi + phase * 1.3);
       const double offset = amplitude * envelope * wave;
       SDL_FPoint current{
           static_cast<float>(start.x + axis_x * t + normal_x * offset),

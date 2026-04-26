@@ -78,6 +78,15 @@ inline constexpr const char *WALKIE_TALKIE_ASSET_PATH = "walkie_talkie.png";
 inline constexpr const char *ROCKET_ASSET_PATH = "rocket.png";
 inline constexpr const char *AIRSTRIKE_PLANE_ASSET_PATH =
     "airstrike_plane.png";
+inline constexpr int HUD_KEYCAP_ASSET_COUNT = 5;
+inline constexpr std::array<const char *, HUD_KEYCAP_ASSET_COUNT>
+    HUD_KEYCAP_ASSET_PATHS{
+        "hud_keycaps/key_1.png",
+        "hud_keycaps/key_2.png",
+        "hud_keycaps/key_3.png",
+        "hud_keycaps/key_4.png",
+        "hud_keycaps/key_5.png",
+    };
 inline constexpr const char *AIRSTRIKE_EXPLOSION_SHEET_ASSET_PATH =
     "airstrike_explosion_sheet.png";
 inline constexpr const char *MONSTER_EXPLOSION_SHEET_ASSET_PATH =
