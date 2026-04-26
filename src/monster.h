@@ -37,7 +37,7 @@ class Monster : public MapElement {
 public:
   Monster(MapCoord, int, char, int);
   ~Monster();
-  void simulate(Events *, Map *);
+  void simulate(Events *, Map *, const std::vector<Monster *> *);
 
 protected:
 private:
@@ -52,6 +52,10 @@ private:
   MapCoord scheduled_dynamite_blast_coord;
   Directions facing_direction;
   int movement_step_delay_ms;
+  bool is_electrified;
+  Uint32 electrified_started_ticks;
+  int electrified_visual_seed;
+  int electrified_charge_target_id;
 
   friend class Renderer;
   friend class Game;

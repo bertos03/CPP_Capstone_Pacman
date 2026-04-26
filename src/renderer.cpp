@@ -113,6 +113,16 @@ bool hasVisibleArea(const SDL_Rect &rect) {
   return rect.w > 0 && rect.h > 0;
 }
 
+double HashUnit(int seed) {
+  const double value =
+      std::sin(static_cast<double>(seed) * 12.9898 + 78.233) * 43758.5453;
+  return value - std::floor(value);
+}
+
+double HashSigned(int seed) {
+  return HashUnit(seed) * 2.0 - 1.0;
+}
+
 SDL_Rect intersectRects(const SDL_Rect &left, const SDL_Rect &right) {
   const int x1 = std::max(left.x, right.x);
   const int y1 = std::max(left.y, right.y);
@@ -1438,6 +1448,68 @@ void Renderer::renderFrame(bool show_hud) {
           }
         }
 
+        const auto &biohazard = game->biohazard_pickup;
+        if (biohazard.is_visible) {
+          double alpha_factor = 1.0;
+          if (biohazard.is_fading) {
+            alpha_factor =
+                1.0 - std::clamp(static_cast<double>(now - biohazard.fade_started_ticks) /
+                                     static_cast<double>(BIOHAZARD_FADE_MS),
+                                 0.0, 1.0);
+          }
+          if (alpha_factor > 0.0) {
+            const MapCoord coord = biohazard.coord;
+            const double depth =
+                projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
+            push_depth_command(depth, [&, coord, biohazard, alpha_factor, now]() {
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
+                    const double animation_clock =
+                        static_cast<double>(now + biohazard.animation_seed * 43) /
+                        170.0;
+                    const double pulse = 0.88 + 0.12 * std::sin(animation_clock);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(114.0 * alpha_factor, 0.0, 160.0));
+                    const Uint8 body_alpha = static_cast<Uint8>(
+                        std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 64, 64,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(8,
+                                 static_cast<int>(element_size * 0.31 * pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 180, 74,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(10,
+                                 static_cast<int>(element_size * 0.42 * pulse)));
+
+                    const int icon_size =
+                        std::max(12, static_cast<int>(element_size * 0.82));
+                    const SDL_Rect icon_rect{center_x - icon_size / 2,
+                                             center_y - icon_size / 2,
+                                             icon_size, icon_size};
+                    drawBiohazardIcon(
+                        icon_rect, body_alpha, animation_clock,
+                        static_cast<double>(now + biohazard.animation_seed * 19) *
+                            0.11,
+                        0.96 + 0.08 * std::sin(animation_clock * 1.2));
+                  });
+            });
+          }
+        }
+
         if (game->pacman != nullptr) {
           const bool potion_invulnerable =
               game->pacman->invulnerable_until_ticks > now;
@@ -1852,6 +1924,10 @@ void Renderer::renderFrame(bool show_hud) {
                       }
                       SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
                                      &monster_rect);
+                      if (monster->is_electrified) {
+                        drawElectrifiedMonsterAura(
+                            monster_rect, monster->electrified_visual_seed, now);
+                      }
                       SDL_SetTextureAlphaMod(monster_texture, 255);
                     });
               });
@@ -1969,6 +2045,7 @@ void Renderer::renderFrame(bool show_hud) {
       drawslimeballs();
       drawrockets();
       drawactiveairstrike();
+      drawbiohazardbeam();
       draweffects();
     }
     if (show_hud) {
@@ -1986,10 +2063,12 @@ void Renderer::renderFrame(bool show_hud) {
     drawplasticexplosivepickup();
     drawwalkietalkiepickup();
     drawrocketpickup();
+    drawbiohazardpickup();
     drawpacman();
     drawplaceddynamites();
     drawplacedplasticexplosive();
     drawmonsters();
+    drawbiohazardbeam();
     drawgasclouds();
     drawfireballs();
     drawslimeballs();
@@ -2105,11 +2184,15 @@ void Renderer::drawhud() {
       std::to_string(game->airstrike_inventory) + "x";
   const std::string rocket_text =
       std::to_string(game->rocket_inventory) + "x";
+  const std::string biohazard_text =
+      std::to_string(game->biohazard_inventory) + "x";
   const bool plastic_explosive_armed = game->plastic_explosive_is_armed;
   const bool airstrike_available =
       game->airstrike_inventory > 0 && !game->active_airstrike.is_active;
   const bool rocket_available =
       game->rocket_inventory > 0 && game->active_rockets.empty();
+  const bool biohazard_available =
+      game->biohazard_inventory > 0 && !game->active_biohazard_beam.is_active;
   struct ExtraHudSlot {
     ExtraSlot slot;
     char key_label;
@@ -2117,24 +2200,28 @@ void Renderer::drawhud() {
     bool key_enabled;
     bool emphasize_slot;
     bool armed;
+    bool active;
   };
-  const std::array<ExtraHudSlot, 4> extra_slots{{
+  const std::array<ExtraHudSlot, 5> extra_slots{{
       {ExtraSlot::Dynamite, '1', dynamite_text, game->dynamite_inventory > 0,
-       game->dynamite_inventory > 0, false},
+       game->dynamite_inventory > 0, false, false},
       {ExtraSlot::PlasticExplosive, '2', plastic_explosive_text,
        plastic_explosive_armed || game->plastic_explosive_inventory > 0,
        plastic_explosive_armed || game->plastic_explosive_inventory > 0,
-       plastic_explosive_armed},
+       plastic_explosive_armed, false},
       {ExtraSlot::Airstrike, '3', airstrike_text, airstrike_available,
-       game->airstrike_inventory > 0, false},
+       game->airstrike_inventory > 0, false, false},
       {ExtraSlot::Rocket, '4', rocket_text, rocket_available,
-       game->rocket_inventory > 0, false},
+       game->rocket_inventory > 0, false, false},
+      {ExtraSlot::Biohazard, '5', biohazard_text, biohazard_available,
+       biohazard_available || game->active_biohazard_beam.is_active, false,
+       game->active_biohazard_beam.is_active},
   }};
   int title_width = 0;
   int lives_text_width = 0;
   int score_width = 0;
-  std::array<int, 4> extra_text_widths{};
-  std::array<int, 4> extra_slot_widths{};
+  std::array<int, 5> extra_text_widths{};
+  std::array<int, 5> extra_slot_widths{};
   TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, lives_text.c_str(), &lives_text_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
@@ -2266,6 +2353,12 @@ void Renderer::drawhud() {
       break;
     case ExtraSlot::Rocket:
       drawRocketIcon(icon_rect, icon_alpha, animation_clock / 190.0);
+      break;
+    case ExtraSlot::Biohazard:
+      drawBiohazardIcon(icon_rect, icon_alpha, animation_clock / 180.0,
+                        slot.active ? animation_clock * 0.75
+                                    : animation_clock * 0.20,
+                        slot.active ? 1.08 : 1.0);
       break;
     case ExtraSlot::None:
     default:
@@ -4524,6 +4617,112 @@ void Renderer::drawRocketIcon(const SDL_Rect &icon_rect, Uint8 alpha,
                      body_rect.y + body_rect.h - std::max(2, icon_rect.h / 5));
 }
 
+void Renderer::drawBiohazardIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                                 double animation_clock,
+                                 double rotation_degrees, double scale) {
+  if (icon_rect.w <= 0 || icon_rect.h <= 0 || alpha == 0) {
+    return;
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const int center_x = icon_rect.x + icon_rect.w / 2;
+  const int center_y = icon_rect.y + icon_rect.h / 2;
+  const int base_radius = std::max(
+      4, static_cast<int>(std::lround(
+             std::min(icon_rect.w, icon_rect.h) * 0.47 * std::max(0.4, scale))));
+  const int orbit_radius = std::max(4, static_cast<int>(std::lround(base_radius * 0.46)));
+  const int arc_thickness =
+      std::max(2, static_cast<int>(std::lround(base_radius * 0.20)));
+  const int core_radius =
+      std::max(2, static_cast<int>(std::lround(base_radius * 0.15)));
+  const int connector_radius =
+      std::max(1, static_cast<int>(std::lround(base_radius * 0.06)));
+  const double rotation_radians =
+      rotation_degrees * 3.14159265358979323846 / 180.0;
+  const SDL_Color disc_color{244, 216, 28, alpha};
+  const SDL_Color disc_highlight{255, 246, 156, alpha};
+  const SDL_Color symbol_color{12, 12, 12, alpha};
+
+  auto rotated_offset = [&](double radius, double angle) {
+    return SDL_FPoint{
+        static_cast<float>(center_x + std::cos(angle + rotation_radians) * radius),
+        static_cast<float>(center_y + std::sin(angle + rotation_radians) * radius)};
+  };
+  auto draw_brush_line = [&](SDL_FPoint from, SDL_FPoint to, int radius,
+                             const SDL_Color &color) {
+    SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, color.a);
+    const int steps = std::max(
+        1, static_cast<int>(std::lround(
+               std::hypot(static_cast<double>(to.x - from.x),
+                          static_cast<double>(to.y - from.y)))));
+    for (int step = 0; step <= steps; ++step) {
+      const double t = static_cast<double>(step) / static_cast<double>(steps);
+      const int x = static_cast<int>(std::lround(
+          from.x + (to.x - from.x) * static_cast<float>(t)));
+      const int y = static_cast<int>(std::lround(
+          from.y + (to.y - from.y) * static_cast<float>(t)));
+      SDL_RenderFillCircle(sdl_renderer, x, y, radius);
+    }
+  };
+  auto draw_arc = [&](double angle_center) {
+    const double start_angle = angle_center - 1.02;
+    const double end_angle = angle_center + 1.02;
+    SDL_FPoint previous = rotated_offset(orbit_radius, start_angle);
+    for (int step = 1; step <= 24; ++step) {
+      const double t = static_cast<double>(step) / 24.0;
+      const double angle = start_angle + (end_angle - start_angle) * t;
+      const SDL_FPoint point = rotated_offset(orbit_radius, angle);
+      draw_brush_line(previous, point, arc_thickness / 2, symbol_color);
+      previous = point;
+    }
+
+    const SDL_FPoint connector_from =
+        rotated_offset(core_radius * 1.2, angle_center);
+    const SDL_FPoint connector_to =
+        rotated_offset(std::max(1, orbit_radius - arc_thickness), angle_center);
+    draw_brush_line(connector_from, connector_to, connector_radius, symbol_color);
+  };
+
+  SDL_SetRenderDrawColor(sdl_renderer, disc_color.r, disc_color.g, disc_color.b,
+                         disc_color.a);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, base_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, 188, 138, 16,
+                         static_cast<Uint8>(std::clamp(alpha * 0.8, 0.0, 255.0)));
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y, base_radius);
+  SDL_SetRenderDrawColor(
+      sdl_renderer, disc_highlight.r, disc_highlight.g, disc_highlight.b,
+      static_cast<Uint8>(std::clamp(0.5 * static_cast<double>(disc_highlight.a),
+                                    0.0, 255.0)));
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(3, base_radius - 1));
+
+  for (int arm = 0; arm < 3; ++arm) {
+    draw_arc(-3.14159265358979323846 / 2.0 +
+             arm * (2.0 * 3.14159265358979323846 / 3.0));
+  }
+
+  SDL_SetRenderDrawColor(sdl_renderer, symbol_color.r, symbol_color.g,
+                         symbol_color.b, symbol_color.a);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, core_radius);
+
+  for (int spark = 0; spark < 3; ++spark) {
+    const double angle =
+        animation_clock * 0.8 + spark * (2.0 * 3.14159265358979323846 / 3.0);
+    const int spark_x =
+        center_x + static_cast<int>(std::cos(angle) * std::max(2, base_radius / 6));
+    const int spark_y =
+        center_y + static_cast<int>(std::sin(angle) * std::max(2, base_radius / 6));
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 248, 196,
+                           static_cast<Uint8>(std::clamp(alpha * 0.45, 0.0, 255.0)));
+    SDL_RenderFillCircle(sdl_renderer, spark_x, spark_y, 1);
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
 void Renderer::drawRocketFlight(const SDL_FPoint &center, Directions direction,
                                 int max_dimension, int frame_index,
                                 Uint8 alpha) {
@@ -5011,6 +5210,54 @@ void Renderer::drawrocketpickup() {
   drawRocketIcon(icon_rect, body_alpha, animation_clock);
 }
 
+void Renderer::drawbiohazardpickup() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const auto &biohazard = game->biohazard_pickup;
+  if (!biohazard.is_visible) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  double alpha_factor = 1.0;
+  if (biohazard.is_fading) {
+    alpha_factor =
+        1.0 - std::clamp(static_cast<double>(now - biohazard.fade_started_ticks) /
+                             static_cast<double>(BIOHAZARD_FADE_MS),
+                         0.0, 1.0);
+  }
+  if (alpha_factor <= 0.0) {
+    return;
+  }
+
+  const PixelCoord pickup_px = getPixelCoord(biohazard.coord, 0, 0);
+  const int center_x = pickup_px.x + element_size / 2;
+  const int center_y = pickup_px.y + element_size / 2;
+  const double animation_clock =
+      static_cast<double>(now + biohazard.animation_seed * 43) / 170.0;
+  const double pulse = 0.88 + 0.12 * std::sin(animation_clock * 1.2);
+  const Uint8 glow_alpha = static_cast<Uint8>(
+      std::clamp(114.0 * alpha_factor, 0.0, 160.0));
+  const Uint8 body_alpha = static_cast<Uint8>(
+      std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 64, 64, glow_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(8, static_cast<int>(element_size * 0.31 * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 180, 74, glow_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(10, static_cast<int>(element_size * 0.42 * pulse)));
+
+  const int icon_size = std::max(12, static_cast<int>(element_size * 0.82));
+  const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
+                           icon_size, icon_size};
+  drawBiohazardIcon(icon_rect, body_alpha, animation_clock,
+                    static_cast<double>(now + biohazard.animation_seed * 19) * 0.11,
+                    0.96 + 0.08 * std::sin(animation_clock * 1.2));
+}
+
 void Renderer::drawplaceddynamites() {
   if (game == nullptr) {
     return;
@@ -5222,6 +5469,157 @@ void Renderer::drawrockets() {
   }
 }
 
+void Renderer::drawbiohazardbeam() {
+  if (game == nullptr || game->dead || game->pacman == nullptr ||
+      !game->active_biohazard_beam.is_active) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  const Directions direction = game->active_biohazard_beam.direction;
+  const PixelCoord pacman_px = getPixelCoord(
+      game->pacman->map_coord,
+      static_cast<int>(element_size * game->pacman->px_delta.x / 100.0),
+      static_cast<int>(element_size * game->pacman->px_delta.y / 100.0));
+  const SDL_Rect pacman_rect{
+      pacman_px.x + static_cast<int>(element_size * 0.05),
+      pacman_px.y + static_cast<int>(element_size * 0.05),
+      static_cast<int>(element_size * 0.9), static_cast<int>(element_size * 0.9)};
+  const int non_character_sprite_lift_px = getNonCharacterSpriteLiftPixels();
+  const float side_beam_raise_px =
+      (direction == Directions::Left || direction == Directions::Right)
+          ? static_cast<float>(element_size * BIOHAZARD_SIDE_BEAM_RAISE_FACTOR)
+          : 0.0f;
+  const SDL_FPoint start{
+      static_cast<float>(pacman_rect.x + pacman_rect.w / 2),
+      static_cast<float>(pacman_rect.y + pacman_rect.h / 2 -
+                         std::max(2, non_character_sprite_lift_px / 2)) -
+          side_beam_raise_px};
+
+  MapCoord beam_end_coord = game->pacman->map_coord;
+  MapCoord next_coord = game->pacman->map_coord;
+  while (true) {
+    next_coord = StepRenderCoord(next_coord, direction);
+    if (next_coord.u < 0 || next_coord.v < 0 ||
+        next_coord.u >= static_cast<int>(rows) ||
+        next_coord.v >= static_cast<int>(cols)) {
+      break;
+    }
+    if (map != nullptr &&
+        map->map_entry(static_cast<size_t>(next_coord.u),
+                       static_cast<size_t>(next_coord.v)) ==
+            ElementType::TYPE_WALL) {
+      break;
+    }
+    beam_end_coord = next_coord;
+  }
+
+  const PixelCoord end_px = getPixelCoord(beam_end_coord, 0, 0);
+  SDL_FPoint end{
+      static_cast<float>(end_px.x + element_size / 2),
+      static_cast<float>(end_px.y + element_size / 2 -
+                         std::max(2, non_character_sprite_lift_px / 2)) -
+          side_beam_raise_px};
+
+  if (beam_end_coord.u == game->pacman->map_coord.u &&
+      beam_end_coord.v == game->pacman->map_coord.v) {
+    switch (direction) {
+    case Directions::Up:
+      end.y -= static_cast<float>(element_size * 0.55);
+      break;
+    case Directions::Down:
+      end.y += static_cast<float>(element_size * 0.55);
+      break;
+    case Directions::Left:
+      end.x -= static_cast<float>(element_size * 0.55);
+      break;
+    case Directions::Right:
+      end.x += static_cast<float>(element_size * 0.55);
+      break;
+    case Directions::None:
+    default:
+      break;
+    }
+  }
+
+  const double axis_x = static_cast<double>(end.x - start.x);
+  const double axis_y = static_cast<double>(end.y - start.y);
+  const double axis_length = std::hypot(axis_x, axis_y);
+  if (axis_length < 2.0) {
+    return;
+  }
+
+  const double normal_x = -axis_y / axis_length;
+  const double normal_y = axis_x / axis_length;
+  const double beam_clock =
+      static_cast<double>(now + game->active_biohazard_beam.animation_seed * 13) /
+      160.0;
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const std::array<SDL_Color, 6> beam_colors{{
+      SDL_Color{38, 122, 255, 114},
+      SDL_Color{58, 162, 255, 132},
+      SDL_Color{74, 208, 255, 150},
+      SDL_Color{90, 238, 255, 170},
+      SDL_Color{162, 248, 255, 196},
+      SDL_Color{224, 252, 255, 220},
+  }};
+
+  for (size_t wave_index = 0; wave_index < beam_colors.size(); ++wave_index) {
+    const SDL_Color color = beam_colors[wave_index];
+    const double amplitude =
+        std::max(4.0, element_size * (0.07 + wave_index * 0.013));
+    const double frequency = 1.2 + wave_index * 0.28;
+    const double phase = beam_clock * (2.1 + wave_index * 0.11) +
+                         static_cast<double>(wave_index) * 0.9;
+    SDL_FPoint previous = start;
+
+    SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, color.a);
+    for (int sample = 1; sample <= 48; ++sample) {
+      const double t = static_cast<double>(sample) / 48.0;
+      const double envelope = std::sin(t * 3.14159265358979323846);
+      const double wave =
+          std::sin(t * frequency * 2.0 * 3.14159265358979323846 + phase) +
+          0.38 * std::sin(t * frequency * 5.0 * 3.14159265358979323846 -
+                          phase * 0.7);
+      const double offset = amplitude * envelope * wave;
+      SDL_FPoint current{
+          static_cast<float>(start.x + axis_x * t + normal_x * offset),
+          static_cast<float>(start.y + axis_y * t + normal_y * offset)};
+      SDL_RenderDrawLine(sdl_renderer, static_cast<int>(std::lround(previous.x)),
+                         static_cast<int>(std::lround(previous.y)),
+                         static_cast<int>(std::lround(current.x)),
+                         static_cast<int>(std::lround(current.y)));
+      previous = current;
+    }
+  }
+
+  SDL_SetRenderDrawColor(sdl_renderer, 228, 252, 255, 220);
+  SDL_RenderDrawLine(sdl_renderer, static_cast<int>(std::lround(start.x)),
+                     static_cast<int>(std::lround(start.y)),
+                     static_cast<int>(std::lround(end.x)),
+                     static_cast<int>(std::lround(end.y)));
+
+  for (int pulse = 0; pulse < 4; ++pulse) {
+    const double progress =
+        std::fmod(beam_clock * 0.21 + pulse * 0.23, 1.0);
+    const int pulse_x =
+        static_cast<int>(std::lround(start.x + axis_x * progress));
+    const int pulse_y =
+        static_cast<int>(std::lround(start.y + axis_y * progress));
+    SDL_SetRenderDrawColor(sdl_renderer, 110, 224, 255, 150);
+    SDL_RenderFillCircle(sdl_renderer, pulse_x, pulse_y,
+                         std::max(3, element_size / 10));
+    SDL_SetRenderDrawColor(sdl_renderer, 232, 252, 255, 210);
+    SDL_RenderFillCircle(sdl_renderer, pulse_x, pulse_y,
+                         std::max(1, element_size / 18));
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
 void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
                                 double pulse_clock) {
   const double pulse = 0.72 + 0.28 * std::sin(pulse_clock);
@@ -5247,6 +5645,118 @@ void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
     SDL_SetRenderDrawColor(sdl_renderer, 214, 250, 255, 180);
     SDL_RenderFillCircle(sdl_renderer, orb_x, orb_y, orb_radius);
   }
+}
+
+void Renderer::drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
+                                          int animation_seed, Uint32 now) {
+  if (monster_rect.w <= 0 || monster_rect.h <= 0) {
+    return;
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const int center_x = monster_rect.x + monster_rect.w / 2;
+  const int center_y = monster_rect.y + monster_rect.h / 2;
+  const int core_radius = std::max(
+      8, std::min(monster_rect.w, monster_rect.h) / 3 + std::max(2, element_size / 18));
+  const int aura_radius =
+      std::max(monster_rect.w, monster_rect.h) / 2 + std::max(9, element_size / 6);
+  const int flicker_phase = static_cast<int>(now / 45) + animation_seed * 19;
+  const double pulse =
+      0.72 + 0.28 * std::sin(static_cast<double>(now + animation_seed * 31) / 120.0);
+
+  auto draw_lightning_segment = [&](int x1, int y1, int x2, int y2,
+                                    Uint8 glow_alpha, Uint8 core_alpha) {
+    SDL_SetRenderDrawColor(sdl_renderer, 34, 98, 255, glow_alpha / 2);
+    SDL_RenderDrawLine(sdl_renderer, x1 - 1, y1, x2 - 1, y2);
+    SDL_RenderDrawLine(sdl_renderer, x1 + 1, y1, x2 + 1, y2);
+    SDL_RenderDrawLine(sdl_renderer, x1, y1 - 1, x2, y2 - 1);
+    SDL_RenderDrawLine(sdl_renderer, x1, y1 + 1, x2, y2 + 1);
+
+    SDL_SetRenderDrawColor(sdl_renderer, 84, 196, 255, glow_alpha);
+    SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
+    SDL_SetRenderDrawColor(sdl_renderer, 236, 252, 255, core_alpha);
+    SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
+  };
+
+  SDL_SetRenderDrawColor(sdl_renderer, 18, 68, 255, 28);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(aura_radius, static_cast<int>(aura_radius * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 90, 212, 255, 56);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(core_radius + 2,
+                                static_cast<int>(core_radius * (1.10 + 0.10 * pulse))));
+  SDL_SetRenderDrawColor(sdl_renderer, 140, 232, 255, 144);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(core_radius + 4, static_cast<int>(aura_radius * 0.72)));
+
+  const int bolt_count = 10 + std::abs(animation_seed % 4);
+  for (int bolt = 0; bolt < bolt_count; ++bolt) {
+    const int bolt_seed = flicker_phase * 131 + animation_seed * 29 + bolt * 17;
+    const double angle =
+        (2.0 * kLogoPi * static_cast<double>(bolt) / static_cast<double>(bolt_count)) +
+        HashSigned(bolt_seed) * 0.45;
+    const double unit_x = std::cos(angle);
+    const double unit_y = std::sin(angle);
+    const double normal_x = -unit_y;
+    const double normal_y = unit_x;
+    const int segment_count = 4 + (bolt_seed % 4);
+    const double bolt_length =
+        aura_radius * (0.72 + 0.68 * HashUnit(bolt_seed + 5));
+    const double start_radius = core_radius * (0.42 + 0.32 * HashUnit(bolt_seed + 7));
+    int previous_x = static_cast<int>(std::lround(center_x + unit_x * start_radius));
+    int previous_y = static_cast<int>(std::lround(center_y + unit_y * start_radius));
+
+    for (int segment = 1; segment <= segment_count; ++segment) {
+      const double t =
+          static_cast<double>(segment) / static_cast<double>(segment_count);
+      const double base_distance = bolt_length * t;
+      const double jagged_offset =
+          HashSigned(bolt_seed + segment * 23) *
+          (element_size * 0.08 + (1.0 - t) * aura_radius * 0.16);
+      const double forward_offset =
+          HashSigned(bolt_seed + segment * 41) * element_size * 0.04;
+      const int point_x = static_cast<int>(std::lround(
+          center_x + unit_x * (start_radius + base_distance + forward_offset) +
+          normal_x * jagged_offset));
+      const int point_y = static_cast<int>(std::lround(
+          center_y + unit_y * (start_radius + base_distance + forward_offset) +
+          normal_y * jagged_offset));
+      const Uint8 glow_alpha = static_cast<Uint8>(
+          std::clamp(196.0 - t * 88.0, 72.0, 196.0));
+      const Uint8 core_alpha = static_cast<Uint8>(
+          std::clamp(255.0 - t * 64.0, 118.0, 255.0));
+      draw_lightning_segment(previous_x, previous_y, point_x, point_y, glow_alpha,
+                             core_alpha);
+
+      if (segment < segment_count &&
+          HashUnit(bolt_seed + segment * 59) > 0.58) {
+        const double branch_angle =
+            angle + HashSigned(bolt_seed + segment * 61) * 0.95;
+        const double branch_length =
+            bolt_length * (0.12 + 0.16 * HashUnit(bolt_seed + segment * 67)) *
+            (1.0 - t);
+        const int branch_x = static_cast<int>(std::lround(
+            point_x + std::cos(branch_angle) * branch_length));
+        const int branch_y = static_cast<int>(std::lround(
+            point_y + std::sin(branch_angle) * branch_length));
+        draw_lightning_segment(previous_x, previous_y, branch_x, branch_y,
+                               std::max<Uint8>(48, glow_alpha / 2),
+                               std::max<Uint8>(96, core_alpha / 2));
+      }
+
+      previous_x = point_x;
+      previous_y = point_y;
+    }
+
+    SDL_SetRenderDrawColor(sdl_renderer, 206, 246, 255, 188);
+    SDL_RenderFillCircle(sdl_renderer, previous_x, previous_y,
+                         std::max(1, element_size / 18));
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
 void Renderer::drawDwarf(const SDL_Rect &dwarf_rect,
@@ -6039,6 +6549,10 @@ void Renderer::drawmonsters() {
       SDL_SetTextureAlphaMod(monster_texture, 255);
     }
     SDL_RenderCopy(sdl_renderer, monster_texture, nullptr, &sdl_monster_rect);
+    if (monster->is_electrified) {
+      drawElectrifiedMonsterAura(sdl_monster_rect, monster->electrified_visual_seed,
+                                 now);
+    }
     SDL_SetTextureAlphaMod(monster_texture, 255);
   }
 }
@@ -6447,6 +6961,88 @@ void Renderer::draweffects() {
         SDL_RenderFillCircle(sdl_renderer, center_x, center_y, radius + 4);
         SDL_SetRenderDrawColor(sdl_renderer, 255, 232, 140, alpha);
         SDL_RenderFillCircle(sdl_renderer, center_x, center_y, radius);
+      }
+    } else if (effect.type == EffectType::PlasmaShockwave) {
+      const double progress =
+          std::clamp(static_cast<double>(elapsed) /
+                         static_cast<double>(PLASMA_SHOCKWAVE_DURATION_MS),
+                     0.0, 1.0);
+      const double flash = std::max(0.0, 1.0 - progress * 1.9);
+      const double burst_phase =
+          std::sin(std::clamp(progress / 0.34, 0.0, 1.0) * kLogoPi);
+      const int max_radius =
+          std::max(element_size * std::max(7, effect.radius_cells),
+                   static_cast<int>(std::hypot(
+                       static_cast<double>(screen_res_x),
+                       static_cast<double>(screen_res_y)) *
+                                    0.58));
+      const int flash_radius = std::max(
+          element_size,
+          static_cast<int>(element_size * (0.85 + 2.8 * std::pow(progress, 0.56))));
+      const int white_burst_radius = std::max(
+          element_size / 2,
+          static_cast<int>(std::lround(
+              element_size * (0.30 + 4.6 * burst_phase))));
+      const std::array<SDL_Color, 7> ring_colors{{
+          {28, 86, 255, 255},
+          {52, 128, 255, 255},
+          {78, 176, 255, 255},
+          {108, 228, 255, 255},
+          {84, 255, 236, 255},
+          {170, 238, 255, 255},
+          {218, 246, 255, 255},
+      }};
+
+      if (burst_phase > 0.0) {
+        SDL_SetRenderDrawColor(
+            sdl_renderer, 255, 255, 255,
+            static_cast<Uint8>(std::clamp(235.0 * burst_phase, 0.0, 235.0)));
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                             white_burst_radius);
+        SDL_SetRenderDrawColor(
+            sdl_renderer, 206, 242, 255,
+            static_cast<Uint8>(std::clamp(144.0 * burst_phase, 0.0, 144.0)));
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                             white_burst_radius + std::max(5, element_size / 4));
+      }
+
+      SDL_SetRenderDrawColor(
+          sdl_renderer, 38, 96, 255,
+          static_cast<Uint8>(std::clamp(118.0 * flash, 0.0, 118.0)));
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, flash_radius + 18);
+      SDL_SetRenderDrawColor(
+          sdl_renderer, 204, 242, 255,
+          static_cast<Uint8>(std::clamp(164.0 * flash, 0.0, 164.0)));
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, flash_radius);
+
+      for (size_t ring = 0; ring < ring_colors.size(); ++ring) {
+        const double ring_progress =
+            std::clamp(progress * 1.56 - static_cast<double>(ring) * 0.085, 0.0,
+                       1.0);
+        if (ring_progress <= 0.0) {
+          continue;
+        }
+
+        const int ring_radius = std::max(
+            10, static_cast<int>(
+                    std::lround(max_radius * std::pow(ring_progress, 0.60))));
+        const Uint8 alpha = static_cast<Uint8>(std::clamp(
+            (240.0 - ring * 14.0) * std::pow(1.0 - ring_progress, 0.34), 0.0,
+            255.0));
+        const SDL_Color &color = ring_colors[ring];
+        for (int thickness = -2; thickness <= 2; ++thickness) {
+          SDL_SetRenderDrawColor(
+              sdl_renderer, color.r, color.g, color.b,
+              static_cast<Uint8>(std::max(0, alpha - std::abs(thickness) * 48)));
+          SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                               std::max(1, ring_radius + thickness));
+        }
+
+        SDL_SetRenderDrawColor(
+            sdl_renderer, color.r, color.g, color.b,
+            static_cast<Uint8>(std::clamp(alpha * 0.22, 0.0, 92.0)));
+        SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                             std::max(6, ring_radius / 4));
       }
     } else if (effect.type == EffectType::DynamiteExplosion) {
       const double progress =

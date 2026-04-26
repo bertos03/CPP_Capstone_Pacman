@@ -33,7 +33,14 @@ struct MapCoord {
 
 enum class Directions { None, Up, Down, Left, Right };
 enum class Difficulty { Training, Easy, Medium, Hard };
-enum class ExtraSlot { None, Dynamite, PlasticExplosive, Airstrike, Rocket };
+enum class ExtraSlot {
+  None,
+  Dynamite,
+  PlasticExplosive,
+  Airstrike,
+  Rocket,
+  Biohazard
+};
 
 
 // struct DirOptions{

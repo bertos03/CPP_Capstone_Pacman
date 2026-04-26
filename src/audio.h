@@ -69,6 +69,10 @@ public:
   void PlayAirstrikeExplosion();
   void PlayRocketLaunch();
   void StopRocketLaunch();
+  void StartBiohazardBeam();
+  void StopBiohazardBeam();
+  void PlayElectrifiedMonsterRoar();
+  void PlayElectrifiedMonsterImpact();
   Uint32 GetAirstrikeRadioDurationMs() const;
   void StartInvulnerabilityLoop();
   void StopInvulnerabilityLoop();
@@ -92,6 +96,7 @@ private:
   Mix_Chunk *CreateDynamiteExplosionChunk();
   Mix_Chunk *CreatePlasticExplosiveReadyChunk();
   Mix_Chunk *CreatePlasticExplosiveWallBreakChunk();
+  Mix_Chunk *CreateBiohazardBeamChunk();
   Mix_Chunk *CreateInvulnerabilityLoopChunk();
   void PlayChunk(Mix_Chunk *);
 
@@ -122,11 +127,15 @@ private:
   Mix_Chunk *SFX_airstrike_radio;
   Mix_Chunk *SFX_airstrike_explosion;
   Mix_Chunk *SFX_rocket_launch;
+  Mix_Chunk *SFX_biohazard_beam;
+  Mix_Chunk *SFX_electrified_monster_roar;
+  Mix_Chunk *SFX_electrified_monster_impact;
   Mix_Chunk *SFX_invulnerability_loop;
   Mix_Music *menu_music;
   Mix_Music *win_music;
   Mix_Music *lose_music;
   int rocket_launch_channel;
+  int biohazard_beam_channel;
   int invulnerability_loop_channel;
   bool menu_music_active;
   bool audio_ready;

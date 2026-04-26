@@ -63,6 +63,7 @@ struct GasCloud {
   Uint32 started_ticks;
   Uint32 fade_started_ticks;
   int animation_seed;
+  int owner_id;
   bool is_fading;
   // Set once Pacman has walked into the cloud.
   bool triggered_by_pacman;
@@ -109,6 +110,16 @@ struct WalkieTalkiePickup {
 };
 
 struct RocketPickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
+struct BiohazardPickup {
   MapCoord coord{0, 0};
   Uint32 appeared_ticks = 0;
   Uint32 fade_started_ticks = 0;
@@ -172,12 +183,20 @@ struct RocketProjectile {
   int animation_seed = 0;
 };
 
+struct ActiveBiohazardBeam {
+  bool is_active = false;
+  Directions direction = Directions::Right;
+  Uint32 started_ticks = 0;
+  int animation_seed = 0;
+};
+
 enum class EffectType {
   MonsterExplosion,
   WallImpact,
   DynamiteExplosion,
   AirstrikeExplosion,
-  SlimeSplash
+  SlimeSplash,
+  PlasmaShockwave
 };
 
 struct GameEffect {
@@ -229,11 +248,13 @@ private:
   PlasticExplosivePickup plastic_explosive_pickup;
   WalkieTalkiePickup walkie_talkie_pickup;
   RocketPickup rocket_pickup;
+  BiohazardPickup biohazard_pickup;
   std::vector<PlacedDynamite> placed_dynamites;
   PlacedPlasticExplosive placed_plastic_explosive;
   bool plastic_explosive_is_armed;
   ActiveAirstrike active_airstrike;
   std::vector<RocketProjectile> active_rockets;
+  ActiveBiohazardBeam active_biohazard_beam;
   std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
   Uint32 last_update_ticks;
@@ -241,6 +262,7 @@ private:
   int plastic_explosive_inventory;
   int airstrike_inventory;
   int rocket_inventory;
+  int biohazard_inventory;
   friend class Renderer;
   bool dead;
   bool win;
@@ -272,10 +294,17 @@ private:
   void ScheduleNextRocketSpawn(Uint32 now);
   void TrySpawnRocket(Uint32 now);
   void UpdateRocketPickup(Uint32 now);
+  void ScheduleNextBiohazardSpawn(Uint32 now);
+  void TrySpawnBiohazard(Uint32 now);
+  void UpdateBiohazardPickup(Uint32 now);
   void TryUseAirstrike(Uint32 now);
   void TryFireRocket(Uint32 now);
+  void TryUseBiohazardBeam(Uint32 now);
+  void UpdateBiohazardBeam(Uint32 now);
+  void StopBiohazardBeam();
   void UpdateAirstrike(Uint32 now);
   void UpdateRockets(Uint32 now);
+  void UpdateElectrifiedMonsters(Uint32 now);
   void UpdatePlacedDynamites(Uint32 now);
   void DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now);
   void DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
@@ -289,12 +318,16 @@ private:
   bool IsCellFreeForPlasticExplosivePickup(MapCoord coord) const;
   bool IsCellFreeForWalkieTalkiePickup(MapCoord coord) const;
   bool IsCellFreeForRocketPickup(MapCoord coord) const;
+  bool IsCellFreeForBiohazardPickup(MapCoord coord) const;
   bool CanPlacePlasticExplosiveAt(MapCoord coord) const;
   bool IsWithinRadius(MapCoord center, MapCoord target, int radius_cells) const;
   bool IsWithinDynamiteRadius(MapCoord center, MapCoord target) const;
   bool IsCellFreeForInvulnerabilityPotion(MapCoord coord) const;
   bool IsPacmanInvulnerable(Uint32 now) const;
   bool IsPacmanRecoveringFromLifeLoss(Uint32 now) const;
+  Monster *FindMonsterById(int monster_id) const;
+  bool IsMonsterHitByBiohazardBeam(const Monster *monster) const;
+  void ElectrifyMonster(Monster *monster, Uint32 now);
   void UpdateFireballs(Uint32 now);
   void UpdateSlimeballs(Uint32 now);
   void UpdateGasClouds(Uint32 now);

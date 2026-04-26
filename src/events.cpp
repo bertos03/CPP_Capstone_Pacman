@@ -32,6 +32,9 @@ ExtraSlot KeycodeToExtraSlot(SDL_Keycode keycode) {
   case SDLK_4:
   case SDLK_KP_4:
     return ExtraSlot::Rocket;
+  case SDLK_5:
+  case SDLK_KP_5:
+    return ExtraSlot::Biohazard;
   default:
     return ExtraSlot::None;
   }

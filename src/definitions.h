@@ -112,6 +112,11 @@ inline constexpr const char *AIRSTRIKE_RADIO_SOUND_PATH =
 inline constexpr const char *AIRSTRIKE_EXPLOSION_SOUND_PATH =
     "airstrike_explosion.wav";
 inline constexpr const char *ROCKET_LAUNCH_SOUND_PATH = "rocket_launch.mp3";
+inline constexpr const char *BIOHAZARD_BEAM_SOUND_PATH = "biohazard_beam.wav";
+inline constexpr const char *ELECTRIFIED_MONSTER_ROAR_SOUND_PATH =
+    "electrified_monster_roar.mp3";
+inline constexpr const char *ELECTRIFIED_MONSTER_IMPACT_SOUND_PATH =
+    "electrified_monster_impact.mp3";
 inline constexpr const char *SETTINGS_FILE_NAME = "settings.cfg";
 
 /**
@@ -214,6 +219,15 @@ inline constexpr Uint32 ROCKET_SPAWN_MIN_INTERVAL_MS = 8000;
 inline constexpr Uint32 ROCKET_SPAWN_MAX_INTERVAL_MS = 16000;
 inline constexpr Uint32 ROCKET_VISIBLE_MS = 60000;
 inline constexpr Uint32 ROCKET_FADE_MS = 1000;
+inline constexpr Uint32 BIOHAZARD_SPAWN_MIN_INTERVAL_MS = 14000;
+inline constexpr Uint32 BIOHAZARD_SPAWN_MAX_INTERVAL_MS = 26000;
+inline constexpr Uint32 BIOHAZARD_VISIBLE_MS = 60000;
+inline constexpr Uint32 BIOHAZARD_FADE_MS = 1000;
+inline constexpr Uint32 BIOHAZARD_BEAM_ACTIVE_MS = 3000;
+inline constexpr int BIOHAZARD_CHARGE_STEP_DELAY_MS = 1;
+inline constexpr double BIOHAZARD_SIDE_BEAM_RAISE_FACTOR = 0.18;
+inline constexpr Uint32 PLASMA_SHOCKWAVE_DURATION_MS = 1350;
+inline constexpr int PLASMA_SHOCKWAVE_RADIUS_CELLS = 10;
 inline constexpr Uint32 DYNAMITE_COUNTDOWN_MS = 5000;
 inline constexpr Uint32 DYNAMITE_EXPLOSION_DURATION_MS = 2000;
 inline constexpr int DYNAMITE_EXPLOSION_RADIUS_CELLS = 3;
@@ -336,13 +350,13 @@ inline constexpr double MONSTER_RENDER_SCALE = 1.19;
 inline constexpr double MONSTER_EXPLOSION_RENDER_SCALE = 1.10;
 inline constexpr double MONSTER_EXPLOSION_INITIAL_OPACITY = 0.50;
 inline constexpr double MONSTER_EXPLOSION_FINAL_OPACITY = 0.10;
-inline constexpr double FART_CLOUD_RENDER_SCALE = 0.90;
+inline constexpr double FART_CLOUD_RENDER_SCALE = 0.70;
 inline constexpr double SLIME_BALL_RENDER_SCALE = 0.90;
 inline constexpr double SLIME_OVERLAY_RENDER_SCALE = 1.22;
 inline constexpr double SLIME_SPLASH_RENDER_SCALE = 1.26;
 inline constexpr double FART_CLOUD_DRIFT_X_FACTOR = 0.06;
-inline constexpr double FART_CLOUD_DRIFT_Y_FACTOR = 0.05;
-inline constexpr double FART_CLOUD_SCALE_PULSE_AMPLITUDE = 0.04;
+inline constexpr double FART_CLOUD_DRIFT_Y_FACTOR = 0.15;
+inline constexpr double FART_CLOUD_SCALE_PULSE_AMPLITUDE = 0.14;
 inline constexpr double ROCKET_SPRITE_ANGLE_OFFSET_DEGREES = 0.0;
 inline constexpr SDL_Color FLOOR_3D_NEAR_COLOR{62, 60, 72, 255};
 inline constexpr SDL_Color FLOOR_3D_FAR_COLOR{34, 34, 42, 255};

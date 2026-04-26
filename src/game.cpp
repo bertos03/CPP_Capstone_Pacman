@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <random>
 
 namespace {
@@ -27,6 +28,7 @@ constexpr Uint32 kMonsterExplosionDurationMs = MONSTER_EXPLOSION_DURATION_MS;
 constexpr Uint32 kWallImpactDurationMs = 180;
 constexpr Uint32 kSlimeSplashDurationMs =
     SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT + SLIME_SPLASH_FADE_MS;
+constexpr Uint32 kPlasmaShockwaveDurationMs = PLASMA_SHOCKWAVE_DURATION_MS;
 constexpr Uint32 kDynamiteChainDelayMs = 140;
 constexpr double kPlasticExplosiveMonsterHitRadiusCells = 0.72;
 constexpr float kAirstrikePlaneMarginCells = 2.0f;
@@ -305,8 +307,10 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   plastic_explosive_inventory = 0;
   airstrike_inventory = 0;
   rocket_inventory = 0;
+  biohazard_inventory = 0;
   plastic_explosive_is_armed = false;
   active_airstrike = {};
+  active_biohazard_beam = {};
   simulation_started = false;
   death_started_ticks = 0;
   life_recovery_until_ticks = 0;
@@ -320,6 +324,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   ScheduleNextPlasticExplosiveSpawn(last_update_ticks);
   ScheduleNextWalkieTalkieSpawn(last_update_ticks);
   ScheduleNextRocketSpawn(last_update_ticks);
+  ScheduleNextBiohazardSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -350,7 +355,8 @@ void Game::StartSimulation() {
   events->Keyreset();
 
   for (size_t i = 0; i < monsters.size(); i++) {
-    monster_threads.emplace_back(&Monster::simulate, monsters[i], events, map);
+    monster_threads.emplace_back(&Monster::simulate, monsters[i], events, map,
+                                 &monsters);
   }
 
   pacman_thread = std::thread(&Pacman::simulate, pacman, events, map);
@@ -417,6 +423,9 @@ void Game::Update() {
   UpdatePlasticExplosivePickup(now);
   UpdateWalkieTalkiePickup(now);
   UpdateRocketPickup(now);
+  UpdateBiohazardPickup(now);
+  TryUseBiohazardBeam(now);
+  UpdateBiohazardBeam(now);
   TryUseAirstrike(now);
   TryPlaceDynamite(now);
   TryUsePlasticExplosive(now);
@@ -443,6 +452,7 @@ void Game::Update() {
     win = (i->is_active) ? false : win;
   }
   if (win) {
+    StopBiohazardBeam();
 #ifdef AUDIO
     audio->StopInvulnerabilityLoop();
     audio->PlayWin();
@@ -455,6 +465,7 @@ void Game::Update() {
   UpdateFireballs(now);
   UpdateSlimeballs(now);
   UpdateGasClouds(now);
+  UpdateElectrifiedMonsters(now);
   UpdateScheduledMonsterBlasts(now);
   if (dead) {
     return;
@@ -462,7 +473,7 @@ void Game::Update() {
 
   // Check for collision with Monsters ... game is lost if collision occurs
   for (auto i : monsters) {
-    if (!i->is_alive) {
+    if (!i->is_alive || i->is_electrified) {
       continue;
     }
     if (pacman->map_coord.u == i->map_coord.u &&
@@ -501,6 +512,7 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
     ShiftActiveTicks(monster->death_started_ticks, paused_duration_ms);
     ShiftActiveTicks(monster->scheduled_dynamite_blast_ticks,
                      paused_duration_ms);
+    ShiftActiveTicks(monster->electrified_started_ticks, paused_duration_ms);
   }
 
   for (Fireball &fireball : fireballs) {
@@ -535,6 +547,10 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
   ShiftActiveTicks(rocket_pickup.fade_started_ticks, paused_duration_ms);
   ShiftActiveTicks(rocket_pickup.next_spawn_ticks, paused_duration_ms);
 
+  ShiftActiveTicks(biohazard_pickup.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(biohazard_pickup.fade_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(biohazard_pickup.next_spawn_ticks, paused_duration_ms);
+
   for (PlacedDynamite &placed_dynamite : placed_dynamites) {
     ShiftActiveTicks(placed_dynamite.placed_ticks, paused_duration_ms);
     ShiftActiveTicks(placed_dynamite.explode_at_ticks, paused_duration_ms);
@@ -556,6 +572,8 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
     ShiftActiveTicks(rocket.segment_started_ticks, paused_duration_ms);
   }
 
+  ShiftActiveTicks(active_biohazard_beam.started_ticks, paused_duration_ms);
+
   for (ScheduledMonsterBlast &blast : scheduled_monster_blasts) {
     ShiftActiveTicks(blast.trigger_ticks, paused_duration_ms);
   }
@@ -571,6 +589,7 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
  */
 Game::~Game() {
 #ifdef AUDIO
+  audio->StopBiohazardBeam();
   audio->StopInvulnerabilityLoop();
 #endif
   // std::cout << "Waiting for threads to finish ... \n";
@@ -631,6 +650,7 @@ void Game::TriggerLoss(MapCoord coord, Uint32 now) {
     events->SetGameplayFrozen(true);
     events->Keyreset();
   }
+  StopBiohazardBeam();
 #ifdef AUDIO
   audio->StopInvulnerabilityLoop();
   audio->PlayGameOver();
@@ -683,7 +703,8 @@ void Game::TryTeleportElement(MapElement *element) {
 void Game::TryShootFireballs(Uint32 now) {
   const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   for (auto monster : monsters) {
-    if (!monster->is_alive || monster->monster_char != MONSTER_MANY) {
+    if (!monster->is_alive || monster->is_electrified ||
+        monster->monster_char != MONSTER_MANY) {
       continue;
     }
 
@@ -710,7 +731,8 @@ void Game::TryShootFireballs(Uint32 now) {
 void Game::TryShootSlimeballs(Uint32 now) {
   const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   for (auto monster : monsters) {
-    if (!monster->is_alive || monster->monster_char != MONSTER_EXTRA) {
+    if (!monster->is_alive || monster->is_electrified ||
+        monster->monster_char != MONSTER_EXTRA) {
       continue;
     }
 
@@ -736,7 +758,8 @@ void Game::TryShootSlimeballs(Uint32 now) {
 
 void Game::TrySpawnGasClouds(Uint32 now) {
   for (auto monster : monsters) {
-    if (!monster->is_alive || monster->monster_char != MONSTER_MEDIUM) {
+    if (!monster->is_alive || monster->is_electrified ||
+        monster->monster_char != MONSTER_MEDIUM) {
       continue;
     }
 
@@ -747,7 +770,8 @@ void Game::TrySpawnGasClouds(Uint32 now) {
 
     gas_clouds.push_back(
         {monster->map_coord, now, now + GAS_CLOUD_ACTIVE_MS,
-         static_cast<int>(monster->id * 43 + now % 997), false, false});
+         static_cast<int>(monster->id * 43 + now % 997), monster->id, false,
+         false});
     monster->next_gas_cloud_ticks =
         now + RandomInterval(MONSTER_GAS_MIN_INTERVAL_MS,
                              MONSTER_GAS_MAX_INTERVAL_MS);
@@ -797,6 +821,14 @@ void Game::ScheduleNextRocketSpawn(Uint32 now) {
                                  tuning.extra_spawn_interval_scale);
 }
 
+void Game::ScheduleNextBiohazardSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  biohazard_pickup.next_spawn_ticks =
+      now + RandomScaledInterval(BIOHAZARD_SPAWN_MIN_INTERVAL_MS,
+                                 BIOHAZARD_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
+}
+
 bool Game::IsWithinRadius(MapCoord center, MapCoord target,
                           int radius_cells) const {
   const int clamped_radius = std::max(0, radius_cells);
@@ -834,6 +866,10 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
   }
 
   if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+
+  if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
     return false;
   }
 
@@ -936,6 +972,10 @@ bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
     return false;
   }
 
+  if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
+    return false;
+  }
+
   for (const auto &dynamite : placed_dynamites) {
     if (SameCoord(coord, dynamite.coord)) {
       return false;
@@ -982,6 +1022,10 @@ bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
   }
 
   if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+
+  if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
     return false;
   }
 
@@ -1057,6 +1101,10 @@ bool Game::IsCellFreeForWalkieTalkiePickup(MapCoord coord) const {
   }
 
   if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+
+  if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
     return false;
   }
 
@@ -1136,6 +1184,90 @@ bool Game::IsCellFreeForRocketPickup(MapCoord coord) const {
     return false;
   }
 
+  if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
+    return false;
+  }
+
+  for (const auto *monster : monsters) {
+    if ((monster->is_alive ||
+         monster->scheduled_dynamite_blast_ticks != 0) &&
+        SameCoord(coord, monster->map_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &fireball : fireballs) {
+    if (SameCoord(coord, fireball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &slimeball : slimeballs) {
+    if (SameCoord(coord, slimeball.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &rocket : active_rockets) {
+    if (SameCoord(coord, rocket.current_coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &cloud : gas_clouds) {
+    if (SameCoord(coord, cloud.coord)) {
+      return false;
+    }
+  }
+
+  for (const auto &dynamite : placed_dynamites) {
+    if (SameCoord(coord, dynamite.coord)) {
+      return false;
+    }
+  }
+
+  if (plastic_explosive_is_armed &&
+      SameCoord(coord, placed_plastic_explosive.coord)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool Game::IsCellFreeForBiohazardPickup(MapCoord coord) const {
+  if (map == nullptr ||
+      map->map_entry(static_cast<size_t>(coord.u), static_cast<size_t>(coord.v)) !=
+          ElementType::TYPE_PATH) {
+    return false;
+  }
+
+  if (SameCoord(coord, pacman->map_coord)) {
+    return false;
+  }
+
+  if (invulnerability_potion.is_visible &&
+      SameCoord(coord, invulnerability_potion.coord)) {
+    return false;
+  }
+
+  if (dynamite_pickup.is_visible && SameCoord(coord, dynamite_pickup.coord)) {
+    return false;
+  }
+
+  if (plastic_explosive_pickup.is_visible &&
+      SameCoord(coord, plastic_explosive_pickup.coord)) {
+    return false;
+  }
+
+  if (walkie_talkie_pickup.is_visible &&
+      SameCoord(coord, walkie_talkie_pickup.coord)) {
+    return false;
+  }
+
+  if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -1209,6 +1341,9 @@ bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
     return false;
   }
   if (rocket_pickup.is_visible && SameCoord(coord, rocket_pickup.coord)) {
+    return false;
+  }
+  if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
     return false;
   }
   for (const auto &dynamite : placed_dynamites) {
@@ -1571,6 +1706,134 @@ void Game::UpdateRocketPickup(Uint32 now) {
   }
 }
 
+void Game::TrySpawnBiohazard(Uint32 now) {
+  if (biohazard_pickup.is_visible || now < biohazard_pickup.next_spawn_ticks) {
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForBiohazardPickup(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    biohazard_pickup.next_spawn_ticks = now + 1000;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  biohazard_pickup.coord = candidates[distribution(RandomGenerator())];
+  biohazard_pickup.appeared_ticks = now;
+  biohazard_pickup.fade_started_ticks = 0;
+  biohazard_pickup.animation_seed =
+      static_cast<int>((now % 997) + biohazard_pickup.coord.u * 83 +
+                       biohazard_pickup.coord.v * 47);
+  biohazard_pickup.is_visible = true;
+  biohazard_pickup.is_fading = false;
+#ifdef AUDIO
+  audio->PlayDynamiteSpawn();
+#endif
+}
+
+void Game::UpdateBiohazardPickup(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  TrySpawnBiohazard(now);
+  if (!biohazard_pickup.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, biohazard_pickup.coord)) {
+    biohazard_inventory++;
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
+    biohazard_pickup.is_visible = false;
+    biohazard_pickup.is_fading = false;
+    biohazard_pickup.fade_started_ticks = 0;
+    ScheduleNextBiohazardSpawn(now);
+    return;
+  }
+
+  if (!biohazard_pickup.is_fading &&
+      now - biohazard_pickup.appeared_ticks >= tuning.pickup_visible_ms) {
+    biohazard_pickup.is_fading = true;
+    biohazard_pickup.fade_started_ticks = now;
+  }
+
+  if (biohazard_pickup.is_fading &&
+      now - biohazard_pickup.fade_started_ticks >= BIOHAZARD_FADE_MS) {
+    biohazard_pickup.is_visible = false;
+    biohazard_pickup.is_fading = false;
+    biohazard_pickup.fade_started_ticks = 0;
+    ScheduleNextBiohazardSpawn(now);
+  }
+}
+
+void Game::TryUseBiohazardBeam(Uint32 now) {
+  if (events == nullptr || pacman == nullptr) {
+    return;
+  }
+
+  const bool use_requested =
+      events->ConsumeExtraUseRequest(ExtraSlot::Biohazard);
+  if (!use_requested || biohazard_inventory <= 0 ||
+      active_biohazard_beam.is_active) {
+    return;
+  }
+
+  Directions facing_direction = pacman->facing_direction;
+  if (facing_direction == Directions::None) {
+    facing_direction = Directions::Down;
+  }
+
+  active_biohazard_beam = {true,
+                           facing_direction,
+                           now,
+                           static_cast<int>((now % 997) + pacman->map_coord.u * 89 +
+                                            pacman->map_coord.v * 53 +
+                                            biohazard_inventory * 29)};
+  biohazard_inventory--;
+#ifdef AUDIO
+  audio->StartBiohazardBeam();
+#endif
+}
+
+void Game::StopBiohazardBeam() {
+  active_biohazard_beam = {};
+#ifdef AUDIO
+  if (audio != nullptr) {
+    audio->StopBiohazardBeam();
+  }
+#endif
+}
+
+void Game::UpdateBiohazardBeam(Uint32 now) {
+  if (!active_biohazard_beam.is_active || pacman == nullptr) {
+    return;
+  }
+
+  if (now - active_biohazard_beam.started_ticks >= BIOHAZARD_BEAM_ACTIVE_MS) {
+    StopBiohazardBeam();
+    return;
+  }
+
+  for (Monster *monster : monsters) {
+    if (monster == nullptr || !monster->is_alive || monster->is_electrified) {
+      continue;
+    }
+
+    if (IsMonsterHitByBiohazardBeam(monster)) {
+      ElectrifyMonster(monster, now);
+    }
+  }
+}
+
 void Game::TryPlaceDynamite(Uint32 now) {
   if (events == nullptr || pacman == nullptr) {
     return;
@@ -1864,6 +2127,88 @@ void Game::UpdateRockets(Uint32 now) {
   }
 }
 
+void Game::UpdateElectrifiedMonsters(Uint32 now) {
+  const auto get_monster_world_center = [](const Monster *current) {
+    SDL_FPoint center = MakeCellCenter(current->map_coord);
+    center.x += static_cast<float>(current->px_delta.x) / 100.0f;
+    center.y += static_cast<float>(current->px_delta.y) / 100.0f;
+    return center;
+  };
+  const auto find_charge_target = [&](Monster *current) -> Monster * {
+    if (map == nullptr || current == nullptr || !current->is_alive ||
+        !current->is_electrified) {
+      return nullptr;
+    }
+
+    Monster *best_target = nullptr;
+    int best_distance = std::numeric_limits<int>::max();
+    for (Monster *other : monsters) {
+      if (other == nullptr || other == current || !other->is_alive) {
+        continue;
+      }
+
+      Directions direction = Directions::None;
+      if (!HasLineOfSight(map, current->map_coord, other->map_coord, direction)) {
+        continue;
+      }
+
+      const int distance = std::abs(other->map_coord.u - current->map_coord.u) +
+                           std::abs(other->map_coord.v - current->map_coord.v);
+      if (distance >= best_distance) {
+        continue;
+      }
+
+      best_distance = distance;
+      best_target = other;
+    }
+
+    return best_target;
+  };
+
+  for (Monster *monster : monsters) {
+    if (monster == nullptr || !monster->is_alive || !monster->is_electrified) {
+      continue;
+    }
+
+    Monster *target = find_charge_target(monster);
+    const int next_target_id = (target != nullptr) ? target->id : -1;
+    if (next_target_id != -1 &&
+        monster->electrified_charge_target_id != next_target_id) {
+#ifdef AUDIO
+      audio->PlayElectrifiedMonsterRoar();
+#endif
+    }
+    monster->electrified_charge_target_id = next_target_id;
+
+    for (Monster *other : monsters) {
+      if (other == nullptr || other == monster || !other->is_alive) {
+        continue;
+      }
+
+      if (!SameCoord(monster->map_coord, other->map_coord)) {
+        continue;
+      }
+
+      const SDL_FPoint monster_center = get_monster_world_center(monster);
+      const SDL_FPoint other_center = get_monster_world_center(other);
+      GameEffect shockwave_effect{monster->map_coord, now,
+                                  EffectType::PlasmaShockwave,
+                                  PLASMA_SHOCKWAVE_RADIUS_CELLS};
+      shockwave_effect.has_precise_world_center = true;
+      shockwave_effect.precise_world_center =
+          ScalePoint(AddPoint(monster_center, other_center), 0.5f);
+      effects.push_back(shockwave_effect);
+#ifdef AUDIO
+      audio->PlayElectrifiedMonsterImpact();
+#endif
+
+      EliminateMonster(monster, now);
+      EliminateMonster(other, now);
+      break;
+    }
+  }
+}
+
 void Game::ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks) {
   if (monster == nullptr || !monster->is_alive) {
     return;
@@ -1872,6 +2217,7 @@ void Game::ScheduleMonsterBlast(Monster *monster, Uint32 trigger_ticks) {
   monster->is_alive = false;
   monster->px_delta.x = 0;
   monster->px_delta.y = 0;
+  monster->electrified_charge_target_id = -1;
   monster->scheduled_dynamite_blast_ticks = trigger_ticks;
   monster->scheduled_dynamite_blast_coord = monster->map_coord;
   monster->death_coord = monster->map_coord;
@@ -2124,6 +2470,44 @@ bool Game::IsPacmanRecoveringFromLifeLoss(Uint32 now) const {
   return pacman != nullptr && life_recovery_until_ticks > now;
 }
 
+Monster *Game::FindMonsterById(int monster_id) const {
+  for (Monster *monster : monsters) {
+    if (monster != nullptr && monster->id == monster_id) {
+      return monster;
+    }
+  }
+
+  return nullptr;
+}
+
+bool Game::IsMonsterHitByBiohazardBeam(const Monster *monster) const {
+  if (monster == nullptr || !active_biohazard_beam.is_active || pacman == nullptr ||
+      map == nullptr || !monster->is_alive || SameCoord(monster->map_coord, pacman->map_coord)) {
+    return false;
+  }
+
+  Directions beam_direction = Directions::None;
+  if (!HasLineOfSight(map, pacman->map_coord, monster->map_coord,
+                      beam_direction)) {
+    return false;
+  }
+
+  return beam_direction == active_biohazard_beam.direction;
+}
+
+void Game::ElectrifyMonster(Monster *monster, Uint32 now) {
+  if (monster == nullptr || !monster->is_alive) {
+    return;
+  }
+
+  monster->is_electrified = true;
+  monster->electrified_charge_target_id = -1;
+  monster->electrified_started_ticks = now;
+  monster->electrified_visual_seed =
+      static_cast<int>((now % 997) + monster->id * 41 + monster->map_coord.u * 13 +
+                       monster->map_coord.v * 17);
+}
+
 void Game::UpdateFireballs(Uint32 now) {
   for (size_t index = 0; index < fireballs.size();) {
     Fireball &fireball = fireballs[index];
@@ -2150,7 +2534,9 @@ void Game::UpdateFireballs(Uint32 now) {
 #ifdef AUDIO
         audio->PlayFireballWallHit();
 #endif
-        if (!IsPacmanInvulnerable(now)) {
+        const Monster *owner = FindMonsterById(fireball.owner_id);
+        if ((owner == nullptr || !owner->is_electrified) &&
+            !IsPacmanInvulnerable(now)) {
           TriggerLoss(fireball.current_coord, now);
         }
         remove_fireball = true;
@@ -2227,7 +2613,9 @@ void Game::UpdateSlimeballs(Uint32 now) {
 #ifdef AUDIO
         audio->PlaySlimeImpact();
 #endif
-        if (!IsPacmanInvulnerable(now)) {
+        const Monster *owner = FindMonsterById(slimeball.owner_id);
+        if ((owner == nullptr || !owner->is_electrified) &&
+            !IsPacmanInvulnerable(now)) {
           pacman->paralyzed_until_ticks =
               std::max(pacman->paralyzed_until_ticks,
                        now + static_cast<Uint32>(PACMAN_PARALYSIS_MS));
@@ -2260,7 +2648,9 @@ void Game::UpdateGasClouds(Uint32 now) {
       cloud.is_fading = true;
       cloud.fade_started_ticks = now;
       cloud.triggered_by_pacman = true;
-      if (!IsPacmanInvulnerable(now)) {
+      const Monster *owner = FindMonsterById(cloud.owner_id);
+      if ((owner == nullptr || !owner->is_electrified) &&
+          !IsPacmanInvulnerable(now)) {
         pacman->paralyzed_until_ticks =
             std::max(pacman->paralyzed_until_ticks, now + PACMAN_PARALYSIS_MS);
         pacman->px_delta.x = 0;
@@ -2306,6 +2696,8 @@ void Game::CleanupEffects(Uint32 now) {
                          max_age = AIRSTRIKE_EXPLOSION_DURATION_MS;
                        } else if (effect.type == EffectType::SlimeSplash) {
                          max_age = kSlimeSplashDurationMs;
+                       } else if (effect.type == EffectType::PlasmaShockwave) {
+                         max_age = kPlasmaShockwaveDurationMs;
                        }
                        return now - effect.started_ticks > max_age;
                      }),
@@ -2324,6 +2716,7 @@ void Game::EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now) {
   monster->is_alive = false;
   monster->px_delta.x = 0;
   monster->px_delta.y = 0;
+  monster->electrified_charge_target_id = -1;
   monster->scheduled_dynamite_blast_ticks = 0;
   monster->death_coord = monster->map_coord;
   monster->death_started_ticks = now;
@@ -2350,6 +2743,7 @@ void Game::EliminateMonster(Monster *monster, Uint32 now) {
   monster->px_delta.x = 0;
   monster->px_delta.y = 0;
   monster->scheduled_dynamite_blast_ticks = 0;
+  monster->electrified_charge_target_id = -1;
   monster->death_coord = monster->map_coord;
   monster->death_started_ticks = now;
   GameEffect explosion_effect{monster->death_coord, now,

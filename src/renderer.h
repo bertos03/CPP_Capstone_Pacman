@@ -116,6 +116,7 @@ private:
   void drawplasticexplosivepickup();
   void drawwalkietalkiepickup();
   void drawrocketpickup();
+  void drawbiohazardpickup();
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
@@ -125,6 +126,7 @@ private:
   void drawplacedplasticexplosive();
   void drawactiveairstrike();
   void drawrockets();
+  void drawbiohazardbeam();
   void drawStaticPacman();
   void drawStaticMonsters();
   void drawStaticGoodies();
@@ -149,6 +151,9 @@ private:
                           int max_dimension, double wobble_phase);
   void drawRocketIcon(const SDL_Rect &icon_rect, Uint8 alpha,
                       double animation_clock);
+  void drawBiohazardIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                         double animation_clock, double rotation_degrees,
+                         double scale);
   void drawRocketFlight(const SDL_FPoint &center, Directions direction,
                         int max_dimension, int frame_index, Uint8 alpha);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
@@ -156,6 +161,8 @@ private:
                         double fuse_burn_progress);
   void drawPlasticExplosiveIcon(const SDL_Rect &icon_rect, double animation_clock,
                                 Uint8 alpha, bool armed);
+  void drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
+                                  int animation_seed, Uint32 now);
   void drawhud();
   void drawDimmer(Uint8 alpha);
   void drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,

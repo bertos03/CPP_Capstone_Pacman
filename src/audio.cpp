@@ -220,11 +220,15 @@ Audio::Audio() {
   SFX_airstrike_radio = nullptr;
   SFX_airstrike_explosion = nullptr;
   SFX_rocket_launch = nullptr;
+  SFX_biohazard_beam = nullptr;
+  SFX_electrified_monster_roar = nullptr;
+  SFX_electrified_monster_impact = nullptr;
   SFX_invulnerability_loop = nullptr;
   menu_music = nullptr;
   win_music = nullptr;
   lose_music = nullptr;
   rocket_launch_channel = 0;
+  biohazard_beam_channel = -1;
   invulnerability_loop_channel = -1;
   menu_music_active = false;
 
@@ -269,6 +273,12 @@ Audio::Audio() {
       Paths::GetDataFilePath("airstrike_explosion.wav");
   const std::string rocket_launch_sound_path =
       Paths::GetDataFilePath("rocket_launch.mp3");
+  const std::string biohazard_beam_sound_path =
+      Paths::GetDataFilePath(BIOHAZARD_BEAM_SOUND_PATH);
+  const std::string electrified_monster_roar_sound_path =
+      Paths::GetDataFilePath(ELECTRIFIED_MONSTER_ROAR_SOUND_PATH);
+  const std::string electrified_monster_impact_sound_path =
+      Paths::GetDataFilePath(ELECTRIFIED_MONSTER_IMPACT_SOUND_PATH);
   const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
   const std::string win_music_path = Paths::GetDataFilePath("win_melody.mp3");
   const std::string lose_music_path = Paths::GetDataFilePath("lose_melody.mp3");
@@ -344,6 +354,22 @@ Audio::Audio() {
     SFX_rocket_launch =
         CreateSynthChunk({196, 247, 294}, 420, 0.34, 4.0, 90.0);
   }
+  SFX_biohazard_beam = Mix_LoadWAV(biohazard_beam_sound_path.c_str());
+  if (SFX_biohazard_beam == nullptr) {
+    SFX_biohazard_beam = CreateBiohazardBeamChunk();
+  }
+  SFX_electrified_monster_roar =
+      Mix_LoadWAV(electrified_monster_roar_sound_path.c_str());
+  if (SFX_electrified_monster_roar == nullptr) {
+    SFX_electrified_monster_roar =
+        CreateSynthChunk({98, 82, 74, 55}, 760, 0.54, 6.0, 240.0);
+  }
+  SFX_electrified_monster_impact =
+      Mix_LoadWAV(electrified_monster_impact_sound_path.c_str());
+  if (SFX_electrified_monster_impact == nullptr) {
+    SFX_electrified_monster_impact =
+        CreateSynthChunk({148, 222, 296, 444}, 430, 0.64, 2.0, 140.0);
+  }
   SFX_invulnerability_loop = CreateInvulnerabilityLoopChunk();
   menu_music = Mix_LoadMUS(menu_music_path.c_str());
   if (menu_music == nullptr) {
@@ -378,6 +404,9 @@ Audio::Audio() {
       SFX_airstrike_radio == nullptr ||
       SFX_airstrike_explosion == nullptr ||
       SFX_rocket_launch == nullptr ||
+      SFX_biohazard_beam == nullptr ||
+      SFX_electrified_monster_roar == nullptr ||
+      SFX_electrified_monster_impact == nullptr ||
       SFX_invulnerability_loop == nullptr) {
     std::cerr << "Failed to load SFX: " << Mix_GetError() << "\n";
     return;
@@ -396,6 +425,7 @@ Audio::~Audio() {
   Mix_SetPostMix(nullptr, nullptr);
   ClearMenuSpectrumLevels();
   StopInvulnerabilityLoop();
+  StopBiohazardBeam();
   if (audio_ready) {
     Mix_HaltChannel(-1);
     Mix_HaltMusic();
@@ -481,6 +511,15 @@ Audio::~Audio() {
   }
   if (SFX_rocket_launch != nullptr) {
     Mix_FreeChunk(SFX_rocket_launch);
+  }
+  if (SFX_biohazard_beam != nullptr) {
+    Mix_FreeChunk(SFX_biohazard_beam);
+  }
+  if (SFX_electrified_monster_roar != nullptr) {
+    Mix_FreeChunk(SFX_electrified_monster_roar);
+  }
+  if (SFX_electrified_monster_impact != nullptr) {
+    Mix_FreeChunk(SFX_electrified_monster_impact);
   }
   if (SFX_invulnerability_loop != nullptr) {
     Mix_FreeChunk(SFX_invulnerability_loop);
@@ -1134,6 +1173,50 @@ Mix_Chunk *Audio::CreateDynamiteExplosionChunk() {
   return Mix_LoadWAV_RW(wav_stream, 1);
 }
 
+Mix_Chunk *Audio::CreateBiohazardBeamChunk() {
+  const int duration_ms = 900;
+  const int sample_count = std::max(1, duration_ms * kSampleRate / 1000);
+  std::vector<Sint16> pcm_samples;
+  pcm_samples.reserve(sample_count * kChannels);
+
+  for (int i = 0; i < sample_count; i++) {
+    const double time = static_cast<double>(i) / kSampleRate;
+    const double progress = static_cast<double>(i) / sample_count;
+    const double surge =
+        0.72 + 0.28 * std::sin(2.0 * kPi * (5.0 + progress * 3.0) * time);
+    const double carrier =
+        std::sin(2.0 * kPi * (182.0 + progress * 26.0) * time +
+                 0.58 * std::sin(2.0 * kPi * 11.5 * time));
+    const double upper =
+        0.48 * std::sin(2.0 * kPi * (486.0 + progress * 120.0) * time + 0.8);
+    const double arc =
+        0.26 * std::sin(2.0 * kPi * (1280.0 - progress * 170.0) * time + 1.4);
+    const double crackle_gate =
+        (std::sin(2.0 * kPi * 24.0 * time + progress * 4.0) > 0.0) ? 1.0 : 0.18;
+    const double crackle =
+        0.18 * crackle_gate *
+        std::sin(2.0 * kPi * (3120.0 - progress * 540.0) * time + 0.6);
+    const double envelope =
+        0.82 + 0.18 * std::sin(2.0 * kPi * 1.4 * time + 0.3);
+    double sample_value =
+        (carrier * surge + upper + arc + crackle) * envelope * 0.20;
+
+    sample_value = std::clamp(sample_value, -1.0, 1.0);
+    const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+    pcm_samples.push_back(pcm);
+    pcm_samples.push_back(pcm);
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
 Mix_Chunk *Audio::CreatePlasticExplosiveReadyChunk() {
   struct Note {
     double frequency;
@@ -1495,6 +1578,35 @@ void Audio::StopRocketLaunch() {
 
   Mix_HaltChannel(rocket_launch_channel);
 }
+
+void Audio::StartBiohazardBeam() {
+  if (!audio_ready || SFX_biohazard_beam == nullptr) {
+    return;
+  }
+
+  if (biohazard_beam_channel != -1) {
+    Mix_HaltChannel(biohazard_beam_channel);
+  }
+
+  biohazard_beam_channel = Mix_PlayChannel(-1, SFX_biohazard_beam, -1);
+}
+
+void Audio::StopBiohazardBeam() {
+  if (!audio_ready || biohazard_beam_channel == -1) {
+    return;
+  }
+
+  Mix_HaltChannel(biohazard_beam_channel);
+  biohazard_beam_channel = -1;
+}
+
+void Audio::PlayElectrifiedMonsterRoar() {
+  PlayChunk(SFX_electrified_monster_roar);
+};
+
+void Audio::PlayElectrifiedMonsterImpact() {
+  PlayChunk(SFX_electrified_monster_impact);
+};
 
 Uint32 Audio::GetAirstrikeRadioDurationMs() const {
   if (!audio_ready || SFX_airstrike_radio == nullptr) {
