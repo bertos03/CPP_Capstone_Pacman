@@ -55,7 +55,7 @@ inline constexpr const char *MAPS_SUBDIRECTORY = "maps";
 inline constexpr const char *FONT_ASSET_PATH = "font.ttf";
 inline constexpr const char *APP_ICON_RGBA_ASSET_PATH = "app_icon_rgba.png";
 inline constexpr const char *APP_ICON_FALLBACK_ASSET_PATH = "app_icon.png";
-inline constexpr const char *WALL_TEXTURE_ASSET_PATH = "brick.png";
+inline constexpr const char *WALL_TEXTURE_ASSET_PATH = "brick.bmp";
 inline constexpr int FLOOR_TEXTURE_OPTION_COUNT = 5;
 inline constexpr int FLOOR_TEXTURE_DEFAULT_INDEX = 0;
 inline constexpr std::array<const char *, FLOOR_TEXTURE_OPTION_COUNT>
