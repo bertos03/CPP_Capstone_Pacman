@@ -4885,8 +4885,10 @@ void Renderer::drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
   }
 
   SDL_Rect draw_rect{icon_rect.x, icon_rect.y, icon_rect.w, icon_rect.h};
-  if (sdl_dynamite_texture != nullptr && sdl_dynamite_size.x > 0 &&
-      sdl_dynamite_size.y > 0) {
+  const bool can_use_texture =
+      sdl_dynamite_texture != nullptr && sdl_dynamite_size.x > 0 &&
+      sdl_dynamite_size.y > 0;
+  if (can_use_texture) {
     const double scale_by_width =
         static_cast<double>(icon_rect.w) / static_cast<double>(sdl_dynamite_size.x);
     const double scale_by_height =
@@ -4937,66 +4939,63 @@ void Renderer::drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
     return;
   }
 
-  fuse_burn_progress = std::clamp(fuse_burn_progress, 0.0, 1.0);
-  constexpr std::array<SDL_FPoint, 6> kFusePath{{
-      {0.94f, 0.15f}, {0.89f, 0.13f}, {0.82f, 0.16f},
-      {0.76f, 0.09f}, {0.68f, 0.07f}, {0.60f, 0.24f},
-  }};
+  (void)fuse_burn_progress;
 
-  auto interpolate_fuse_point = [&](double path_progress) {
-    path_progress = std::clamp(path_progress, 0.0, 1.0);
-    const double scaled =
-        path_progress * static_cast<double>(kFusePath.size() - 1);
-    const size_t index = std::min(
-        static_cast<size_t>(std::floor(scaled)), kFusePath.size() - 2);
-    const double local = scaled - static_cast<double>(index);
-    const SDL_FPoint from = kFusePath[index];
-    const SDL_FPoint to = kFusePath[index + 1];
-    return SDL_FPoint{
-        static_cast<float>(from.x + (to.x - from.x) * local),
-        static_cast<float>(from.y + (to.y - from.y) * local)};
-  };
+  constexpr SDL_FPoint kFuseTipNorm{0.94f, 0.15f};
+  const int tip_x = draw_rect.x +
+                    static_cast<int>(std::lround(kFuseTipNorm.x * draw_rect.w));
+  const int tip_y = draw_rect.y +
+                    static_cast<int>(std::lround(kFuseTipNorm.y * draw_rect.h));
 
-  const SDL_FPoint burn_norm = interpolate_fuse_point(fuse_burn_progress);
-  const SDL_FPoint trail_norm =
-      interpolate_fuse_point(std::max(0.0, fuse_burn_progress - 0.10));
-  const int burn_x = draw_rect.x +
-                     static_cast<int>(std::lround(burn_norm.x * draw_rect.w));
-  const int burn_y = draw_rect.y +
-                     static_cast<int>(std::lround(burn_norm.y * draw_rect.h));
-  const int trail_x = draw_rect.x +
-                      static_cast<int>(std::lround(trail_norm.x * draw_rect.w));
-  const int trail_y = draw_rect.y +
-                      static_cast<int>(std::lround(trail_norm.y * draw_rect.h));
+  const double flicker_a = std::sin(animation_clock * 7.3);
+  const double flicker_b = std::sin(animation_clock * 11.7 + 1.3);
+  const double flicker_c = std::sin(animation_clock * 4.1 + 2.7);
+  const double flicker = 0.55 + 0.30 * flicker_a + 0.10 * flicker_b +
+                         0.05 * flicker_c;
+  const double clamped_flicker = std::clamp(flicker, 0.20, 1.00);
 
-  const double spark_pulse = 0.55 + 0.45 * std::sin(animation_clock * 2.4);
-  const int spark_radius =
-      std::max(2, static_cast<int>(std::max(draw_rect.w, draw_rect.h) * 0.06));
-  const Uint8 spark_alpha = static_cast<Uint8>(
-      std::clamp(static_cast<double>(alpha) * (0.70 + 0.30 * spark_pulse), 0.0,
-                 255.0));
+  const int base_radius =
+      std::max(2, static_cast<int>(std::max(draw_rect.w, draw_rect.h) * 0.05));
+  const int outer_radius = std::max(
+      base_radius + 1,
+      static_cast<int>(base_radius * (1.6 + 0.6 * clamped_flicker)));
+  const int mid_radius = std::max(
+      base_radius,
+      static_cast<int>(base_radius * (1.1 + 0.5 * clamped_flicker)));
+  const int core_radius = std::max(
+      1, static_cast<int>(base_radius * (0.55 + 0.35 * clamped_flicker)));
 
-  SDL_SetRenderDrawColor(sdl_renderer, 255, 156, 48, spark_alpha / 2);
-  SDL_RenderFillCircle(sdl_renderer, burn_x, burn_y, spark_radius + 2);
-  SDL_SetRenderDrawColor(sdl_renderer, 255, 112, 32, spark_alpha);
-  SDL_RenderFillCircle(sdl_renderer, burn_x, burn_y, spark_radius + 1);
-  SDL_SetRenderDrawColor(sdl_renderer, 255, 232, 146, spark_alpha);
-  SDL_RenderFillCircle(sdl_renderer, burn_x, burn_y, spark_radius);
+  const int jitter_x =
+      static_cast<int>(std::lround(flicker_b * base_radius * 0.35));
+  const int jitter_y =
+      static_cast<int>(std::lround(-std::abs(flicker_c) * base_radius * 0.45));
+  const int flame_x = tip_x + jitter_x;
+  const int flame_y = tip_y + jitter_y;
 
-  SDL_SetRenderDrawColor(sdl_renderer, 255, 148, 40,
-                         static_cast<Uint8>(std::clamp(spark_alpha * 0.7, 0.0, 255.0)));
-  SDL_RenderDrawLine(sdl_renderer, trail_x, trail_y, burn_x, burn_y);
+  const Uint8 glow_alpha = static_cast<Uint8>(std::clamp(
+      static_cast<double>(alpha) * (0.35 + 0.30 * clamped_flicker), 0.0, 220.0));
+  const Uint8 mid_alpha = static_cast<Uint8>(std::clamp(
+      static_cast<double>(alpha) * (0.65 + 0.30 * clamped_flicker), 0.0, 255.0));
+  const Uint8 core_alpha = static_cast<Uint8>(std::clamp(
+      static_cast<double>(alpha) * (0.85 + 0.15 * clamped_flicker), 0.0, 255.0));
 
-  for (int spark = 0; spark < 5; spark++) {
-    const double angle =
-        animation_clock * 1.8 + spark * (2.0 * 3.1415926535 / 5.0);
-    const int length =
-        std::max(3, static_cast<int>(draw_rect.w * (0.10 + 0.06 * spark_pulse)));
-    const int x2 = burn_x + static_cast<int>(std::cos(angle) * length);
-    const int y2 = burn_y + static_cast<int>(std::sin(angle) * length);
-    SDL_SetRenderDrawColor(sdl_renderer, 255, 236, 158, spark_alpha);
-    SDL_RenderDrawLine(sdl_renderer, burn_x, burn_y, x2, y2);
-  }
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 132, 40, glow_alpha);
+  SDL_RenderFillCircle(sdl_renderer, flame_x, flame_y, outer_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 184, 72, mid_alpha);
+  SDL_RenderFillCircle(sdl_renderer, flame_x, flame_y - base_radius / 3,
+                       mid_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 240, 168, core_alpha);
+  SDL_RenderFillCircle(sdl_renderer, flame_x, flame_y - base_radius / 2,
+                       core_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 252, 220, core_alpha);
+  SDL_RenderFillCircle(sdl_renderer, flame_x, flame_y - base_radius / 2,
+                       std::max(1, core_radius - 1));
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
 void Renderer::drawPlasticExplosiveIcon(const SDL_Rect &icon_rect,
