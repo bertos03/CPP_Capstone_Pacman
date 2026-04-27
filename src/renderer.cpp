@@ -7027,6 +7027,47 @@ void Renderer::draweffects() {
         SDL_SetRenderDrawColor(sdl_renderer, 255, 232, 140, alpha);
         SDL_RenderFillCircle(sdl_renderer, center_x, center_y, radius);
       }
+    } else if (effect.type == EffectType::BiohazardImpactFlash) {
+      const double progress =
+          std::clamp(static_cast<double>(elapsed) /
+                         static_cast<double>(BIOHAZARD_IMPACT_FLASH_DURATION_MS),
+                     0.0, 1.0);
+      const double pulse = std::sin(progress * kLogoPi);
+      const double fade = std::pow(1.0 - progress, 0.28);
+      const int outer_radius =
+          std::max(5, static_cast<int>(std::lround(
+                          element_size * (0.12 + 0.42 * pulse))));
+      const int mid_radius =
+          std::max(3, static_cast<int>(std::lround(
+                          element_size * (0.08 + 0.28 * pulse))));
+      const int core_radius =
+          std::max(2, static_cast<int>(std::lround(
+                          element_size * (0.05 + 0.16 * pulse))));
+      const Uint8 glow_alpha = static_cast<Uint8>(
+          std::clamp(212.0 * fade, 0.0, 212.0));
+      const Uint8 core_alpha = static_cast<Uint8>(
+          std::clamp(255.0 * fade, 0.0, 255.0));
+
+      SDL_SetRenderDrawColor(sdl_renderer, 42, 118, 255, glow_alpha / 2);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius + 4);
+      SDL_SetRenderDrawColor(sdl_renderer, 126, 218, 255, glow_alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
+      SDL_SetRenderDrawColor(sdl_renderer, 212, 244, 255, core_alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, mid_radius);
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, core_alpha);
+      SDL_RenderFillCircle(sdl_renderer, center_x, center_y, core_radius);
+
+      for (int spark = 0; spark < 6; ++spark) {
+        const double angle = progress * 4.0 + spark * (2.0 * kLogoPi / 6.0);
+        const int spark_radius = std::max(
+            4, static_cast<int>(std::lround(outer_radius * (0.78 + 0.12 * spark))));
+        const int spark_x = center_x +
+                            static_cast<int>(std::lround(std::cos(angle) * spark_radius));
+        const int spark_y = center_y +
+                            static_cast<int>(std::lround(std::sin(angle) * spark_radius));
+        SDL_SetRenderDrawColor(sdl_renderer, 186, 238, 255, glow_alpha);
+        SDL_RenderDrawLine(sdl_renderer, center_x, center_y, spark_x, spark_y);
+      }
     } else if (effect.type == EffectType::PlasmaShockwave) {
       const double progress =
           std::clamp(static_cast<double>(elapsed) /

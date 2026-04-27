@@ -233,6 +233,7 @@ inline constexpr Uint32 BIOHAZARD_SPAWN_MAX_INTERVAL_MS = 26000;
 inline constexpr Uint32 BIOHAZARD_VISIBLE_MS = 60000;
 inline constexpr Uint32 BIOHAZARD_FADE_MS = 1000;
 inline constexpr Uint32 BIOHAZARD_BEAM_ACTIVE_MS = 3000;
+inline constexpr Uint32 BIOHAZARD_IMPACT_FLASH_DURATION_MS = 220;
 inline constexpr int BIOHAZARD_CHARGE_STEP_DELAY_MS = 1;
 inline constexpr double BIOHAZARD_SIDE_BEAM_RAISE_FACTOR = 0.18;
 inline constexpr Uint32 PLASMA_SHOCKWAVE_DURATION_MS = 1350;

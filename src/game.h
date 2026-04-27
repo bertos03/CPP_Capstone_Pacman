@@ -193,6 +193,7 @@ struct ActiveBiohazardBeam {
 enum class EffectType {
   MonsterExplosion,
   WallImpact,
+  BiohazardImpactFlash,
   DynamiteExplosion,
   AirstrikeExplosion,
   SlimeSplash,

@@ -1,14 +1,14 @@
 Kleine Tore
 xxxxxxxxxxxxxxxxxxxxxx
-xP..............xG..xx
+xP.............OxG..xx
 x.x.x.xxxxx.x.x.x.x.xx
-x...x......K....x...xx
-xxx.xxxxxxxxx.xxxxx.xx
-x..K......K.........xx
-x.xxxxx.xxx.x.x.xxxxxx
-x.x...x.......xG...Gxx
+xx..xO.........Gx...xx
+xxx.xxxxxxxxx.xxxxxMxx
+xM........N.........xx
+x.xxxxx.xxx.x.xMxxxxxx
+x.xG..xK......xG...Gxx
 x.x.x.x.xxxxxxxxxxx.xx
-x.x.....x....N.M.G..xx
+x.x.....x.....O..G..xx
 x.x.xxxxx.x.x.x.x.x.xx
-x..........G..xO.N..xx
+x.N.....M..G..xG...Kxx
 xxxxxxxxxxxxxxxxxxxxxx

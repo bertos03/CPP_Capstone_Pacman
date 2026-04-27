@@ -26,6 +26,8 @@ namespace {
 
 constexpr Uint32 kMonsterExplosionDurationMs = MONSTER_EXPLOSION_DURATION_MS;
 constexpr Uint32 kWallImpactDurationMs = 180;
+constexpr Uint32 kBiohazardImpactFlashDurationMs =
+    BIOHAZARD_IMPACT_FLASH_DURATION_MS;
 constexpr Uint32 kSlimeSplashDurationMs =
     SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT + SLIME_SPLASH_FADE_MS;
 constexpr Uint32 kPlasmaShockwaveDurationMs = PLASMA_SHOCKWAVE_DURATION_MS;
@@ -1823,14 +1825,54 @@ void Game::UpdateBiohazardBeam(Uint32 now) {
     return;
   }
 
+  Monster *closest_target = nullptr;
+  int closest_distance = std::numeric_limits<int>::max();
   for (Monster *monster : monsters) {
-    if (monster == nullptr || !monster->is_alive || monster->is_electrified) {
+    if (monster == nullptr || !monster->is_alive || monster->is_electrified ||
+        !IsMonsterHitByBiohazardBeam(monster)) {
       continue;
     }
 
-    if (IsMonsterHitByBiohazardBeam(monster)) {
-      ElectrifyMonster(monster, now);
+    const int distance = std::abs(monster->map_coord.u - pacman->map_coord.u) +
+                         std::abs(monster->map_coord.v - pacman->map_coord.v);
+    if (distance >= closest_distance) {
+      continue;
     }
+
+    closest_distance = distance;
+    closest_target = monster;
+  }
+
+  if (closest_target != nullptr) {
+    SDL_FPoint impact_point = MakeCellCenter(closest_target->map_coord);
+    impact_point.x += static_cast<float>(closest_target->px_delta.x) / 100.0f;
+    impact_point.y += static_cast<float>(closest_target->px_delta.y) / 100.0f;
+    const float impact_offset = 0.24f;
+    switch (active_biohazard_beam.direction) {
+    case Directions::Up:
+      impact_point.y += impact_offset;
+      break;
+    case Directions::Down:
+      impact_point.y -= impact_offset;
+      break;
+    case Directions::Left:
+      impact_point.x += impact_offset;
+      break;
+    case Directions::Right:
+      impact_point.x -= impact_offset;
+      break;
+    case Directions::None:
+    default:
+      break;
+    }
+
+    ElectrifyMonster(closest_target, now);
+    GameEffect impact_flash{closest_target->map_coord, now,
+                            EffectType::BiohazardImpactFlash, 1};
+    impact_flash.has_precise_world_center = true;
+    impact_flash.precise_world_center = impact_point;
+    effects.push_back(impact_flash);
+    StopBiohazardBeam();
   }
 }
 
@@ -2697,6 +2739,9 @@ void Game::CleanupEffects(Uint32 now) {
                        Uint32 max_age = kWallImpactDurationMs;
                        if (effect.type == EffectType::MonsterExplosion) {
                          max_age = kMonsterExplosionDurationMs;
+                       } else if (effect.type ==
+                                  EffectType::BiohazardImpactFlash) {
+                         max_age = kBiohazardImpactFlashDurationMs;
                        } else if (effect.type ==
                                   EffectType::DynamiteExplosion) {
                          max_age = DYNAMITE_EXPLOSION_DURATION_MS;
