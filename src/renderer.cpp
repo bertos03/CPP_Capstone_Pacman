@@ -534,6 +534,8 @@ void Renderer::initializeRenderer(size_t row_count_value,
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
 
+  recreateSupersampleTarget();
+
   const std::string font_path = Paths::GetDataFilePath("font.ttf");
   const int hud_fontsize = std::max(22, screen_res_y / 35);
   sdl_font_hud = TTF_OpenFont(font_path.c_str(), hud_fontsize);
@@ -815,6 +817,10 @@ Renderer::~Renderer() {
       SDL_DestroyTexture(keycap_texture);
     }
   }
+  if (sdl_supersample_target != nullptr) {
+    SDL_DestroyTexture(sdl_supersample_target);
+    sdl_supersample_target = nullptr;
+  }
   if (sdl_renderer != nullptr) {
     SDL_DestroyRenderer(sdl_renderer);
   }
@@ -862,51 +868,57 @@ Renderer::~Renderer() {
 
 void Renderer::Render(bool show_pause_overlay, bool show_exit_dialog,
                       int exit_dialog_selected) {
+  beginSupersampledFrame();
   renderFrame(true);
   if (show_pause_overlay || show_exit_dialog) {
     drawGameplayPauseOverlay(show_exit_dialog, exit_dialog_selected);
   }
-  SDL_RenderPresent(sdl_renderer);
+  endSupersampledFrameAndPresent();
 }
 
 void Renderer::RenderStartMenu(int selected_item, const std::string &map_name,
                                const std::string &status_message) {
+  beginSupersampledFrame();
   renderFrame(false);
   drawDimmer(120);
   drawStartMenuOverlay(selected_item, map_name, status_message);
-  SDL_RenderPresent(sdl_renderer);
+  endSupersampledFrameAndPresent();
 }
 
 void Renderer::RenderConfigMenu(int selected_item, Difficulty difficulty,
                                 int player_lives, int floor_texture_index) {
+  beginSupersampledFrame();
   renderFrame(false);
   drawDimmer(120);
   drawConfigMenuOverlay(selected_item, difficulty, player_lives,
                         floor_texture_index);
-  SDL_RenderPresent(sdl_renderer);
+  endSupersampledFrameAndPresent();
 }
 
 void Renderer::RenderMapSelectionMenu(const std::vector<std::string> &map_names,
                                       int selected_index) {
+  beginSupersampledFrame();
   renderFrame(false);
   drawDimmer(120);
   drawMapSelectionOverlay(map_names, selected_index);
-  SDL_RenderPresent(sdl_renderer);
+  endSupersampledFrameAndPresent();
 }
 
 void Renderer::RenderEditorSelectionMenu(const std::vector<std::string> &items,
                                          int selected_index) {
+  beginSupersampledFrame();
   renderFrame(false);
   drawDimmer(120);
   drawEditorSelectionOverlay(items, selected_index);
-  SDL_RenderPresent(sdl_renderer);
+  endSupersampledFrameAndPresent();
 }
 
 void Renderer::RenderEditorSizeSelectionMenu(int selected_index) {
+  beginSupersampledFrame();
   renderFrame(false);
   drawDimmer(120);
   drawEditorSizeSelectionOverlay(selected_index);
-  SDL_RenderPresent(sdl_renderer);
+  endSupersampledFrameAndPresent();
 }
 
 void Renderer::RenderEditor(const std::vector<std::string> &layout,
@@ -916,19 +928,21 @@ void Renderer::RenderEditor(const std::vector<std::string> &layout,
                             bool show_name_dialog,
                             const std::string &name_input,
                             const std::string &name_dialog_message) {
+  beginSupersampledFrame();
   renderLayoutFrame(layout);
   drawDimmer(20);
   drawEditorOverlay(map_name, cursor, warning_message, show_exit_dialog,
                     exit_dialog_selected, show_name_dialog, name_input,
                     name_dialog_message);
-  SDL_RenderPresent(sdl_renderer);
+  endSupersampledFrameAndPresent();
 }
 
 void Renderer::RenderCountdown(int seconds_left) {
+  beginSupersampledFrame();
   renderFrame(false);
   drawDimmer(145);
   drawCountdownOverlay(seconds_left);
-  SDL_RenderPresent(sdl_renderer);
+  endSupersampledFrameAndPresent();
 }
 
 bool Renderer::TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
@@ -5687,7 +5701,6 @@ void Renderer::drawbiohazardbeam() {
         beam_clock * wave_def.phase_speed + wave_def.phase_offset;
     SDL_FPoint previous = beam_start;
 
-    SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, color.a);
     for (int sample = 1; sample <= 72; ++sample) {
       const double t = static_cast<double>(sample) / 72.0;
       const double envelope = std::sin(t * kPi);
@@ -5701,19 +5714,14 @@ void Renderer::drawbiohazardbeam() {
       SDL_FPoint current{
           static_cast<float>(beam_start.x + axis_x * t + normal_x * offset),
           static_cast<float>(beam_start.y + axis_y * t + normal_y * offset)};
-      SDL_RenderDrawLine(sdl_renderer, static_cast<int>(std::lround(previous.x)),
-                         static_cast<int>(std::lround(previous.y)),
-                         static_cast<int>(std::lround(current.x)),
-                         static_cast<int>(std::lround(current.y)));
+      SDL_RenderDrawAALine(sdl_renderer, previous.x, previous.y, current.x,
+                           current.y, color);
       previous = current;
     }
   }
 
-  SDL_SetRenderDrawColor(sdl_renderer, 228, 252, 255, 220);
-  SDL_RenderDrawLine(sdl_renderer, static_cast<int>(std::lround(beam_start.x)),
-                     static_cast<int>(std::lround(beam_start.y)),
-                     static_cast<int>(std::lround(end.x)),
-                     static_cast<int>(std::lround(end.y)));
+  SDL_RenderDrawAALine(sdl_renderer, beam_start.x, beam_start.y, end.x, end.y,
+                       SDL_Color{228, 252, 255, 220});
 
   for (int pulse = 0; pulse < 4; ++pulse) {
     const double progress =
@@ -8319,4 +8327,120 @@ PixelCoord Renderer::getPixelCoord(MapCoord in_coord, int delta_x,
     out.y = offset_y + 1 + in_coord.u * (element_size + 1) + delta_y;
   }
   return out;
+}
+
+void Renderer::SDL_RenderDrawAALine(SDL_Renderer *renderer, double x0,
+                                    double y0, double x1, double y1,
+                                    SDL_Color color) {
+  auto plot = [&](int px, int py, double brightness) {
+    if (brightness <= 0.0) {
+      return;
+    }
+    const double clamped = std::clamp(brightness, 0.0, 1.0);
+    const Uint8 alpha = static_cast<Uint8>(std::lround(color.a * clamped));
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, alpha);
+    SDL_RenderDrawPoint(renderer, px, py);
+  };
+
+  const bool steep = std::fabs(y1 - y0) > std::fabs(x1 - x0);
+  if (steep) {
+    std::swap(x0, y0);
+    std::swap(x1, y1);
+  }
+  if (x0 > x1) {
+    std::swap(x0, x1);
+    std::swap(y0, y1);
+  }
+
+  const double dx = x1 - x0;
+  const double dy = y1 - y0;
+  const double gradient = (dx == 0.0) ? 1.0 : (dy / dx);
+
+  auto fpart = [](double v) { return v - std::floor(v); };
+  auto rfpart = [&](double v) { return 1.0 - fpart(v); };
+
+  double xend = std::round(x0);
+  double yend = y0 + gradient * (xend - x0);
+  double xgap = rfpart(x0 + 0.5);
+  const int xpxl1 = static_cast<int>(xend);
+  const int ypxl1 = static_cast<int>(std::floor(yend));
+  if (steep) {
+    plot(ypxl1, xpxl1, rfpart(yend) * xgap);
+    plot(ypxl1 + 1, xpxl1, fpart(yend) * xgap);
+  } else {
+    plot(xpxl1, ypxl1, rfpart(yend) * xgap);
+    plot(xpxl1, ypxl1 + 1, fpart(yend) * xgap);
+  }
+  double intery = yend + gradient;
+
+  xend = std::round(x1);
+  yend = y1 + gradient * (xend - x1);
+  xgap = fpart(x1 + 0.5);
+  const int xpxl2 = static_cast<int>(xend);
+  const int ypxl2 = static_cast<int>(std::floor(yend));
+  if (steep) {
+    plot(ypxl2, xpxl2, rfpart(yend) * xgap);
+    plot(ypxl2 + 1, xpxl2, fpart(yend) * xgap);
+  } else {
+    plot(xpxl2, ypxl2, rfpart(yend) * xgap);
+    plot(xpxl2, ypxl2 + 1, fpart(yend) * xgap);
+  }
+
+  if (steep) {
+    for (int x = xpxl1 + 1; x < xpxl2; ++x) {
+      const int iy = static_cast<int>(std::floor(intery));
+      plot(iy, x, rfpart(intery));
+      plot(iy + 1, x, fpart(intery));
+      intery += gradient;
+    }
+  } else {
+    for (int x = xpxl1 + 1; x < xpxl2; ++x) {
+      const int iy = static_cast<int>(std::floor(intery));
+      plot(x, iy, rfpart(intery));
+      plot(x, iy + 1, fpart(intery));
+      intery += gradient;
+    }
+  }
+}
+
+void Renderer::recreateSupersampleTarget() {
+  if (sdl_supersample_target != nullptr) {
+    SDL_DestroyTexture(sdl_supersample_target);
+    sdl_supersample_target = nullptr;
+  }
+  if (sdl_renderer == nullptr || screen_res_x <= 0 || screen_res_y <= 0) {
+    return;
+  }
+  supersample_target_w = screen_res_x * supersample_factor;
+  supersample_target_h = screen_res_y * supersample_factor;
+  sdl_supersample_target =
+      SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_RGBA8888,
+                        SDL_TEXTUREACCESS_TARGET, supersample_target_w,
+                        supersample_target_h);
+  if (sdl_supersample_target == nullptr) {
+    std::cerr << "Supersample target creation failed: " << SDL_GetError()
+              << "\n";
+    return;
+  }
+  SDL_SetTextureBlendMode(sdl_supersample_target, SDL_BLENDMODE_BLEND);
+  SDL_SetTextureScaleMode(sdl_supersample_target, SDL_ScaleModeBest);
+}
+
+void Renderer::beginSupersampledFrame() {
+  if (sdl_supersample_target == nullptr) {
+    return;
+  }
+  SDL_SetRenderTarget(sdl_renderer, sdl_supersample_target);
+  SDL_RenderSetScale(sdl_renderer,
+                     static_cast<float>(supersample_factor),
+                     static_cast<float>(supersample_factor));
+}
+
+void Renderer::endSupersampledFrameAndPresent() {
+  if (sdl_supersample_target != nullptr) {
+    SDL_RenderSetScale(sdl_renderer, 1.0f, 1.0f);
+    SDL_SetRenderTarget(sdl_renderer, nullptr);
+    SDL_RenderCopy(sdl_renderer, sdl_supersample_target, nullptr, nullptr);
+  }
+  SDL_RenderPresent(sdl_renderer);
 }

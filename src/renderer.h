@@ -224,7 +224,18 @@ private:
   int SDL_RenderDrawCircle(SDL_Renderer *, int, int, int);
   int SDL_RenderFillCircle(SDL_Renderer *, int, int, int);
   int SDL_RenderFillEllipse(SDL_Renderer *, int, int, int, int);
+  void SDL_RenderDrawAALine(SDL_Renderer *renderer, double x0, double y0,
+                            double x1, double y1, SDL_Color color);
   PixelCoord getPixelCoord(MapCoord, int, int);
+
+  void beginSupersampledFrame();
+  void endSupersampledFrameAndPresent();
+  void recreateSupersampleTarget();
+
+  SDL_Texture *sdl_supersample_target = nullptr;
+  int supersample_factor = 2;
+  int supersample_target_w = 0;
+  int supersample_target_h = 0;
 
   int screen_res_x;
   int screen_res_y;
