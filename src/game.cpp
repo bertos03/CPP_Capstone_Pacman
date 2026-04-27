@@ -26,6 +26,7 @@ namespace {
 
 constexpr Uint32 kMonsterExplosionDurationMs = MONSTER_EXPLOSION_DURATION_MS;
 constexpr Uint32 kWallImpactDurationMs = 180;
+constexpr Uint32 kBiohazardHitSequenceDurationMs = BIOHAZARD_HIT_SEQUENCE_MS;
 constexpr Uint32 kBiohazardImpactFlashDurationMs =
     BIOHAZARD_IMPACT_FLASH_DURATION_MS;
 constexpr Uint32 kSlimeSplashDurationMs =
@@ -515,6 +516,8 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
     ShiftActiveTicks(monster->scheduled_dynamite_blast_ticks,
                      paused_duration_ms);
     ShiftActiveTicks(monster->electrified_started_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->biohazard_paralyzed_until_ticks,
+                     paused_duration_ms);
   }
 
   for (Fireball &fireball : fireballs) {
@@ -575,6 +578,12 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
   }
 
   ShiftActiveTicks(active_biohazard_beam.started_ticks, paused_duration_ms);
+  ShiftActiveTicks(active_biohazard_beam.minimum_visible_until_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(active_biohazard_beam.hit_sequence_started_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(active_biohazard_beam.locked_until_ticks,
+                   paused_duration_ms);
 
   for (ScheduledMonsterBlast &blast : scheduled_monster_blasts) {
     ShiftActiveTicks(blast.trigger_ticks, paused_duration_ms);
@@ -706,6 +715,7 @@ void Game::TryShootFireballs(Uint32 now) {
   const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   for (auto monster : monsters) {
     if (!monster->is_alive || monster->is_electrified ||
+        monster->biohazard_paralyzed_until_ticks > now ||
         monster->monster_char != MONSTER_MANY) {
       continue;
     }
@@ -734,6 +744,7 @@ void Game::TryShootSlimeballs(Uint32 now) {
   const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   for (auto monster : monsters) {
     if (!monster->is_alive || monster->is_electrified ||
+        monster->biohazard_paralyzed_until_ticks > now ||
         monster->monster_char != MONSTER_EXTRA) {
       continue;
     }
@@ -761,6 +772,7 @@ void Game::TryShootSlimeballs(Uint32 now) {
 void Game::TrySpawnGasClouds(Uint32 now) {
   for (auto monster : monsters) {
     if (!monster->is_alive || monster->is_electrified ||
+        monster->biohazard_paralyzed_until_ticks > now ||
         monster->monster_char != MONSTER_MEDIUM) {
       continue;
     }
@@ -1789,17 +1801,25 @@ void Game::TryUseBiohazardBeam(Uint32 now) {
     return;
   }
 
-  Directions facing_direction = pacman->facing_direction;
+  Directions facing_direction = events->get_next_move();
+  if (facing_direction != Directions::None) {
+    pacman->facing_direction = facing_direction;
+  } else {
+    facing_direction = pacman->facing_direction;
+  }
   if (facing_direction == Directions::None) {
     facing_direction = Directions::Down;
   }
 
-  active_biohazard_beam = {true,
-                           facing_direction,
-                           now,
-                           static_cast<int>((now % 997) + pacman->map_coord.u * 89 +
-                                            pacman->map_coord.v * 53 +
-                                            biohazard_inventory * 29)};
+  active_biohazard_beam = {};
+  active_biohazard_beam.is_active = true;
+  active_biohazard_beam.direction = facing_direction;
+  active_biohazard_beam.started_ticks = now;
+  active_biohazard_beam.minimum_visible_until_ticks =
+      now + BIOHAZARD_BEAM_MIN_VISIBLE_MS;
+  active_biohazard_beam.animation_seed =
+      static_cast<int>((now % 997) + pacman->map_coord.u * 89 +
+                       pacman->map_coord.v * 53 + biohazard_inventory * 29);
   biohazard_inventory--;
 #ifdef AUDIO
   audio->StartBiohazardBeam();
@@ -1817,6 +1837,13 @@ void Game::StopBiohazardBeam() {
 
 void Game::UpdateBiohazardBeam(Uint32 now) {
   if (!active_biohazard_beam.is_active || pacman == nullptr) {
+    return;
+  }
+
+  if (active_biohazard_beam.is_locked_after_hit) {
+    if (now >= active_biohazard_beam.locked_until_ticks) {
+      StopBiohazardBeam();
+    }
     return;
   }
 
@@ -1867,12 +1894,24 @@ void Game::UpdateBiohazardBeam(Uint32 now) {
     }
 
     ElectrifyMonster(closest_target, now);
+    closest_target->biohazard_paralyzed_until_ticks = std::max(
+        closest_target->biohazard_paralyzed_until_ticks,
+        now + kBiohazardHitSequenceDurationMs);
+    closest_target->px_delta.x = 0;
+    closest_target->px_delta.y = 0;
     GameEffect impact_flash{closest_target->map_coord, now,
                             EffectType::BiohazardImpactFlash, 1};
     impact_flash.has_precise_world_center = true;
     impact_flash.precise_world_center = impact_point;
     effects.push_back(impact_flash);
-    StopBiohazardBeam();
+
+    active_biohazard_beam.hit_sequence_started_ticks = now;
+    active_biohazard_beam.locked_until_ticks =
+        now + kBiohazardHitSequenceDurationMs;
+    active_biohazard_beam.is_locked_after_hit = true;
+    active_biohazard_beam.locked_origin_coord = pacman->map_coord;
+    active_biohazard_beam.locked_origin_delta = pacman->px_delta;
+    active_biohazard_beam.locked_end_world_center = impact_point;
   }
 }
 
@@ -2178,7 +2217,8 @@ void Game::UpdateElectrifiedMonsters(Uint32 now) {
   };
   const auto find_charge_target = [&](Monster *current) -> Monster * {
     if (map == nullptr || current == nullptr || !current->is_alive ||
-        !current->is_electrified) {
+        !current->is_electrified ||
+        current->biohazard_paralyzed_until_ticks > now) {
       return nullptr;
     }
 
@@ -2209,6 +2249,11 @@ void Game::UpdateElectrifiedMonsters(Uint32 now) {
 
   for (Monster *monster : monsters) {
     if (monster == nullptr || !monster->is_alive || !monster->is_electrified) {
+      continue;
+    }
+
+    if (monster->biohazard_paralyzed_until_ticks > now) {
+      monster->electrified_charge_target_id = -1;
       continue;
     }
 

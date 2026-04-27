@@ -6,9 +6,9 @@ x.....x...x.xG......xx
 x.xxx.x.x.x.x.xxx.x.xx
 x...........x..G...Gxx
 x.x.xxxxxxxxxxxxxxx.xx
-x.x...............xMxx
-x.xxx.x.x.xxx.x.x.x.xx
-x.....x...xG..x...xOxx
+x.x.......OKOKOK..xMxx
+x.xxx.x.x.xxxOxKx.x.xx
+x.....x...xG..xO..xOxx
 x.x.x.xxx.x.x.x.x.x.xx
 x........G..x..Gx..Nxx
 xxxxxxxxxxxxxxxxxxxxxx

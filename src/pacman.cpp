@@ -81,12 +81,14 @@ void Pacman::simulate(Events *events, Map *map) {
     }
 
     next_move = events->get_next_move();
+    if (next_move != Directions::None) {
+      facing_direction = next_move;
+    }
     map->get_options(map_coord, options);
     events->Keyreset();
     sleep(5);
 	    for (auto i : options) {
 	      if (i == next_move) {
-        facing_direction = next_move;
 	        switch (next_move) {
         case Directions::Up:
           for (int i = 0;

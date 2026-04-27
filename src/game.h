@@ -187,7 +187,14 @@ struct ActiveBiohazardBeam {
   bool is_active = false;
   Directions direction = Directions::Right;
   Uint32 started_ticks = 0;
+  Uint32 minimum_visible_until_ticks = 0;
+  Uint32 hit_sequence_started_ticks = 0;
+  Uint32 locked_until_ticks = 0;
   int animation_seed = 0;
+  bool is_locked_after_hit = false;
+  MapCoord locked_origin_coord{0, 0};
+  PixelCoord locked_origin_delta{0, 0};
+  SDL_FPoint locked_end_world_center{0.0f, 0.0f};
 };
 
 enum class EffectType {

@@ -56,6 +56,7 @@ private:
   Uint32 electrified_started_ticks;
   int electrified_visual_seed;
   int electrified_charge_target_id;
+  Uint32 biohazard_paralyzed_until_ticks;
 
   friend class Renderer;
   friend class Game;

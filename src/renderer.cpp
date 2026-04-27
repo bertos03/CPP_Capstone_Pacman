@@ -5511,10 +5511,16 @@ void Renderer::drawbiohazardbeam() {
 
   const Uint32 now = SDL_GetTicks();
   const Directions direction = game->active_biohazard_beam.direction;
+  const bool use_locked_segment = game->active_biohazard_beam.is_locked_after_hit;
+  const MapCoord origin_coord =
+      use_locked_segment ? game->active_biohazard_beam.locked_origin_coord
+                         : game->pacman->map_coord;
+  const PixelCoord origin_delta =
+      use_locked_segment ? game->active_biohazard_beam.locked_origin_delta
+                         : game->pacman->px_delta;
   const PixelCoord pacman_px = getPixelCoord(
-      game->pacman->map_coord,
-      static_cast<int>(element_size * game->pacman->px_delta.x / 100.0),
-      static_cast<int>(element_size * game->pacman->px_delta.y / 100.0));
+      origin_coord, static_cast<int>(element_size * origin_delta.x / 100.0),
+      static_cast<int>(element_size * origin_delta.y / 100.0));
   const SDL_Rect pacman_rect{
       pacman_px.x + static_cast<int>(element_size * 0.05),
       pacman_px.y + static_cast<int>(element_size * 0.05),
@@ -5529,67 +5535,110 @@ void Renderer::drawbiohazardbeam() {
       static_cast<float>(pacman_rect.y + pacman_rect.h / 2 -
                          std::max(2, non_character_sprite_lift_px / 2)) -
           side_beam_raise_px};
+  SDL_FPoint beam_start = start;
 
-  MapCoord beam_end_coord = game->pacman->map_coord;
-  MapCoord next_coord = game->pacman->map_coord;
-  while (true) {
-    next_coord = StepRenderCoord(next_coord, direction);
-    if (next_coord.u < 0 || next_coord.v < 0 ||
-        next_coord.u >= static_cast<int>(rows) ||
-        next_coord.v >= static_cast<int>(cols)) {
-      break;
-    }
-    if (map != nullptr &&
-        map->map_entry(static_cast<size_t>(next_coord.u),
-                       static_cast<size_t>(next_coord.v)) ==
-            ElementType::TYPE_WALL) {
-      break;
-    }
-    bool monster_blocks = false;
-    for (const Monster *monster : game->monsters) {
-      if (monster != nullptr && monster->is_alive &&
-          monster->map_coord.u == next_coord.u &&
-          monster->map_coord.v == next_coord.v) {
-        monster_blocks = true;
-        break;
-      }
-    }
-    beam_end_coord = next_coord;
-    if (monster_blocks) {
-      break;
-    }
-  }
-
-  const PixelCoord end_px = getPixelCoord(beam_end_coord, 0, 0);
-  SDL_FPoint end{
-      static_cast<float>(end_px.x + element_size / 2),
-      static_cast<float>(end_px.y + element_size / 2 -
-                         std::max(2, non_character_sprite_lift_px / 2)) -
-          side_beam_raise_px};
-
-  if (beam_end_coord.u == game->pacman->map_coord.u &&
-      beam_end_coord.v == game->pacman->map_coord.v) {
+  SDL_FPoint end{};
+  if (use_locked_segment) {
+    const SDL_FPoint locked_end = game->active_biohazard_beam.locked_end_world_center;
+    end = SDL_FPoint{
+        static_cast<float>(offset_x +
+                           locked_end.x * static_cast<float>(element_size + 1)),
+        static_cast<float>(offset_y +
+                           locked_end.y * static_cast<float>(element_size + 1))};
     switch (direction) {
-    case Directions::Up:
-      end.y -= static_cast<float>(element_size * 0.55);
-      break;
-    case Directions::Down:
-      end.y += static_cast<float>(element_size * 0.55);
-      break;
     case Directions::Left:
-      end.x -= static_cast<float>(element_size * 0.55);
-      break;
     case Directions::Right:
-      end.x += static_cast<float>(element_size * 0.55);
+      end.y = start.y;
+      break;
+    case Directions::Up:
+    case Directions::Down:
+      end.x = start.x;
       break;
     case Directions::None:
     default:
       break;
     }
+  } else {
+    MapCoord beam_end_coord = game->pacman->map_coord;
+    MapCoord next_coord = game->pacman->map_coord;
+    while (true) {
+      next_coord = StepRenderCoord(next_coord, direction);
+      if (next_coord.u < 0 || next_coord.v < 0 ||
+          next_coord.u >= static_cast<int>(rows) ||
+          next_coord.v >= static_cast<int>(cols)) {
+        break;
+      }
+      if (map != nullptr &&
+          map->map_entry(static_cast<size_t>(next_coord.u),
+                         static_cast<size_t>(next_coord.v)) ==
+              ElementType::TYPE_WALL) {
+        break;
+      }
+      bool monster_blocks = false;
+      for (const Monster *monster : game->monsters) {
+        if (monster != nullptr && monster->is_alive &&
+            monster->map_coord.u == next_coord.u &&
+            monster->map_coord.v == next_coord.v) {
+          monster_blocks = true;
+          break;
+        }
+      }
+      beam_end_coord = next_coord;
+      if (monster_blocks) {
+        break;
+      }
+    }
+
+    const PixelCoord end_px = getPixelCoord(beam_end_coord, 0, 0);
+    end = SDL_FPoint{
+        static_cast<float>(end_px.x + element_size / 2),
+        static_cast<float>(end_px.y + element_size / 2 -
+                           std::max(2, non_character_sprite_lift_px / 2)) -
+            side_beam_raise_px};
+
+    if (beam_end_coord.u == game->pacman->map_coord.u &&
+        beam_end_coord.v == game->pacman->map_coord.v) {
+      switch (direction) {
+      case Directions::Up:
+        end.y -= static_cast<float>(element_size * 0.55);
+        break;
+      case Directions::Down:
+        end.y += static_cast<float>(element_size * 0.55);
+        break;
+      case Directions::Left:
+        end.x -= static_cast<float>(element_size * 0.55);
+        break;
+      case Directions::Right:
+        end.x += static_cast<float>(element_size * 0.55);
+        break;
+      case Directions::None:
+      default:
+        break;
+      }
+    }
   }
 
-  const double axis_x = static_cast<double>(end.x - start.x);
-  const double axis_y = static_cast<double>(end.y - start.y);
+  if (use_locked_segment &&
+      game->active_biohazard_beam.locked_until_ticks >
+          game->active_biohazard_beam.hit_sequence_started_ticks &&
+      now >= game->active_biohazard_beam.hit_sequence_started_ticks) {
+    const Uint32 sequence_duration =
+        game->active_biohazard_beam.locked_until_ticks -
+        game->active_biohazard_beam.hit_sequence_started_ticks;
+    const double raw_progress = std::clamp(
+        static_cast<double>(now -
+                            game->active_biohazard_beam.hit_sequence_started_ticks) /
+            static_cast<double>(sequence_duration),
+        0.0, 1.0);
+    const double sink_progress = std::pow(raw_progress, 1.25);
+    beam_start.x =
+        static_cast<float>(start.x + (end.x - start.x) * sink_progress);
+    beam_start.y =
+        static_cast<float>(start.y + (end.y - start.y) * sink_progress);
+  }
+
+  const double axis_x = static_cast<double>(end.x - beam_start.x);
+  const double axis_y = static_cast<double>(end.y - beam_start.y);
   const double axis_length = std::hypot(axis_x, axis_y);
   if (axis_length < 2.0) {
     return;
@@ -5637,7 +5686,7 @@ void Renderer::drawbiohazardbeam() {
         std::max(3.0, element_size * wave_def.amplitude_factor);
     const double phase =
         beam_clock * wave_def.phase_speed + wave_def.phase_offset;
-    SDL_FPoint previous = start;
+    SDL_FPoint previous = beam_start;
 
     SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, color.a);
     for (int sample = 1; sample <= 72; ++sample) {
@@ -5651,8 +5700,8 @@ void Renderer::drawbiohazardbeam() {
           0.18 * std::sin(t * wave_def.frequency * 9.0 * kPi + phase * 1.3);
       const double offset = amplitude * envelope * wave;
       SDL_FPoint current{
-          static_cast<float>(start.x + axis_x * t + normal_x * offset),
-          static_cast<float>(start.y + axis_y * t + normal_y * offset)};
+          static_cast<float>(beam_start.x + axis_x * t + normal_x * offset),
+          static_cast<float>(beam_start.y + axis_y * t + normal_y * offset)};
       SDL_RenderDrawLine(sdl_renderer, static_cast<int>(std::lround(previous.x)),
                          static_cast<int>(std::lround(previous.y)),
                          static_cast<int>(std::lround(current.x)),
@@ -5662,8 +5711,8 @@ void Renderer::drawbiohazardbeam() {
   }
 
   SDL_SetRenderDrawColor(sdl_renderer, 228, 252, 255, 220);
-  SDL_RenderDrawLine(sdl_renderer, static_cast<int>(std::lround(start.x)),
-                     static_cast<int>(std::lround(start.y)),
+  SDL_RenderDrawLine(sdl_renderer, static_cast<int>(std::lround(beam_start.x)),
+                     static_cast<int>(std::lround(beam_start.y)),
                      static_cast<int>(std::lround(end.x)),
                      static_cast<int>(std::lround(end.y)));
 
@@ -5671,9 +5720,9 @@ void Renderer::drawbiohazardbeam() {
     const double progress =
         std::fmod(beam_clock * 0.21 + pulse * 0.23, 1.0);
     const int pulse_x =
-        static_cast<int>(std::lround(start.x + axis_x * progress));
+        static_cast<int>(std::lround(beam_start.x + axis_x * progress));
     const int pulse_y =
-        static_cast<int>(std::lround(start.y + axis_y * progress));
+        static_cast<int>(std::lround(beam_start.y + axis_y * progress));
     SDL_SetRenderDrawColor(sdl_renderer, 110, 224, 255, 150);
     SDL_RenderFillCircle(sdl_renderer, pulse_x, pulse_y,
                          std::max(3, element_size / 10));

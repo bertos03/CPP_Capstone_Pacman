@@ -88,6 +88,7 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char,
   electrified_started_ticks = 0;
   electrified_visual_seed = 0;
   electrified_charge_target_id = -1;
+  biohazard_paralyzed_until_ticks = 0;
 }
 
 /**
@@ -144,7 +145,8 @@ void Monster::simulate(Events *events, Map *map,
   }
 
   while (!events->is_quit() && is_alive) {
-    if (events->IsGameplayFrozen()) {
+    const Uint32 now = SDL_GetTicks();
+    if (events->IsGameplayFrozen() || now < biohazard_paralyzed_until_ticks) {
       px_delta.x = 0;
       px_delta.y = 0;
       sleep(15);
@@ -167,12 +169,13 @@ void Monster::simulate(Events *events, Map *map,
     case Directions::Up:
       for (int i = 0;
            i > -100 && is_alive && !events->IsGameplayFrozen() &&
-           !events->is_quit();
+           !events->is_quit() && SDL_GetTicks() >= biohazard_paralyzed_until_ticks;
            i--) {
         px_delta.y = i;
         sleep(step_delay_ms);
       }
-      if (!is_alive || events->IsGameplayFrozen() || events->is_quit()) {
+      if (!is_alive || events->IsGameplayFrozen() || events->is_quit() ||
+          SDL_GetTicks() < biohazard_paralyzed_until_ticks) {
         break;
       }
       px_delta.y = 0;
@@ -181,12 +184,13 @@ void Monster::simulate(Events *events, Map *map,
     case Directions::Down:
       for (int i = 0;
            i < 100 && is_alive && !events->IsGameplayFrozen() &&
-           !events->is_quit();
+           !events->is_quit() && SDL_GetTicks() >= biohazard_paralyzed_until_ticks;
            i++) {
         px_delta.y = i;
         sleep(step_delay_ms);
       }
-      if (!is_alive || events->IsGameplayFrozen() || events->is_quit()) {
+      if (!is_alive || events->IsGameplayFrozen() || events->is_quit() ||
+          SDL_GetTicks() < biohazard_paralyzed_until_ticks) {
         break;
       }
       px_delta.y = 0;
@@ -195,12 +199,13 @@ void Monster::simulate(Events *events, Map *map,
     case Directions::Left:
       for (int i = 0;
            i > -100 && is_alive && !events->IsGameplayFrozen() &&
-           !events->is_quit();
+           !events->is_quit() && SDL_GetTicks() >= biohazard_paralyzed_until_ticks;
            i--) {
         px_delta.x = i;
         sleep(step_delay_ms);
       }
-      if (!is_alive || events->IsGameplayFrozen() || events->is_quit()) {
+      if (!is_alive || events->IsGameplayFrozen() || events->is_quit() ||
+          SDL_GetTicks() < biohazard_paralyzed_until_ticks) {
         break;
       }
       px_delta.x = 0;
@@ -209,12 +214,13 @@ void Monster::simulate(Events *events, Map *map,
     case Directions::Right:
       for (int i = 0;
            i < 100 && is_alive && !events->IsGameplayFrozen() &&
-           !events->is_quit();
+           !events->is_quit() && SDL_GetTicks() >= biohazard_paralyzed_until_ticks;
            i++) {
         px_delta.x = i;
         sleep(step_delay_ms);
       }
-      if (!is_alive || events->IsGameplayFrozen() || events->is_quit()) {
+      if (!is_alive || events->IsGameplayFrozen() || events->is_quit() ||
+          SDL_GetTicks() < biohazard_paralyzed_until_ticks) {
         break;
       }
       px_delta.x = 0;
@@ -227,6 +233,13 @@ void Monster::simulate(Events *events, Map *map,
       px_delta.x = 0;
       px_delta.y = 0;
       break;
+    }
+
+    if (SDL_GetTicks() < biohazard_paralyzed_until_ticks) {
+      px_delta.x = 0;
+      px_delta.y = 0;
+      sleep(1);
+      continue;
     }
 
     
