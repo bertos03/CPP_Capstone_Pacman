@@ -382,8 +382,6 @@ inline constexpr double CHARACTER_GROUND_SHADOW_HEIGHT_FACTOR = 0.15;
 inline constexpr double CHARACTER_GROUND_SHADOW_Y_OFFSET_FACTOR = 0.06;
 inline constexpr Uint8 WALKIE_TALKIE_ICON_ALPHA = 255;
 inline constexpr Uint8 HUD_ICON_ALPHA = 255;
-inline constexpr bool RENDER_ENABLE_SUPERSAMPLING_AA = true;
-inline constexpr int RENDER_SUPERSAMPLING_FACTOR = 2;
 
 /**
  * @brief Audio mixer and spectrum-analyser configuration.

@@ -69,9 +69,6 @@ public:
 
 private:
   void initializeRenderer(size_t row_count, size_t col_count);
-  void ensureAntialiasRenderTarget();
-  void beginFrameRenderTarget();
-  void presentFrame();
   void updateSceneLayout(size_t row_count, size_t col_count);
   void renderFrame(bool show_hud);
   void renderLayoutFrame(const std::vector<std::string> &layout);
@@ -245,9 +242,6 @@ private:
   Game *game;
   SDL_Window *sdl_window;
   SDL_Renderer *sdl_renderer;
-  SDL_Texture *sdl_antialias_target;
-  int antialias_target_width;
-  int antialias_target_height;
 
   SDL_Surface *sdl_wall_surface;
   SDL_Texture *sdl_wall_texture;
