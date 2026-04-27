@@ -197,6 +197,21 @@ struct ActiveBiohazardBeam {
   SDL_FPoint locked_end_world_center{0.0f, 0.0f};
 };
 
+struct ExplosionParticle {
+  SDL_FPoint world_position{0.0f, 0.0f};
+  SDL_FPoint velocity_cells_per_sec{0.0f, 0.0f};
+  Uint32 spawned_ticks = 0;
+  Uint32 last_smoke_spawn_ticks = 0;
+  Uint32 shape_seed = 0;
+  float radius_cells = 0.0f;
+};
+
+struct ExplosionSmokePuff {
+  SDL_FPoint world_position{0.0f, 0.0f};
+  Uint32 spawned_ticks = 0;
+  Uint32 shape_seed = 0;
+};
+
 enum class EffectType {
   MonsterExplosion,
   WallImpact,
@@ -265,6 +280,9 @@ private:
   ActiveBiohazardBeam active_biohazard_beam;
   std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
+  std::vector<ExplosionParticle> explosion_particles;
+  std::vector<ExplosionSmokePuff> explosion_smoke_puffs;
+  Uint32 explosion_particles_last_update_ticks = 0;
   Uint32 last_update_ticks;
   int dynamite_inventory;
   int plastic_explosive_inventory;
@@ -344,6 +362,8 @@ private:
   void ShiftPausedTimers(Uint32 paused_duration_ms);
   void EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now);
   void EliminateMonster(Monster *monster, Uint32 now);
+  void SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now);
+  void UpdateExplosionParticles(Uint32 now);
 };
 
 #endif

@@ -23,6 +23,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <random>
 
 #include "game.h"
 #include "goodie.h"
@@ -2077,6 +2078,7 @@ void Renderer::renderFrame(bool show_hud) {
       drawactiveairstrike();
       drawbiohazardbeam();
       draweffects();
+      drawExplosionParticles();
     }
     if (show_hud) {
       drawhud();
@@ -2105,6 +2107,7 @@ void Renderer::renderFrame(bool show_hud) {
     drawrockets();
     drawactiveairstrike();
     draweffects();
+    drawExplosionParticles();
   } else {
     drawStaticGoodies();
     drawStaticPacman();
@@ -6381,6 +6384,368 @@ void Renderer::drawDwarf(const SDL_Rect &dwarf_rect,
   }
 }
 
+void Renderer::drawExplosionParticles() {
+  if (game == nullptr) {
+    return;
+  }
+  if (game->explosion_particles.empty() &&
+      game->explosion_smoke_puffs.empty()) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const float cell_to_px = static_cast<float>(element_size + 1);
+
+  auto world_to_screen = [&](SDL_FPoint world) {
+    if (ENABLE_3D_VIEW) {
+      return projectScene(world.x, world.y, 0.0);
+    }
+    return SDL_FPoint{
+        static_cast<float>(offset_x) + world.x * cell_to_px,
+        static_cast<float>(offset_y) + world.y * cell_to_px};
+  };
+
+  const double wobble_clock =
+      static_cast<double>(now) / 1000.0 *
+      (2.0 * 3.14159265358979323846 *
+       MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ);
+
+  for (const ExplosionSmokePuff &puff : game->explosion_smoke_puffs) {
+    if (now < puff.spawned_ticks) {
+      continue;
+    }
+    const Uint32 age = now - puff.spawned_ticks;
+    if (age >= MONSTER_EXPLOSION_SMOKE_LIFETIME_MS) {
+      continue;
+    }
+    const double progress =
+        static_cast<double>(age) /
+        static_cast<double>(MONSTER_EXPLOSION_SMOKE_LIFETIME_MS);
+    const float radius_cells =
+        MONSTER_EXPLOSION_SMOKE_INITIAL_RADIUS_CELLS +
+        (MONSTER_EXPLOSION_SMOKE_FINAL_RADIUS_CELLS -
+         MONSTER_EXPLOSION_SMOKE_INITIAL_RADIUS_CELLS) *
+            static_cast<float>(progress);
+    const Uint8 base_alpha = static_cast<Uint8>(std::clamp(
+        MONSTER_EXPLOSION_SMOKE_INITIAL_ALPHA * (1.0 - progress), 0.0, 255.0));
+    const SDL_FPoint screen = world_to_screen(puff.world_position);
+    const float base_radius_px = radius_cells * cell_to_px;
+
+    std::mt19937 shape_rng(puff.shape_seed);
+    std::uniform_int_distribution<int> blob_count_dist(
+        MONSTER_EXPLOSION_SMOKE_BLOB_MIN_COUNT,
+        MONSTER_EXPLOSION_SMOKE_BLOB_MAX_COUNT);
+    std::uniform_real_distribution<float> offset_dist(-1.0f, 1.0f);
+    std::uniform_real_distribution<float> radius_factor_dist(
+        MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+        MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MAX_FACTOR);
+    std::uniform_real_distribution<float> shade_dist(0.0f, 1.0f);
+    std::uniform_real_distribution<float> phase_dist(
+        0.0f, static_cast<float>(2.0 * 3.14159265358979323846));
+
+    const int blob_count = blob_count_dist(shape_rng);
+    const float wobble_px =
+        MONSTER_EXPLOSION_SMOKE_WOBBLE_AMPLITUDE_CELLS * cell_to_px;
+
+    for (int blob = 0; blob < blob_count; ++blob) {
+      const float base_offset_x =
+          offset_dist(shape_rng) *
+          MONSTER_EXPLOSION_SMOKE_BLOB_OFFSET_FACTOR * base_radius_px;
+      const float base_offset_y =
+          offset_dist(shape_rng) *
+          MONSTER_EXPLOSION_SMOKE_BLOB_OFFSET_FACTOR * base_radius_px;
+      const float blob_radius =
+          base_radius_px * radius_factor_dist(shape_rng);
+      const float shade_mix = shade_dist(shape_rng);
+      const float phase_x = phase_dist(shape_rng);
+      const float phase_y = phase_dist(shape_rng);
+      const float wobble_x =
+          wobble_px * static_cast<float>(std::sin(wobble_clock + phase_x));
+      const float wobble_y =
+          wobble_px * static_cast<float>(std::cos(wobble_clock * 0.83 + phase_y));
+      const Uint8 r = static_cast<Uint8>(
+          MONSTER_EXPLOSION_SMOKE_COLOR.r * (1.0f - shade_mix) +
+          MONSTER_EXPLOSION_SMOKE_HIGHLIGHT_COLOR.r * shade_mix);
+      const Uint8 g = static_cast<Uint8>(
+          MONSTER_EXPLOSION_SMOKE_COLOR.g * (1.0f - shade_mix) +
+          MONSTER_EXPLOSION_SMOKE_HIGHLIGHT_COLOR.g * shade_mix);
+      const Uint8 b = static_cast<Uint8>(
+          MONSTER_EXPLOSION_SMOKE_COLOR.b * (1.0f - shade_mix) +
+          MONSTER_EXPLOSION_SMOKE_HIGHLIGHT_COLOR.b * shade_mix);
+      SDL_SetRenderDrawColor(sdl_renderer, r, g, b, base_alpha);
+      SDL_RenderFillCircle(
+          sdl_renderer,
+          static_cast<int>(
+              std::lround(screen.x + base_offset_x + wobble_x)),
+          static_cast<int>(
+              std::lround(screen.y + base_offset_y + wobble_y)),
+          std::max(1, static_cast<int>(std::lround(blob_radius))));
+    }
+  }
+
+  for (const ExplosionParticle &particle : game->explosion_particles) {
+    if (now < particle.spawned_ticks) {
+      continue;
+    }
+    const Uint32 age = now - particle.spawned_ticks;
+    if (age >= MONSTER_EXPLOSION_PARTICLE_LIFETIME_MS) {
+      continue;
+    }
+    const double life_progress =
+        static_cast<double>(age) /
+        static_cast<double>(MONSTER_EXPLOSION_PARTICLE_LIFETIME_MS);
+    const double fade =
+        std::clamp(1.0 - life_progress * life_progress, 0.0, 1.0);
+    const Uint8 base_alpha = static_cast<Uint8>(std::clamp(
+        MONSTER_EXPLOSION_PARTICLE_INITIAL_ALPHA * fade, 0.0, 255.0));
+    const float growth = 1.0f + 0.55f * static_cast<float>(life_progress);
+    const SDL_FPoint screen = world_to_screen(particle.world_position);
+
+    std::mt19937 shape_rng(particle.shape_seed);
+    std::uniform_int_distribution<int> blob_count_dist(
+        MONSTER_EXPLOSION_PARTICLE_BLOB_MIN_COUNT,
+        MONSTER_EXPLOSION_PARTICLE_BLOB_MAX_COUNT);
+    std::uniform_real_distribution<float> offset_dist(-1.0f, 1.0f);
+    std::uniform_real_distribution<float> radius_factor_dist(
+        MONSTER_EXPLOSION_PARTICLE_BLOB_RADIUS_MIN_FACTOR,
+        MONSTER_EXPLOSION_PARTICLE_BLOB_RADIUS_MAX_FACTOR);
+    std::uniform_real_distribution<float> shade_dist(0.0f, 1.0f);
+
+    const int blob_count = blob_count_dist(shape_rng);
+    const float base_radius_px = particle.radius_cells * cell_to_px * growth;
+
+    for (int blob = 0; blob < blob_count; ++blob) {
+      const float offset_x =
+          offset_dist(shape_rng) *
+          MONSTER_EXPLOSION_PARTICLE_BLOB_OFFSET_FACTOR * base_radius_px;
+      const float offset_y =
+          offset_dist(shape_rng) *
+          MONSTER_EXPLOSION_PARTICLE_BLOB_OFFSET_FACTOR * base_radius_px;
+      const float blob_radius =
+          base_radius_px * radius_factor_dist(shape_rng);
+      const float shade_mix = shade_dist(shape_rng);
+      const Uint8 r = static_cast<Uint8>(
+          MONSTER_EXPLOSION_PARTICLE_COLOR.r * (1.0f - shade_mix) +
+          MONSTER_EXPLOSION_PARTICLE_HIGHLIGHT_COLOR.r * shade_mix);
+      const Uint8 g = static_cast<Uint8>(
+          MONSTER_EXPLOSION_PARTICLE_COLOR.g * (1.0f - shade_mix) +
+          MONSTER_EXPLOSION_PARTICLE_HIGHLIGHT_COLOR.g * shade_mix);
+      const Uint8 b = static_cast<Uint8>(
+          MONSTER_EXPLOSION_PARTICLE_COLOR.b * (1.0f - shade_mix) +
+          MONSTER_EXPLOSION_PARTICLE_HIGHLIGHT_COLOR.b * shade_mix);
+      SDL_SetRenderDrawColor(sdl_renderer, r, g, b, base_alpha);
+      SDL_RenderFillCircle(
+          sdl_renderer,
+          static_cast<int>(std::lround(screen.x + offset_x)),
+          static_cast<int>(std::lround(screen.y + offset_y)),
+          std::max(1, static_cast<int>(std::lround(blob_radius))));
+    }
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
+void Renderer::drawMonsterFireball(int center_x, int center_y, Uint32 elapsed,
+                                   Uint32 seed) {
+  if (elapsed >= MONSTER_EXPLOSION_FIREBALL_DURATION_MS) {
+    return;
+  }
+  const double duration =
+      static_cast<double>(MONSTER_EXPLOSION_FIREBALL_DURATION_MS);
+  const double progress =
+      std::clamp(static_cast<double>(elapsed) / duration, 0.0, 1.0);
+  const double expansion_progress = std::clamp(
+      static_cast<double>(elapsed) /
+          static_cast<double>(
+              std::max<Uint32>(1, MONSTER_EXPLOSION_FIREBALL_EXPANSION_MS)),
+      0.0, 1.0);
+  const double eased_expansion =
+      1.0 - std::pow(1.0 - expansion_progress, 2.4);
+  const double late_growth =
+      MONSTER_EXPLOSION_FIREBALL_LATE_GROWTH * (progress - 0.20);
+  const double scale =
+      std::max(0.0, eased_expansion + std::max(0.0, late_growth));
+  if (scale <= 0.0) {
+    return;
+  }
+  const double fade_start = MONSTER_EXPLOSION_FIREBALL_FADE_START_PROGRESS;
+  double global_alpha = 1.0;
+  if (progress > fade_start) {
+    global_alpha = std::max(
+        0.0, 1.0 - (progress - fade_start) / std::max(0.001, 1.0 - fade_start));
+    global_alpha = std::pow(global_alpha, 1.4);
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const float cell_to_px = static_cast<float>(element_size + 1);
+  const float peak_radius_px =
+      MONSTER_EXPLOSION_FIREBALL_PEAK_RADIUS_CELLS * cell_to_px;
+
+  const float wobble_px =
+      MONSTER_EXPLOSION_FIREBALL_WOBBLE_AMPLITUDE_CELLS * cell_to_px;
+  const double wobble_clock =
+      static_cast<double>(SDL_GetTicks()) / 1000.0 *
+      (2.0 * 3.14159265358979323846 *
+       MONSTER_EXPLOSION_FIREBALL_WOBBLE_FREQUENCY_HZ);
+
+  const Uint8 halo_alpha = static_cast<Uint8>(std::clamp(
+      MONSTER_EXPLOSION_FIREBALL_HALO_ALPHA * global_alpha, 0.0, 255.0));
+  if (halo_alpha > 0) {
+    const int halo_radius = std::max(
+        2, static_cast<int>(std::lround(peak_radius_px * scale *
+                                        MONSTER_EXPLOSION_FIREBALL_HALO_RADIUS_FACTOR)));
+    SDL_SetRenderDrawColor(sdl_renderer,
+                           MONSTER_EXPLOSION_FIREBALL_HALO_COLOR.r,
+                           MONSTER_EXPLOSION_FIREBALL_HALO_COLOR.g,
+                           MONSTER_EXPLOSION_FIREBALL_HALO_COLOR.b, halo_alpha);
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y, halo_radius);
+  }
+
+  struct FireballLayer {
+    SDL_Color color;
+    SDL_Color highlight;
+    float radius_factor;
+    int blob_count;
+    Uint8 alpha;
+  };
+  const FireballLayer layers[] = {
+      {MONSTER_EXPLOSION_FIREBALL_OUTER_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_RED_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_OUTER_RADIUS_FACTOR,
+       MONSTER_EXPLOSION_FIREBALL_OUTER_BLOB_COUNT,
+       MONSTER_EXPLOSION_FIREBALL_OUTER_ALPHA},
+      {MONSTER_EXPLOSION_FIREBALL_RED_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_ORANGE_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_RED_RADIUS_FACTOR,
+       MONSTER_EXPLOSION_FIREBALL_RED_BLOB_COUNT,
+       MONSTER_EXPLOSION_FIREBALL_RED_ALPHA},
+      {MONSTER_EXPLOSION_FIREBALL_ORANGE_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_YELLOW_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_ORANGE_RADIUS_FACTOR,
+       MONSTER_EXPLOSION_FIREBALL_ORANGE_BLOB_COUNT,
+       MONSTER_EXPLOSION_FIREBALL_ORANGE_ALPHA},
+      {MONSTER_EXPLOSION_FIREBALL_YELLOW_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_CORE_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_YELLOW_RADIUS_FACTOR,
+       MONSTER_EXPLOSION_FIREBALL_YELLOW_BLOB_COUNT,
+       MONSTER_EXPLOSION_FIREBALL_YELLOW_ALPHA},
+      {MONSTER_EXPLOSION_FIREBALL_CORE_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_CORE_COLOR,
+       MONSTER_EXPLOSION_FIREBALL_CORE_RADIUS_FACTOR,
+       MONSTER_EXPLOSION_FIREBALL_CORE_BLOB_COUNT,
+       MONSTER_EXPLOSION_FIREBALL_CORE_ALPHA},
+  };
+
+  for (size_t layer_index = 0;
+       layer_index < sizeof(layers) / sizeof(layers[0]); ++layer_index) {
+    const FireballLayer &layer = layers[layer_index];
+    const float layer_radius_px = static_cast<float>(
+        peak_radius_px * scale * layer.radius_factor);
+    if (layer_radius_px <= 0.5f) {
+      continue;
+    }
+    const Uint8 layer_alpha = static_cast<Uint8>(std::clamp(
+        layer.alpha * global_alpha, 0.0, 255.0));
+    if (layer_alpha == 0) {
+      continue;
+    }
+
+    std::mt19937 rng(seed ^ (0x9E3779B1u * (static_cast<Uint32>(layer_index) + 1u)));
+    std::uniform_real_distribution<float> offset_dist(-1.0f, 1.0f);
+    std::uniform_real_distribution<float> radius_factor_dist(
+        MONSTER_EXPLOSION_FIREBALL_BLOB_RADIUS_MIN_FACTOR,
+        MONSTER_EXPLOSION_FIREBALL_BLOB_RADIUS_MAX_FACTOR);
+    std::uniform_real_distribution<float> shade_dist(0.0f, 1.0f);
+    std::uniform_real_distribution<float> phase_dist(
+        0.0f, static_cast<float>(2.0 * 3.14159265358979323846));
+
+    for (int blob = 0; blob < layer.blob_count; ++blob) {
+      const float base_offset_x =
+          offset_dist(rng) *
+          MONSTER_EXPLOSION_FIREBALL_BLOB_OFFSET_FACTOR * layer_radius_px;
+      const float base_offset_y =
+          offset_dist(rng) *
+          MONSTER_EXPLOSION_FIREBALL_BLOB_OFFSET_FACTOR * layer_radius_px;
+      const float blob_radius =
+          layer_radius_px * radius_factor_dist(rng);
+      const float shade_mix = shade_dist(rng);
+      const float phase_x = phase_dist(rng);
+      const float phase_y = phase_dist(rng);
+      const float wobble_x =
+          wobble_px * static_cast<float>(std::sin(wobble_clock + phase_x));
+      const float wobble_y =
+          wobble_px *
+          static_cast<float>(std::cos(wobble_clock * 0.83 + phase_y));
+      const Uint8 r = static_cast<Uint8>(
+          layer.color.r * (1.0f - shade_mix) + layer.highlight.r * shade_mix);
+      const Uint8 g = static_cast<Uint8>(
+          layer.color.g * (1.0f - shade_mix) + layer.highlight.g * shade_mix);
+      const Uint8 b = static_cast<Uint8>(
+          layer.color.b * (1.0f - shade_mix) + layer.highlight.b * shade_mix);
+      SDL_SetRenderDrawColor(sdl_renderer, r, g, b, layer_alpha);
+      SDL_RenderFillCircle(
+          sdl_renderer,
+          static_cast<int>(
+              std::lround(center_x + base_offset_x + wobble_x)),
+          static_cast<int>(
+              std::lround(center_y + base_offset_y + wobble_y)),
+          std::max(1, static_cast<int>(std::lround(blob_radius))));
+    }
+  }
+
+  const double flare_progress =
+      std::clamp(progress / std::max(0.01, fade_start), 0.0, 1.0);
+  const double flare_strength = std::sin(flare_progress * 3.14159265358979323846);
+  if (flare_strength > 0.01) {
+    const Uint8 flare_alpha = static_cast<Uint8>(std::clamp(
+        MONSTER_EXPLOSION_FIREBALL_FLARE_ALPHA * flare_strength * global_alpha,
+        0.0, 255.0));
+    if (flare_alpha > 0) {
+      std::mt19937 flare_rng(seed ^ 0x517CC1B7u);
+      std::uniform_real_distribution<float> jitter_dist(-0.18f, 0.18f);
+      const double angle_step = 2.0 * 3.14159265358979323846 /
+                                std::max(1, MONSTER_EXPLOSION_FIREBALL_FLARE_COUNT);
+      for (int flare = 0; flare < MONSTER_EXPLOSION_FIREBALL_FLARE_COUNT; ++flare) {
+        const double base_angle = flare * angle_step;
+        const double angle =
+            base_angle + jitter_dist(flare_rng) +
+            wobble_clock * 0.06;
+        const float inner_r = static_cast<float>(
+            peak_radius_px * scale *
+            MONSTER_EXPLOSION_FIREBALL_FLARE_INNER_FACTOR);
+        const float outer_r = static_cast<float>(
+            peak_radius_px * scale *
+            MONSTER_EXPLOSION_FIREBALL_FLARE_OUTER_FACTOR *
+            (0.85f + 0.30f * jitter_dist(flare_rng)));
+        const int x1 = center_x +
+                       static_cast<int>(std::lround(std::cos(angle) * inner_r));
+        const int y1 = center_y +
+                       static_cast<int>(std::lround(std::sin(angle) * inner_r));
+        const int x2 = center_x +
+                       static_cast<int>(std::lround(std::cos(angle) * outer_r));
+        const int y2 = center_y +
+                       static_cast<int>(std::lround(std::sin(angle) * outer_r));
+        const SDL_Color flare_color{
+            MONSTER_EXPLOSION_FIREBALL_FLARE_COLOR.r,
+            MONSTER_EXPLOSION_FIREBALL_FLARE_COLOR.g,
+            MONSTER_EXPLOSION_FIREBALL_FLARE_COLOR.b, flare_alpha};
+        SDL_RenderDrawAALine(sdl_renderer, static_cast<double>(x1),
+                             static_cast<double>(y1), static_cast<double>(x2),
+                             static_cast<double>(y2), flare_color);
+      }
+    }
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
 void Renderer::drawDefeatEffect() {
   if (game == nullptr) {
     return;
@@ -7260,6 +7625,10 @@ void Renderer::draweffects() {
       SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
                            std::max(outer_radius - element_size / 4, mid_radius + 1));
     } else if (effect.type == EffectType::MonsterExplosion) {
+      drawMonsterFireball(center_x, center_y, elapsed,
+                          static_cast<Uint32>(effect.started_ticks) ^
+                              (static_cast<Uint32>(effect.coord.u) * 73856093u) ^
+                              (static_cast<Uint32>(effect.coord.v) * 19349663u));
       const int frame_index = std::clamp(
           static_cast<int>(elapsed / std::max<Uint32>(1, MONSTER_EXPLOSION_FRAME_MS)),
           0, kMonsterExplosionFrames - 1);

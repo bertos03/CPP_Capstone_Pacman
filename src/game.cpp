@@ -470,6 +470,7 @@ void Game::Update() {
   UpdateGasClouds(now);
   UpdateElectrifiedMonsters(now);
   UpdateScheduledMonsterBlasts(now);
+  UpdateExplosionParticles(now);
   if (dead) {
     return;
   }
@@ -530,6 +531,14 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
     ShiftActiveTicks(cloud.started_ticks, paused_duration_ms);
     ShiftActiveTicks(cloud.fade_started_ticks, paused_duration_ms);
   }
+  for (ExplosionParticle &particle : explosion_particles) {
+    ShiftActiveTicks(particle.spawned_ticks, paused_duration_ms);
+    ShiftActiveTicks(particle.last_smoke_spawn_ticks, paused_duration_ms);
+  }
+  for (ExplosionSmokePuff &puff : explosion_smoke_puffs) {
+    ShiftActiveTicks(puff.spawned_ticks, paused_duration_ms);
+  }
+  ShiftActiveTicks(explosion_particles_last_update_ticks, paused_duration_ms);
 
   ShiftActiveTicks(invulnerability_potion.appeared_ticks, paused_duration_ms);
   ShiftActiveTicks(invulnerability_potion.fade_started_ticks, paused_duration_ms);
@@ -2485,6 +2494,7 @@ void Game::UpdateScheduledMonsterBlasts(Uint32 now) {
       blast.monster->death_coord = blast.coord;
       blast.monster->death_started_ticks = now;
       effects.push_back({blast.coord, now, EffectType::MonsterExplosion, 1});
+      SpawnMonsterExplosionParticles(MakeCellCenter(blast.coord), now);
 #ifdef AUDIO
       audio->PlayDynamiteExplosion();
 #endif
@@ -2824,6 +2834,7 @@ void Game::EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now) {
   explosion_effect.has_precise_world_center = true;
   explosion_effect.precise_world_center = sprite_center;
   effects.push_back(explosion_effect);
+  SpawnMonsterExplosionParticles(sprite_center, now);
 #ifdef AUDIO
   audio->PlayDynamiteExplosion();
 #endif
@@ -2850,7 +2861,102 @@ void Game::EliminateMonster(Monster *monster, Uint32 now) {
   explosion_effect.has_precise_world_center = true;
   explosion_effect.precise_world_center = sprite_center;
   effects.push_back(explosion_effect);
+  SpawnMonsterExplosionParticles(sprite_center, now);
 #ifdef AUDIO
   audio->PlayMonsterExplosion();
 #endif
+}
+
+void Game::SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_int_distribution<int> count_dist(
+      MONSTER_EXPLOSION_PARTICLE_MIN_COUNT,
+      MONSTER_EXPLOSION_PARTICLE_MAX_COUNT);
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> speed_dist(
+      MONSTER_EXPLOSION_PARTICLE_MIN_SPEED_CELLS_PER_SEC,
+      MONSTER_EXPLOSION_PARTICLE_MAX_SPEED_CELLS_PER_SEC);
+  std::uniform_real_distribution<float> radius_dist(0.7f, 1.3f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  const int count = count_dist(rng);
+  for (int i = 0; i < count; ++i) {
+    const float angle = angle_dist(rng);
+    const float speed = speed_dist(rng);
+    ExplosionParticle particle;
+    particle.world_position = world_center;
+    particle.velocity_cells_per_sec.x = std::cos(angle) * speed;
+    particle.velocity_cells_per_sec.y =
+        std::sin(angle) * speed -
+        MONSTER_EXPLOSION_PARTICLE_INITIAL_UPWARD_BIAS * speed;
+    particle.spawned_ticks = now;
+    particle.last_smoke_spawn_ticks = now;
+    particle.shape_seed = seed_dist(rng);
+    particle.radius_cells =
+        MONSTER_EXPLOSION_PARTICLE_RADIUS_CELLS * radius_dist(rng);
+    explosion_particles.push_back(particle);
+  }
+}
+
+void Game::UpdateExplosionParticles(Uint32 now) {
+  if (explosion_particles_last_update_ticks == 0 ||
+      explosion_particles_last_update_ticks > now) {
+    explosion_particles_last_update_ticks = now;
+  }
+  const Uint32 last = explosion_particles_last_update_ticks;
+  explosion_particles_last_update_ticks = now;
+  const float dt = (now > last)
+                       ? std::min(0.1f, static_cast<float>(now - last) / 1000.0f)
+                       : 0.0f;
+
+  for (size_t index = 0; index < explosion_particles.size();) {
+    ExplosionParticle &particle = explosion_particles[index];
+    if (now < particle.spawned_ticks) {
+      ++index;
+      continue;
+    }
+    const Uint32 age = now - particle.spawned_ticks;
+    if (age >= MONSTER_EXPLOSION_PARTICLE_LIFETIME_MS) {
+      explosion_particles.erase(explosion_particles.begin() +
+                                static_cast<long>(index));
+      continue;
+    }
+
+    if (dt > 0.0f) {
+      particle.velocity_cells_per_sec.y +=
+          MONSTER_EXPLOSION_PARTICLE_GRAVITY_CELLS_PER_SEC2 * dt;
+      particle.world_position.x += particle.velocity_cells_per_sec.x * dt;
+      particle.world_position.y += particle.velocity_cells_per_sec.y * dt;
+    }
+
+    if (now - particle.last_smoke_spawn_ticks >=
+        MONSTER_EXPLOSION_SMOKE_SPAWN_INTERVAL_MS) {
+      ExplosionSmokePuff puff;
+      puff.world_position = particle.world_position;
+      puff.spawned_ticks = now;
+      puff.shape_seed =
+          particle.shape_seed ^ (now * 2654435761u) ^
+          static_cast<Uint32>(explosion_smoke_puffs.size() * 374761393u);
+      if (puff.shape_seed == 0) {
+        puff.shape_seed = 1;
+      }
+      explosion_smoke_puffs.push_back(puff);
+      particle.last_smoke_spawn_ticks = now;
+    }
+
+    ++index;
+  }
+
+  explosion_smoke_puffs.erase(
+      std::remove_if(explosion_smoke_puffs.begin(),
+                     explosion_smoke_puffs.end(),
+                     [now](const ExplosionSmokePuff &puff) {
+                       if (now < puff.spawned_ticks) {
+                         return false;
+                       }
+                       return now - puff.spawned_ticks >=
+                              MONSTER_EXPLOSION_SMOKE_LIFETIME_MS;
+                     }),
+      explosion_smoke_puffs.end());
 }

@@ -135,6 +135,9 @@ private:
   void drawfireballs();
   void drawslimeballs();
   void draweffects();
+  void drawExplosionParticles();
+  void drawMonsterFireball(int center_x, int center_y, Uint32 elapsed,
+                           Uint32 seed);
   void drawDefeatEffect();
   void drawDefeatOverlay();
   void drawVictoryOverlay();
