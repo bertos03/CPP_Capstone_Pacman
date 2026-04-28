@@ -383,6 +383,37 @@ inline constexpr Uint8 WALL_RUBBLE_BASE_ALPHA = 224;
 inline constexpr SDL_Color WALL_RUBBLE_DARK_COLOR{84, 62, 54, 255};
 inline constexpr SDL_Color WALL_RUBBLE_LIGHT_COLOR{164, 132, 110, 255};
 
+inline constexpr double WALL_MOSS_SURFACE_CHANCE = 0.79;
+inline constexpr int WALL_MOSS_PATCH_MIN_COUNT = 1;
+inline constexpr int WALL_MOSS_PATCH_MAX_COUNT = 4;
+inline constexpr int WALL_MOSS_BLOB_MIN_COUNT = 4;
+inline constexpr int WALL_MOSS_BLOB_MAX_COUNT = 7;
+inline constexpr float WALL_MOSS_PATCH_RADIUS_MIN_FACTOR = 0.045f;
+inline constexpr float WALL_MOSS_PATCH_RADIUS_MAX_FACTOR = 0.17f;
+inline constexpr Uint8 WALL_MOSS_BASE_ALPHA = 162;
+inline constexpr SDL_Color WALL_MOSS_DARK_COLOR{28, 58, 24, 255};
+inline constexpr SDL_Color WALL_MOSS_MID_COLOR{48, 96, 40, 255};
+inline constexpr SDL_Color WALL_MOSS_HIGHLIGHT_COLOR{94, 146, 70, 255};
+
+inline constexpr double WALL_VINE_SURFACE_CHANCE = 0.72;
+inline constexpr int WALL_VINE_MIN_COUNT = 1;
+inline constexpr int WALL_VINE_MAX_COUNT = 4;
+inline constexpr int WALL_VINE_SEGMENT_MIN_COUNT = 4;
+inline constexpr int WALL_VINE_SEGMENT_MAX_COUNT = 7;
+inline constexpr float WALL_VINE_THICKNESS_MIN_FACTOR = 0.011f;
+inline constexpr float WALL_VINE_THICKNESS_MAX_FACTOR = 0.029f;
+inline constexpr float WALL_VINE_DRIFT_FACTOR = 0.18f;
+inline constexpr float WALL_VINE_STEP_MIN_FACTOR = 0.10f;
+inline constexpr float WALL_VINE_STEP_MAX_FACTOR = 0.18f;
+inline constexpr double WALL_VINE_LEAF_CHANCE = 0.76;
+inline constexpr Uint8 WALL_VINE_BASE_ALPHA = 188;
+inline constexpr SDL_Color WALL_VINE_STEM_DARK_COLOR{46, 31, 20, 255};
+inline constexpr SDL_Color WALL_VINE_STEM_MID_COLOR{82, 56, 33, 255};
+inline constexpr SDL_Color WALL_VINE_STEM_HIGHLIGHT_COLOR{146, 104, 64, 255};
+inline constexpr SDL_Color WALL_VINE_LEAF_DARK_COLOR{28, 68, 26, 255};
+inline constexpr SDL_Color WALL_VINE_LEAF_MID_COLOR{64, 126, 50, 255};
+inline constexpr SDL_Color WALL_VINE_LEAF_HIGHLIGHT_COLOR{132, 194, 92, 255};
+
 inline constexpr Uint32 MONSTER_EXPLOSION_FIREBALL_DURATION_MS = 720;
 inline constexpr Uint32 MONSTER_EXPLOSION_FIREBALL_EXPANSION_MS = 170;
 inline constexpr float MONSTER_EXPLOSION_FIREBALL_PEAK_RADIUS_CELLS = 1.05f;

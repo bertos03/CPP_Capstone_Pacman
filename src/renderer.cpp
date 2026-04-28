@@ -8152,7 +8152,8 @@ void Renderer::drawmap() {
                 map->map_entry(j, i + 1) == ElementType::TYPE_WALL,
             j + 1 < rows &&
                 map->map_entry(j + 1, i) == ElementType::TYPE_WALL,
-            i > 0 && map->map_entry(j, i - 1) == ElementType::TYPE_WALL);
+            i > 0 && map->map_entry(j, i - 1) == ElementType::TYPE_WALL, 255,
+            static_cast<int>(j * 92821 + i * 68917 + 11), false);
         break;
       case ElementType::TYPE_PATH:
       case ElementType::TYPE_TELEPORTER:
@@ -8333,7 +8334,8 @@ void Renderer::drawWallTop3D(int row, int col) {
   // The front edge of the top face meets the vertical wall face and should
   // stay closed to avoid notches between both faces.
   drawWallTile(top_rect, has_wall(row - 1, col), has_wall(row, col + 1),
-               true, has_wall(row, col - 1));
+               true, has_wall(row, col - 1), 255,
+               row * 92821 + col * 68917 + 101, false);
 }
 
 SDL_Rect Renderer::getWallTopRect(int row, int col) const {
@@ -8445,7 +8447,8 @@ void Renderer::drawWallFrontFace3D(int row, int col) {
   const SDL_Rect front_rect = getWallFrontFaceRect(row, col);
   // The top edge of the front face joins the top face and must not be carved.
   drawWallTile(front_rect, true, has_wall(row, col + 1), false,
-               has_wall(row, col - 1), 170);
+               has_wall(row, col - 1), 170,
+               row * 92821 + col * 68917 + 202, true);
 }
 
 void Renderer::drawWallTile3D(int row, int col, bool has_wall_down) {
@@ -8639,7 +8642,8 @@ void Renderer::carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
 
 void Renderer::drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
                             bool has_wall_right, bool has_wall_down,
-                            bool has_wall_left, Uint8 shade) {
+                            bool has_wall_left, Uint8 shade, int detail_seed,
+                            bool vertical_surface) {
   if (sdl_wall_texture != nullptr) {
     SDL_SetTextureColorMod(sdl_wall_texture, shade, shade, shade);
     SDL_RenderCopy(sdl_renderer, sdl_wall_texture, nullptr, &wall_rect);
@@ -8653,6 +8657,8 @@ void Renderer::drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
                            shade_channel(68), 0xFF);
     SDL_RenderFillRect(sdl_renderer, &wall_rect);
   }
+
+  drawWallVegetation(wall_rect, shade, detail_seed, vertical_surface);
 
   const int max_radius = std::min(wall_rect.w, wall_rect.h) / 2;
   const int corner_radius =
@@ -8674,6 +8680,340 @@ void Renderer::drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
   if (!has_wall_down && !has_wall_right) {
     carveRoundedWallCorner(wall_rect, corner_radius, false, false);
   }
+}
+
+void Renderer::drawWallVegetation(const SDL_Rect &wall_rect, Uint8 shade,
+                                  int detail_seed, bool vertical_surface) {
+  if (wall_rect.w < 12 || wall_rect.h < 12) {
+    return;
+  }
+
+  const int min_dimension = std::min(wall_rect.w, wall_rect.h);
+  const int margin = std::max(2, min_dimension / 9);
+  const float shade_factor =
+      std::clamp(static_cast<float>(shade) / 255.0f, 0.55f, 1.0f);
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const SDL_Color moss_shadow_color = WithAlpha(
+      ScaleColor(WALL_MOSS_DARK_COLOR, shade_factor * 0.64f),
+      static_cast<Uint8>(std::clamp(WALL_MOSS_BASE_ALPHA * 0.40, 0.0, 255.0)));
+  const SDL_Color moss_base_color = WithAlpha(
+      ScaleColor(WALL_MOSS_MID_COLOR, shade_factor * 0.88f),
+      WALL_MOSS_BASE_ALPHA);
+  const SDL_Color moss_highlight_color = WithAlpha(
+      ScaleColor(WALL_MOSS_HIGHLIGHT_COLOR, shade_factor * 0.96f),
+      static_cast<Uint8>(std::clamp(WALL_MOSS_BASE_ALPHA * 0.48, 0.0, 255.0)));
+
+  const SDL_Color stem_shadow_color = WithAlpha(
+      ScaleColor(WALL_VINE_STEM_DARK_COLOR, shade_factor * 0.62f),
+      static_cast<Uint8>(std::clamp(WALL_VINE_BASE_ALPHA * 0.42, 0.0, 255.0)));
+  const SDL_Color stem_base_color = WithAlpha(
+      ScaleColor(WALL_VINE_STEM_MID_COLOR, shade_factor * 0.96f),
+      WALL_VINE_BASE_ALPHA);
+  const SDL_Color stem_highlight_color = WithAlpha(
+      ScaleColor(WALL_VINE_STEM_HIGHLIGHT_COLOR, shade_factor * 1.02f),
+      static_cast<Uint8>(std::clamp(WALL_VINE_BASE_ALPHA * 0.62, 0.0, 255.0)));
+
+  const SDL_Color leaf_shadow_color = WithAlpha(
+      ScaleColor(WALL_VINE_LEAF_DARK_COLOR, shade_factor * 0.64f),
+      static_cast<Uint8>(std::clamp(WALL_VINE_BASE_ALPHA * 0.44, 0.0, 255.0)));
+  const SDL_Color leaf_base_color = WithAlpha(
+      ScaleColor(WALL_VINE_LEAF_MID_COLOR, shade_factor * 1.00f),
+      WALL_VINE_BASE_ALPHA);
+  const SDL_Color leaf_highlight_color = WithAlpha(
+      ScaleColor(WALL_VINE_LEAF_HIGHLIGHT_COLOR, shade_factor * 1.04f),
+      static_cast<Uint8>(std::clamp(WALL_VINE_BASE_ALPHA * 0.72, 0.0, 255.0)));
+
+  auto random_count = [&](int seed, int minimum, int maximum) {
+    const int clamped_minimum = std::min(minimum, maximum);
+    const int clamped_maximum = std::max(minimum, maximum);
+    return clamped_minimum +
+           (std::abs(seed) % (clamped_maximum - clamped_minimum + 1));
+  };
+
+  const double moss_surface_chance =
+      vertical_surface ? WALL_MOSS_SURFACE_CHANCE * 0.68
+                       : WALL_MOSS_SURFACE_CHANCE;
+  if (HashUnit(detail_seed + 5) < moss_surface_chance) {
+    const int patch_count = random_count(
+        detail_seed * 17 + 9, WALL_MOSS_PATCH_MIN_COUNT, WALL_MOSS_PATCH_MAX_COUNT);
+    for (int patch = 0; patch < patch_count; ++patch) {
+      const int patch_seed = detail_seed * 131 + patch * 37;
+      const float radius =
+          min_dimension *
+          (WALL_MOSS_PATCH_RADIUS_MIN_FACTOR +
+           static_cast<float>(HashUnit(patch_seed + 1)) *
+               (WALL_MOSS_PATCH_RADIUS_MAX_FACTOR -
+                WALL_MOSS_PATCH_RADIUS_MIN_FACTOR)) *
+          (vertical_surface ? 0.82f : 1.0f);
+      const float center_x = static_cast<float>(wall_rect.x + margin) +
+                             static_cast<float>(wall_rect.w - margin * 2) *
+                                 static_cast<float>(HashUnit(patch_seed + 2));
+      const float y_bias =
+          vertical_surface ? static_cast<float>(HashUnit(patch_seed + 3)) * 0.78f
+                           : static_cast<float>(HashUnit(patch_seed + 3));
+      const float center_y = static_cast<float>(wall_rect.y + margin) +
+                             static_cast<float>(wall_rect.h - margin * 2) * y_bias;
+      const int blob_count = random_count(
+          patch_seed + 7, WALL_MOSS_BLOB_MIN_COUNT, WALL_MOSS_BLOB_MAX_COUNT);
+
+      SDL_SetRenderDrawColor(
+          sdl_renderer, moss_shadow_color.r, moss_shadow_color.g,
+          moss_shadow_color.b,
+          static_cast<Uint8>(std::clamp(moss_shadow_color.a * 0.70, 0.0, 255.0)));
+      SDL_RenderFillEllipse(
+          sdl_renderer, static_cast<int>(std::lround(center_x)),
+          static_cast<int>(std::lround(center_y)),
+          std::max(2, static_cast<int>(std::lround(radius * 0.82f))),
+          std::max(2, static_cast<int>(std::lround(radius * (vertical_surface ? 0.54f
+                                                                           : 0.68f)))));
+
+      for (int blob = 0; blob < blob_count; ++blob) {
+        const int blob_seed = patch_seed + blob * 19;
+        const double angle = HashUnit(blob_seed + 11) * 2.0 * kLogoPi;
+        const float orbit =
+            radius * static_cast<float>(0.10 + 0.62 * HashUnit(blob_seed + 13));
+        const float blob_x =
+            center_x + std::cos(angle) * orbit * (vertical_surface ? 0.88f : 1.0f);
+        const float blob_y = center_y +
+                             std::sin(angle) * orbit *
+                                 (vertical_surface ? 0.66f : 0.92f);
+        const int blob_radius_x =
+            std::max(1, static_cast<int>(std::lround(
+                            radius * (0.22 + 0.30 * HashUnit(blob_seed + 17)))));
+        const int blob_radius_y =
+            std::max(1, static_cast<int>(std::lround(
+                            blob_radius_x *
+                            (0.60 + 0.28 * HashUnit(blob_seed + 23)))));
+
+        SDL_SetRenderDrawColor(sdl_renderer, moss_shadow_color.r,
+                               moss_shadow_color.g, moss_shadow_color.b,
+                               moss_shadow_color.a);
+        SDL_RenderFillEllipse(sdl_renderer,
+                              static_cast<int>(std::lround(blob_x + 0.6f)),
+                              static_cast<int>(std::lround(blob_y + 0.6f)),
+                              blob_radius_x, blob_radius_y);
+
+        const SDL_Color blob_color =
+            LerpColor(moss_base_color, moss_highlight_color,
+                      static_cast<float>(HashUnit(blob_seed + 29)) * 0.55f);
+        SDL_SetRenderDrawColor(sdl_renderer, blob_color.r, blob_color.g,
+                               blob_color.b, blob_color.a);
+        SDL_RenderFillEllipse(sdl_renderer,
+                              static_cast<int>(std::lround(blob_x)),
+                              static_cast<int>(std::lround(blob_y)),
+                              blob_radius_x, blob_radius_y);
+
+        SDL_SetRenderDrawColor(
+            sdl_renderer, moss_highlight_color.r, moss_highlight_color.g,
+            moss_highlight_color.b,
+            static_cast<Uint8>(std::clamp(moss_highlight_color.a * 0.55, 0.0, 255.0)));
+        SDL_RenderFillEllipse(
+            sdl_renderer, static_cast<int>(std::lround(blob_x - blob_radius_x * 0.18f)),
+            static_cast<int>(std::lround(blob_y - blob_radius_y * 0.22f)),
+            std::max(1, std::max(1, blob_radius_x - 1) / 2),
+            std::max(1, std::max(1, blob_radius_y - 1) / 2));
+      }
+    }
+  }
+
+  const double vine_surface_chance =
+      vertical_surface ? WALL_VINE_SURFACE_CHANCE
+                       : WALL_VINE_SURFACE_CHANCE * 0.88;
+  if (HashUnit(detail_seed + 71) < vine_surface_chance) {
+    const int vine_count = random_count(detail_seed * 23 + 17, WALL_VINE_MIN_COUNT,
+                                        WALL_VINE_MAX_COUNT);
+    for (int vine = 0; vine < vine_count; ++vine) {
+      const int vine_seed = detail_seed * 197 + vine * 53;
+      const int thickness_px = std::max(
+          1, static_cast<int>(std::lround(
+                 min_dimension *
+                 (WALL_VINE_THICKNESS_MIN_FACTOR +
+                  (WALL_VINE_THICKNESS_MAX_FACTOR -
+                   WALL_VINE_THICKNESS_MIN_FACTOR) *
+                      HashUnit(vine_seed + 3)))));
+      const int segment_count = random_count(
+          vine_seed + 5, WALL_VINE_SEGMENT_MIN_COUNT, WALL_VINE_SEGMENT_MAX_COUNT);
+      const float rect_left = static_cast<float>(wall_rect.x + margin);
+      const float rect_right = static_cast<float>(wall_rect.x + wall_rect.w - margin);
+      const float rect_top = static_cast<float>(wall_rect.y + margin);
+      const float rect_bottom =
+          static_cast<float>(wall_rect.y + wall_rect.h - margin);
+
+      std::vector<SDL_FPoint> points;
+      points.reserve(static_cast<size_t>(segment_count) + 1);
+      const double start_selector = HashUnit(vine_seed + 7);
+      SDL_FPoint current;
+      if (vertical_surface || start_selector < 0.60) {
+        current = SDL_FPoint{
+            rect_left + (rect_right - rect_left) *
+                            static_cast<float>(HashUnit(vine_seed + 11)),
+            rect_top + (rect_bottom - rect_top) *
+                           static_cast<float>(0.02 + 0.10 * HashUnit(vine_seed + 13))};
+      } else if (start_selector < 0.80) {
+        current = SDL_FPoint{
+            rect_left,
+            rect_top + (rect_bottom - rect_top) *
+                           static_cast<float>(HashUnit(vine_seed + 17))};
+      } else {
+        current = SDL_FPoint{
+            rect_right,
+            rect_top + (rect_bottom - rect_top) *
+                            static_cast<float>(HashUnit(vine_seed + 19))};
+      }
+      points.push_back(current);
+
+      for (int segment = 0; segment < segment_count; ++segment) {
+        const int segment_seed = vine_seed + segment * 31;
+        const float step_y =
+            static_cast<float>(wall_rect.h) *
+            (WALL_VINE_STEP_MIN_FACTOR +
+             static_cast<float>(HashUnit(segment_seed + 23)) *
+                 (WALL_VINE_STEP_MAX_FACTOR - WALL_VINE_STEP_MIN_FACTOR)) *
+            (vertical_surface ? 1.0f : 0.70f);
+        const float step_x =
+            static_cast<float>(wall_rect.w) * WALL_VINE_DRIFT_FACTOR *
+            static_cast<float>(HashSigned(segment_seed + 29)) *
+            (vertical_surface ? 1.0f : 1.18f);
+        current.x = std::clamp(current.x + step_x, rect_left, rect_right);
+        current.y = std::clamp(
+            current.y + step_y +
+                static_cast<float>(wall_rect.h) * 0.04f *
+                    static_cast<float>(HashSigned(segment_seed + 37)),
+            rect_top, rect_bottom);
+        points.push_back(current);
+      }
+
+      auto draw_vine_disc = [&](float x, float y, int radius,
+                                const SDL_Color &color) {
+        SDL_RenderFillCircleAA(sdl_renderer, x, y, static_cast<double>(radius),
+                               color);
+      };
+
+      for (size_t point_index = 1; point_index < points.size(); ++point_index) {
+        const SDL_FPoint &from = points[point_index - 1];
+        const SDL_FPoint &to = points[point_index];
+        const double dx = static_cast<double>(to.x - from.x);
+        const double dy = static_cast<double>(to.y - from.y);
+        const double length = std::hypot(dx, dy);
+        const int samples = std::max(4, static_cast<int>(std::ceil(length / 2.8)));
+
+        SDL_RenderDrawAALine(sdl_renderer, from.x + 0.65, from.y + 0.65,
+                             to.x + 0.65, to.y + 0.65, stem_shadow_color);
+        SDL_RenderDrawAALine(sdl_renderer, from.x, from.y, to.x, to.y,
+                             stem_base_color);
+        SDL_RenderDrawAALine(sdl_renderer, from.x - 0.22, from.y - 0.28,
+                             to.x - 0.22, to.y - 0.28, stem_highlight_color);
+
+        for (int sample = 0; sample <= samples; ++sample) {
+          if (sample % 2 != 0 && thickness_px <= 1) {
+            continue;
+          }
+          const float t = static_cast<float>(sample) / static_cast<float>(samples);
+          const float px = from.x + (to.x - from.x) * t;
+          const float py = from.y + (to.y - from.y) * t;
+          draw_vine_disc(px + 0.55f, py + 0.55f, std::max(1, thickness_px),
+                         stem_shadow_color);
+          draw_vine_disc(px, py, std::max(1, thickness_px), stem_base_color);
+          if (thickness_px > 1) {
+            draw_vine_disc(px - thickness_px * 0.16f, py - thickness_px * 0.22f,
+                           std::max(1, thickness_px - 1), stem_highlight_color);
+          }
+        }
+
+        if (HashUnit(vine_seed + static_cast<int>(point_index) * 41) <
+            WALL_VINE_LEAF_CHANCE) {
+          const SDL_FPoint mid{
+              (from.x + to.x) * 0.5f,
+              (from.y + to.y) * 0.5f};
+          const float inv_length =
+              static_cast<float>(length > 0.001 ? 1.0 / length : 0.0);
+          const float dir_x = static_cast<float>(dx) * inv_length;
+          const float dir_y = static_cast<float>(dy) * inv_length;
+          const float perp_x = -dir_y;
+          const float perp_y = dir_x;
+          const float side =
+              HashUnit(vine_seed + static_cast<int>(point_index) * 59) < 0.5 ? -1.0f
+                                                                             : 1.0f;
+          const int leaf_rx =
+              std::max(2, static_cast<int>(std::lround(thickness_px * 2.15f)));
+          const int leaf_ry =
+              std::max(1, static_cast<int>(std::lround(
+                              leaf_rx * (0.58f + 0.20f *
+                                                   static_cast<float>(HashUnit(
+                                                       vine_seed + static_cast<int>(point_index) * 67))))));
+          const float leaf_offset = thickness_px + 1.9f;
+          const float leaf_center_x = mid.x + perp_x * side * leaf_offset;
+          const float leaf_center_y = mid.y + perp_y * side * leaf_offset;
+
+          SDL_RenderDrawAALine(
+              sdl_renderer, mid.x + perp_x * side * (thickness_px * 0.55f),
+              mid.y + perp_y * side * (thickness_px * 0.55f),
+              leaf_center_x - perp_x * side * 0.35f,
+              leaf_center_y - perp_y * side * 0.35f, stem_highlight_color);
+
+          SDL_RenderFillEllipseAA(
+              sdl_renderer, leaf_center_x + 1.0f, leaf_center_y + 1.0f,
+              static_cast<double>(leaf_rx), static_cast<double>(leaf_ry),
+              WithAlpha(
+                  leaf_shadow_color,
+                  static_cast<Uint8>(std::clamp(leaf_shadow_color.a * 0.92, 0.0,
+                                                255.0))));
+          SDL_RenderFillEllipseAA(sdl_renderer, leaf_center_x, leaf_center_y,
+                                  static_cast<double>(leaf_rx),
+                                  static_cast<double>(leaf_ry), leaf_base_color);
+          SDL_RenderFillEllipseAA(
+              sdl_renderer, leaf_center_x - dir_x * leaf_rx * 0.14f,
+              leaf_center_y - dir_y * leaf_rx * 0.18f,
+              std::max(1.0, static_cast<double>(leaf_rx) * 0.56),
+              std::max(1.0, static_cast<double>(leaf_ry) * 0.48),
+              WithAlpha(
+                  leaf_highlight_color,
+                  static_cast<Uint8>(std::clamp(leaf_highlight_color.a * 0.62, 0.0,
+                                                255.0))));
+          SDL_RenderDrawAALine(
+              sdl_renderer, leaf_center_x - dir_x * leaf_rx * 0.55f,
+              leaf_center_y - dir_y * leaf_rx * 0.55f,
+              leaf_center_x + dir_x * leaf_rx * 0.55f,
+              leaf_center_y + dir_y * leaf_rx * 0.55f, leaf_highlight_color);
+
+          if (HashUnit(vine_seed + static_cast<int>(point_index) * 79) < 0.42) {
+            const float secondary_side = -side;
+            const float secondary_center_x =
+                mid.x + perp_x * secondary_side * (leaf_offset * 0.90f);
+            const float secondary_center_y =
+                mid.y + perp_y * secondary_side * (leaf_offset * 0.90f);
+            const int secondary_leaf_rx =
+                std::max(1, static_cast<int>(std::lround(leaf_rx * 0.82f)));
+            const int secondary_leaf_ry =
+                std::max(1, static_cast<int>(std::lround(leaf_ry * 0.82f)));
+
+            SDL_RenderFillEllipseAA(
+                sdl_renderer, secondary_center_x + 1.0f, secondary_center_y + 1.0f,
+                static_cast<double>(secondary_leaf_rx),
+                static_cast<double>(secondary_leaf_ry),
+                WithAlpha(
+                    leaf_shadow_color,
+                    static_cast<Uint8>(std::clamp(leaf_shadow_color.a * 0.78, 0.0,
+                                                  255.0))));
+            SDL_RenderFillEllipseAA(
+                sdl_renderer, secondary_center_x, secondary_center_y,
+                static_cast<double>(secondary_leaf_rx),
+                static_cast<double>(secondary_leaf_ry),
+                WithAlpha(
+                    leaf_base_color,
+                    static_cast<Uint8>(std::clamp(leaf_base_color.a * 0.94, 0.0,
+                                                  255.0))));
+          }
+        }
+      }
+    }
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
 void Renderer::drawteleporters() {
@@ -8726,7 +9066,10 @@ void Renderer::drawLayout(const std::vector<std::string> &layout) {
                      has_layout_wall(static_cast<int>(row) + 1,
                                      static_cast<int>(col)),
                      has_layout_wall(static_cast<int>(row),
-                                     static_cast<int>(col) - 1));
+                                     static_cast<int>(col) - 1),
+                     255,
+                     static_cast<int>(row * 92821 + col * 68917 + 303),
+                     false);
       } else {
         block.x = x;
         block.y = y;
@@ -9001,6 +9344,61 @@ int Renderer::SDL_RenderFillEllipse(SDL_Renderer *renderer, int x, int y,
   }
 
   return status;
+}
+
+void Renderer::SDL_RenderFillCircleAA(SDL_Renderer *renderer, double x, double y,
+                                      double radius, SDL_Color color) {
+  SDL_RenderFillEllipseAA(renderer, x, y, radius, radius, color);
+}
+
+void Renderer::SDL_RenderFillEllipseAA(SDL_Renderer *renderer, double x,
+                                       double y, double radius_x,
+                                       double radius_y, SDL_Color color) {
+  if (renderer == nullptr || radius_x <= 0.0 || radius_y <= 0.0 ||
+      color.a == 0) {
+    return;
+  }
+
+  constexpr int kSampleGrid = 2;
+  constexpr double kSampleStep = 1.0 / static_cast<double>(kSampleGrid);
+  constexpr double kSampleStart = -0.5 + kSampleStep * 0.5;
+  constexpr double kTotalSamples =
+      static_cast<double>(kSampleGrid * kSampleGrid);
+
+  const int min_x = static_cast<int>(std::floor(x - radius_x - 1.0));
+  const int max_x = static_cast<int>(std::ceil(x + radius_x + 1.0));
+  const int min_y = static_cast<int>(std::floor(y - radius_y - 1.0));
+  const int max_y = static_cast<int>(std::ceil(y + radius_y + 1.0));
+
+  for (int py = min_y; py <= max_y; ++py) {
+    for (int px = min_x; px <= max_x; ++px) {
+      int covered_samples = 0;
+      for (int sy = 0; sy < kSampleGrid; ++sy) {
+        const double sample_y =
+            static_cast<double>(py) - y + kSampleStart + sy * kSampleStep;
+        const double normalized_y = sample_y / radius_y;
+        for (int sx = 0; sx < kSampleGrid; ++sx) {
+          const double sample_x =
+              static_cast<double>(px) - x + kSampleStart + sx * kSampleStep;
+          const double normalized_x = sample_x / radius_x;
+          if (normalized_x * normalized_x + normalized_y * normalized_y <=
+              1.0) {
+            ++covered_samples;
+          }
+        }
+      }
+
+      if (covered_samples == 0) {
+        continue;
+      }
+
+      const Uint8 alpha = static_cast<Uint8>(std::lround(
+          static_cast<double>(color.a) *
+          (static_cast<double>(covered_samples) / kTotalSamples)));
+      SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, alpha);
+      SDL_RenderDrawPoint(renderer, px, py);
+    }
+  }
 }
 
 PixelCoord Renderer::getPixelCoord(MapCoord in_coord, int delta_x,

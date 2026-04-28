@@ -75,9 +75,12 @@ private:
   void renderLayoutFrame(const std::vector<std::string> &layout);
   void drawWallTile(const SDL_Rect &wall_rect, bool has_wall_up,
                     bool has_wall_right, bool has_wall_down,
-                    bool has_wall_left, Uint8 shade = 255);
+                    bool has_wall_left, Uint8 shade = 255,
+                    int detail_seed = 0, bool vertical_surface = false);
   void carveRoundedWallCorner(const SDL_Rect &wall_rect, int radius,
                               bool align_left, bool align_top);
+  void drawWallVegetation(const SDL_Rect &wall_rect, Uint8 shade,
+                          int detail_seed, bool vertical_surface);
   void drawmap();
   void drawmap3D();
   void drawmap3DBase();
@@ -238,6 +241,11 @@ private:
   int SDL_RenderDrawCircle(SDL_Renderer *, int, int, int);
   int SDL_RenderFillCircle(SDL_Renderer *, int, int, int);
   int SDL_RenderFillEllipse(SDL_Renderer *, int, int, int, int);
+  void SDL_RenderFillCircleAA(SDL_Renderer *renderer, double x, double y,
+                              double radius, SDL_Color color);
+  void SDL_RenderFillEllipseAA(SDL_Renderer *renderer, double x, double y,
+                               double radius_x, double radius_y,
+                               SDL_Color color);
   void SDL_RenderDrawAALine(SDL_Renderer *renderer, double x0, double y0,
                             double x1, double y1, SDL_Color color);
   PixelCoord getPixelCoord(MapCoord, int, int);
