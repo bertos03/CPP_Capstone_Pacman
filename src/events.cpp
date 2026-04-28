@@ -52,6 +52,7 @@ Events::Events() {
   quit = false;
   current_direction = Directions::None;
   requested_extra = ExtraSlot::None;
+  nuclear_test_requested = false;
   pause_toggle_requested = false;
   exit_dialog_requested = false;
   confirm_requested = false;
@@ -77,6 +78,7 @@ void Events::SetGameplayFrozen(bool frozen) {
   if (frozen) {
     current_direction = Directions::None;
     requested_extra = ExtraSlot::None;
+    nuclear_test_requested = false;
   }
 }
 
@@ -91,6 +93,12 @@ bool Events::ConsumeExtraUseRequest(ExtraSlot slot) {
 
   requested_extra = ExtraSlot::None;
   return true;
+}
+
+bool Events::ConsumeNuclearTestRequest() {
+  const bool requested = nuclear_test_requested;
+  nuclear_test_requested = false;
+  return requested;
 }
 
 bool Events::ConsumePauseToggleRequest() {
@@ -149,6 +157,10 @@ void Events::update() {
       const ExtraSlot requested_slot = KeycodeToExtraSlot(keycode);
       if (requested_slot != ExtraSlot::None) {
         requested_extra = requested_slot;
+        continue;
+      }
+      if (keycode == SDLK_a) {
+        nuclear_test_requested = true;
         continue;
       }
     }

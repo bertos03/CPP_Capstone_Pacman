@@ -6646,6 +6646,7 @@ void Renderer::drawExplosionParticles() {
     float blob_radius_max_factor;
     float wobble_amplitude_cells;
     float wobble_frequency_hz;
+    float vertical_rise_cells;
   };
   auto get_smoke_tuning = [](ExplosionSmokePuffKind kind) {
     switch (kind) {
@@ -6663,7 +6664,8 @@ void Renderer::drawExplosionParticles() {
           EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MIN_FACTOR,
           EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MAX_FACTOR,
           EXPLOSION_SMOKE_CLOUD_WOBBLE_AMPLITUDE_CELLS,
-          EXPLOSION_SMOKE_CLOUD_WOBBLE_FREQUENCY_HZ};
+          EXPLOSION_SMOKE_CLOUD_WOBBLE_FREQUENCY_HZ,
+          0.0f};
     case ExplosionSmokePuffKind::RocketBlastSmoke:
       return SmokeRenderTuning{
           ROCKET_BLAST_SMOKE_LIFETIME_MS,
@@ -6678,7 +6680,8 @@ void Renderer::drawExplosionParticles() {
           ROCKET_BLAST_SMOKE_BLOB_RADIUS_MIN_FACTOR,
           ROCKET_BLAST_SMOKE_BLOB_RADIUS_MAX_FACTOR,
           ROCKET_BLAST_SMOKE_WOBBLE_AMPLITUDE_CELLS,
-          ROCKET_BLAST_SMOKE_WOBBLE_FREQUENCY_HZ};
+          ROCKET_BLAST_SMOKE_WOBBLE_FREQUENCY_HZ,
+          0.0f};
     case ExplosionSmokePuffKind::RocketTrailSmoke:
       return SmokeRenderTuning{
           ROCKET_TRAIL_SMOKE_LIFETIME_MS,
@@ -6693,7 +6696,56 @@ void Renderer::drawExplosionParticles() {
           ROCKET_TRAIL_SMOKE_BLOB_RADIUS_MIN_FACTOR,
           ROCKET_TRAIL_SMOKE_BLOB_RADIUS_MAX_FACTOR,
           ROCKET_TRAIL_SMOKE_WOBBLE_AMPLITUDE_CELLS,
-          ROCKET_TRAIL_SMOKE_WOBBLE_FREQUENCY_HZ};
+          ROCKET_TRAIL_SMOKE_WOBBLE_FREQUENCY_HZ,
+          0.0f};
+    case ExplosionSmokePuffKind::NuclearRingSmoke:
+      return SmokeRenderTuning{
+          NUCLEAR_RING_SMOKE_LIFETIME_MS,
+          NUCLEAR_RING_SMOKE_INITIAL_RADIUS_CELLS,
+          NUCLEAR_RING_SMOKE_FINAL_RADIUS_CELLS,
+          NUCLEAR_RING_SMOKE_INITIAL_ALPHA,
+          NUCLEAR_RING_SMOKE_COLOR,
+          NUCLEAR_RING_SMOKE_HIGHLIGHT_COLOR,
+          NUCLEAR_RING_SMOKE_BLOB_MIN_COUNT,
+          NUCLEAR_RING_SMOKE_BLOB_MAX_COUNT,
+          NUCLEAR_RING_SMOKE_BLOB_OFFSET_FACTOR,
+          NUCLEAR_RING_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+          NUCLEAR_RING_SMOKE_BLOB_RADIUS_MAX_FACTOR,
+          NUCLEAR_RING_SMOKE_WOBBLE_AMPLITUDE_CELLS,
+          NUCLEAR_RING_SMOKE_WOBBLE_FREQUENCY_HZ,
+          NUCLEAR_RING_SMOKE_VERTICAL_RISE_CELLS};
+    case ExplosionSmokePuffKind::NuclearCoreSmoke:
+      return SmokeRenderTuning{
+          NUCLEAR_CORE_SMOKE_LIFETIME_MS,
+          NUCLEAR_CORE_SMOKE_INITIAL_RADIUS_CELLS,
+          NUCLEAR_CORE_SMOKE_FINAL_RADIUS_CELLS,
+          NUCLEAR_CORE_SMOKE_INITIAL_ALPHA,
+          NUCLEAR_CORE_SMOKE_COLOR,
+          NUCLEAR_CORE_SMOKE_HIGHLIGHT_COLOR,
+          NUCLEAR_CORE_SMOKE_BLOB_MIN_COUNT,
+          NUCLEAR_CORE_SMOKE_BLOB_MAX_COUNT,
+          NUCLEAR_CORE_SMOKE_BLOB_OFFSET_FACTOR,
+          NUCLEAR_CORE_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+          NUCLEAR_CORE_SMOKE_BLOB_RADIUS_MAX_FACTOR,
+          NUCLEAR_CORE_SMOKE_WOBBLE_AMPLITUDE_CELLS,
+          NUCLEAR_CORE_SMOKE_WOBBLE_FREQUENCY_HZ,
+          NUCLEAR_CORE_SMOKE_VERTICAL_RISE_CELLS};
+    case ExplosionSmokePuffKind::NuclearMushroomSmoke:
+      return SmokeRenderTuning{
+          NUCLEAR_MUSHROOM_SMOKE_LIFETIME_MS,
+          NUCLEAR_MUSHROOM_SMOKE_INITIAL_RADIUS_CELLS,
+          NUCLEAR_MUSHROOM_SMOKE_FINAL_RADIUS_CELLS,
+          NUCLEAR_MUSHROOM_SMOKE_INITIAL_ALPHA,
+          NUCLEAR_MUSHROOM_SMOKE_COLOR,
+          NUCLEAR_MUSHROOM_SMOKE_HIGHLIGHT_COLOR,
+          NUCLEAR_MUSHROOM_SMOKE_BLOB_MIN_COUNT,
+          NUCLEAR_MUSHROOM_SMOKE_BLOB_MAX_COUNT,
+          NUCLEAR_MUSHROOM_SMOKE_BLOB_OFFSET_FACTOR,
+          NUCLEAR_MUSHROOM_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+          NUCLEAR_MUSHROOM_SMOKE_BLOB_RADIUS_MAX_FACTOR,
+          NUCLEAR_MUSHROOM_SMOKE_WOBBLE_AMPLITUDE_CELLS,
+          NUCLEAR_MUSHROOM_SMOKE_WOBBLE_FREQUENCY_HZ,
+          NUCLEAR_MUSHROOM_SMOKE_VERTICAL_RISE_CELLS};
     case ExplosionSmokePuffKind::WallDust:
       return SmokeRenderTuning{
           PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS,
@@ -6708,7 +6760,8 @@ void Renderer::drawExplosionParticles() {
           PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_RADIUS_MIN_FACTOR,
           PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_RADIUS_MAX_FACTOR,
           PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_AMPLITUDE_CELLS,
-          PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_FREQUENCY_HZ};
+          PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_FREQUENCY_HZ,
+          0.0f};
     case ExplosionSmokePuffKind::MonsterSmoke:
     default:
       return SmokeRenderTuning{
@@ -6724,7 +6777,8 @@ void Renderer::drawExplosionParticles() {
           MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MIN_FACTOR,
           MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MAX_FACTOR,
           MONSTER_EXPLOSION_SMOKE_WOBBLE_AMPLITUDE_CELLS,
-          MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ};
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ,
+          0.0f};
     }
   };
 
@@ -6773,13 +6827,14 @@ void Renderer::drawExplosionParticles() {
     }
   };
 
-  auto world_to_screen = [&](SDL_FPoint world) {
+  auto world_to_screen = [&](SDL_FPoint world, float vertical_cells) {
     if (ENABLE_3D_VIEW) {
-      return projectScene(world.x, world.y, 0.0);
+      return projectScene(world.x, world.y, vertical_cells);
     }
     return SDL_FPoint{
         static_cast<float>(offset_x) + world.x * cell_to_px,
-        static_cast<float>(offset_y) + world.y * cell_to_px};
+        static_cast<float>(offset_y) + world.y * cell_to_px -
+            vertical_cells * cell_to_px * 0.86f};
   };
 
   for (const ExplosionSmokePuff &puff : game->explosion_smoke_puffs) {
@@ -6799,7 +6854,10 @@ void Renderer::drawExplosionParticles() {
             static_cast<float>(progress);
     const Uint8 base_alpha = static_cast<Uint8>(std::clamp(
         tuning.initial_alpha * (1.0 - progress), 0.0, 255.0));
-    SDL_FPoint screen = world_to_screen(puff.world_position);
+    const float vertical_cells =
+        puff.vertical_offset_cells +
+        tuning.vertical_rise_cells * static_cast<float>(progress);
+    SDL_FPoint screen = world_to_screen(puff.world_position, vertical_cells);
     if (puff.kind == ExplosionSmokePuffKind::RocketTrailSmoke) {
       screen.y -= rocket_trail_screen_lift_px;
     }
@@ -6873,7 +6931,7 @@ void Renderer::drawExplosionParticles() {
         tuning.initial_alpha * fade, 0.0, 255.0));
     const float growth =
         1.0f + tuning.growth_factor * static_cast<float>(life_progress);
-    const SDL_FPoint screen = world_to_screen(particle.world_position);
+    const SDL_FPoint screen = world_to_screen(particle.world_position, 0.0f);
 
     std::mt19937 shape_rng(particle.shape_seed);
     std::uniform_int_distribution<int> blob_count_dist(
@@ -8068,6 +8126,231 @@ void Renderer::draweffects() {
             static_cast<Uint8>(std::clamp(alpha * 0.22, 0.0, 92.0)));
         SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
                              std::max(6, ring_radius / 4));
+      }
+    } else if (effect.type == EffectType::NuclearExplosion) {
+      const double progress =
+          std::clamp(static_cast<double>(elapsed) /
+                         static_cast<double>(NUCLEAR_EXPLOSION_TOTAL_DURATION_MS),
+                     0.0, 1.0);
+      const double fire_progress =
+          std::clamp(static_cast<double>(elapsed) /
+                         static_cast<double>(
+                             std::max<Uint32>(1, NUCLEAR_EXPLOSION_FIREBALL_DURATION_MS)),
+                     0.0, 1.0);
+      const double bloom = std::sin(fire_progress * kLogoPi);
+      const double surge = 1.0 - std::pow(1.0 - fire_progress, 3.1);
+      const double fire_fade =
+          (progress <= 0.34)
+              ? 1.0
+              : std::pow(std::max(0.0, 1.0 - (progress - 0.34) / 0.66), 1.10);
+      const double afterglow =
+          (progress <= 0.18)
+              ? 1.0
+              : std::pow(std::max(0.0, 1.0 - (progress - 0.18) / 0.82), 0.78);
+      const int peak_radius = std::max(
+          element_size * std::max(2, effect.radius_cells),
+          static_cast<int>(std::lround(
+              element_size * std::max(2, effect.radius_cells) * 1.95)));
+      const int halo_radius = std::max(
+          20, static_cast<int>(std::lround(
+                  peak_radius * (0.34 + 1.28 * surge))));
+      const int outer_radius = std::max(
+          16, static_cast<int>(std::lround(
+                  peak_radius * (0.30 + 1.18 * surge))));
+      const int orange_radius = std::max(
+          14, static_cast<int>(std::lround(
+                  peak_radius * (0.24 + 0.96 * bloom))));
+      const int mid_radius = std::max(
+          12, static_cast<int>(std::lround(
+                  peak_radius * (0.20 + 0.84 * bloom))));
+      const int yellow_radius = std::max(
+          10, static_cast<int>(std::lround(
+                  peak_radius * (0.14 + 0.64 * bloom))));
+      const int core_radius = std::max(
+          7, static_cast<int>(std::lround(
+                 peak_radius * (0.10 + 0.56 * bloom))));
+      const int white_radius = std::max(
+          4, static_cast<int>(std::lround(
+                 peak_radius * (0.06 + 0.30 * bloom))));
+
+      SDL_RenderFillCircleAA(
+          sdl_renderer, center_x, center_y, halo_radius + 34,
+          SDL_Color{112, 32, 14,
+                    static_cast<Uint8>(
+                        std::clamp(150.0 * afterglow, 0.0, 150.0))});
+      SDL_RenderFillCircleAA(
+          sdl_renderer, center_x, center_y, halo_radius,
+          SDL_Color{178, 52, 18,
+                    static_cast<Uint8>(
+                        std::clamp(212.0 * fire_fade, 0.0, 212.0))});
+      SDL_RenderFillCircleAA(
+          sdl_renderer, center_x, center_y, outer_radius,
+          SDL_Color{232, 86, 20,
+                    static_cast<Uint8>(
+                        std::clamp(228.0 * fire_fade, 0.0, 228.0))});
+      SDL_RenderFillCircleAA(
+          sdl_renderer, center_x, center_y, orange_radius,
+          SDL_Color{255, 138, 34,
+                    static_cast<Uint8>(
+                        std::clamp(238.0 * fire_fade, 0.0, 238.0))});
+      SDL_RenderFillCircleAA(
+          sdl_renderer, center_x, center_y, mid_radius,
+          SDL_Color{255, 176, 42,
+                    static_cast<Uint8>(
+                        std::clamp(246.0 * fire_fade, 0.0, 246.0))});
+      SDL_RenderFillCircleAA(
+          sdl_renderer, center_x, center_y, yellow_radius,
+          SDL_Color{255, 228, 102,
+                    static_cast<Uint8>(
+                        std::clamp(252.0 * fire_fade, 0.0, 252.0))});
+      SDL_RenderFillCircleAA(
+          sdl_renderer, center_x, center_y, core_radius,
+          SDL_Color{255, 245, 184,
+                    static_cast<Uint8>(
+                        std::clamp(255.0 * fire_fade, 0.0, 255.0))});
+      SDL_RenderFillCircleAA(
+          sdl_renderer, center_x, center_y, white_radius,
+          SDL_Color{255, 255, 248,
+                    static_cast<Uint8>(
+                        std::clamp(255.0 * fire_fade, 0.0, 255.0))});
+
+      const int flare_count = 34;
+      for (int flare = 0; flare < flare_count; ++flare) {
+        const double angle =
+            fire_progress * 3.6 + flare * (2.0 * kLogoPi / flare_count);
+        const int inner = std::max(
+            10, static_cast<int>(std::lround(
+                    peak_radius * (0.22 + 0.18 * bloom))));
+        const int outer = std::max(
+            inner + 12, static_cast<int>(std::lround(
+                            peak_radius * (1.04 + 0.58 * surge))));
+        SDL_Color flare_color{255, 188, 70,
+                              static_cast<Uint8>(
+                                  std::clamp(214.0 * fire_fade, 0.0, 214.0))};
+        if (flare % 3 == 1) {
+          flare_color = SDL_Color{
+              255, 232, 140,
+              static_cast<Uint8>(std::clamp(236.0 * fire_fade, 0.0, 236.0))};
+        } else if (flare % 3 == 2) {
+          flare_color = SDL_Color{
+              255, 255, 240,
+              static_cast<Uint8>(std::clamp(196.0 * fire_fade, 0.0, 196.0))};
+        }
+        SDL_SetRenderDrawColor(
+            sdl_renderer, flare_color.r, flare_color.g, flare_color.b,
+            static_cast<Uint8>(std::clamp(flare_color.a * 0.52, 0.0, 255.0)));
+        SDL_RenderDrawLine(
+            sdl_renderer,
+            center_x + static_cast<int>(std::lround(std::cos(angle) * (inner - 8))),
+            center_y + static_cast<int>(std::lround(std::sin(angle) * (inner - 8))),
+            center_x + static_cast<int>(std::lround(std::cos(angle) * (outer + 10))),
+            center_y + static_cast<int>(std::lround(std::sin(angle) * (outer + 10))));
+        SDL_SetRenderDrawColor(sdl_renderer, flare_color.r, flare_color.g,
+                               flare_color.b, flare_color.a);
+        SDL_RenderDrawLine(
+            sdl_renderer,
+            center_x + static_cast<int>(std::lround(std::cos(angle) * inner)),
+            center_y + static_cast<int>(std::lround(std::sin(angle) * inner)),
+            center_x + static_cast<int>(std::lround(std::cos(angle) * outer)),
+            center_y + static_cast<int>(std::lround(std::sin(angle) * outer)));
+      }
+
+      const double ring_progress =
+          std::clamp(static_cast<double>(elapsed) /
+                         static_cast<double>(
+                             std::max<Uint32>(1, NUCLEAR_SMOKE_RING_EXPANSION_MS)),
+                     0.0, 1.0);
+      if (ring_progress > 0.0) {
+        const int ring_radius = std::max(
+            outer_radius,
+            static_cast<int>(std::lround(
+                static_cast<double>(element_size + 1) *
+                NUCLEAR_SMOKE_RING_FINAL_RADIUS_CELLS *
+                std::pow(ring_progress, 0.62))));
+        const Uint8 ring_alpha = static_cast<Uint8>(std::clamp(
+            168.0 * std::pow(1.0 - ring_progress, 0.32), 0.0, 168.0));
+        for (int thickness = -6; thickness <= 6; ++thickness) {
+          SDL_SetRenderDrawColor(
+              sdl_renderer, 132, 126, 118,
+              static_cast<Uint8>(
+                  std::max(0, ring_alpha - std::abs(thickness) * 12)));
+          SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                               std::max(1, ring_radius + thickness));
+        }
+      }
+
+      const double mushroom_progress =
+          std::clamp(static_cast<double>(elapsed) /
+                         static_cast<double>(std::max<Uint32>(
+                             1, NUCLEAR_MUSHROOM_BUILD_MS)),
+                     0.0, 1.0);
+      if (mushroom_progress > 0.0) {
+        const int stem_height_px = std::max(
+            16, static_cast<int>(std::lround(
+                    element_size * (0.95 + mushroom_progress *
+                                           NUCLEAR_MUSHROOM_STEM_HEIGHT_CELLS *
+                                           0.74))));
+        const int stem_radius_x = std::max(
+            4, static_cast<int>(std::lround(
+                   element_size * (0.10 + 0.04 * (1.0 - mushroom_progress)))));
+        const int stem_radius_y = std::max(
+            10, static_cast<int>(std::lround(stem_height_px * 0.58)));
+        const int stem_center_y = center_y - stem_height_px / 2;
+        const int cap_radius_x = std::max(
+            16, static_cast<int>(std::lround(
+                    element_size * (0.95 + mushroom_progress *
+                                           NUCLEAR_MUSHROOM_CAP_RADIUS_CELLS *
+                                           0.92))));
+        const int cap_radius_y = std::max(
+            12, static_cast<int>(std::lround(cap_radius_x * 0.44)));
+        const int cap_center_y =
+            center_y - stem_height_px - std::max(
+                                      4, static_cast<int>(std::lround(
+                                             element_size *
+                                             (0.24 + mushroom_progress * 0.22))));
+        const Uint8 mushroom_alpha = static_cast<Uint8>(std::clamp(
+            132.0 * (1.0 - progress * 0.50), 0.0, 132.0));
+        SDL_RenderFillEllipseAA(
+            sdl_renderer, center_x + 1.5, stem_center_y + 2.0,
+            static_cast<double>(stem_radius_x + 1),
+            static_cast<double>(stem_radius_y + 1),
+            SDL_Color{70, 68, 64,
+                      static_cast<Uint8>(
+                          std::clamp(mushroom_alpha * 0.76, 0.0, 255.0))});
+        SDL_RenderFillEllipseAA(
+            sdl_renderer, center_x, stem_center_y,
+            static_cast<double>(stem_radius_x),
+            static_cast<double>(stem_radius_y),
+            SDL_Color{98, 94, 90,
+                      static_cast<Uint8>(
+                          std::clamp(mushroom_alpha * 0.92, 0.0, 255.0))});
+
+        SDL_RenderFillEllipseAA(
+            sdl_renderer, center_x + 2.0, cap_center_y + 2.0,
+            static_cast<double>(cap_radius_x + 2),
+            static_cast<double>(cap_radius_y + 2),
+            SDL_Color{66, 64, 62,
+                      static_cast<Uint8>(
+                          std::clamp(mushroom_alpha * 0.82, 0.0, 255.0))});
+        SDL_RenderFillEllipseAA(
+            sdl_renderer, center_x, cap_center_y,
+            static_cast<double>(cap_radius_x),
+            static_cast<double>(cap_radius_y),
+            SDL_Color{98, 94, 90, mushroom_alpha});
+        SDL_RenderFillEllipseAA(
+            sdl_renderer, center_x, cap_center_y - cap_radius_y * 0.22,
+            static_cast<double>(cap_radius_x * 0.72),
+            static_cast<double>(cap_radius_y * 0.46),
+            SDL_Color{134, 128, 122,
+                      static_cast<Uint8>(
+                          std::clamp(mushroom_alpha * 0.64, 0.0, 255.0))});
+        SDL_RenderFillEllipseAA(
+            sdl_renderer, center_x, cap_center_y + cap_radius_y * 0.16,
+            static_cast<double>(cap_radius_x * 0.50),
+            static_cast<double>(cap_radius_y * 0.24),
+            SDL_Color{150, 144, 136,
+                      static_cast<Uint8>(
+                          std::clamp(mushroom_alpha * 0.42, 0.0, 255.0))});
       }
     } else if (effect.type == EffectType::DynamiteExplosion) {
       const double progress =

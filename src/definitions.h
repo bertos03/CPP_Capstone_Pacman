@@ -439,6 +439,74 @@ inline constexpr float ROCKET_TRAIL_SMOKE_BLOB_RADIUS_MAX_FACTOR = 0.94f;
 inline constexpr float ROCKET_TRAIL_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.035f;
 inline constexpr float ROCKET_TRAIL_SMOKE_WOBBLE_FREQUENCY_HZ = 1.2f;
 
+inline constexpr int NUCLEAR_EXPLOSION_RADIUS_CELLS = 3;
+inline constexpr Uint32 NUCLEAR_EXPLOSION_FIREBALL_DURATION_MS = 2350;
+inline constexpr Uint32 NUCLEAR_EXPLOSION_TOTAL_DURATION_MS = 9200;
+inline constexpr Uint32 NUCLEAR_SMOKE_RING_EXPANSION_MS = 1850;
+inline constexpr Uint32 NUCLEAR_SMOKE_RING_SPAWN_INTERVAL_MS = 52;
+inline constexpr int NUCLEAR_SMOKE_RING_PUFFS_PER_WAVE = 38;
+inline constexpr float NUCLEAR_SMOKE_RING_FINAL_RADIUS_CELLS = 18.0f;
+inline constexpr float NUCLEAR_SMOKE_RING_THICKNESS_CELLS = 1.05f;
+inline constexpr Uint32 NUCLEAR_CENTER_SMOKE_EMISSION_MS = 4800;
+inline constexpr Uint32 NUCLEAR_CENTER_SMOKE_SPAWN_INTERVAL_MS = 72;
+inline constexpr int NUCLEAR_CENTER_SMOKE_PUFFS_PER_SPAWN = 7;
+inline constexpr float NUCLEAR_CENTER_SMOKE_SPREAD_CELLS = 1.45f;
+inline constexpr Uint32 NUCLEAR_MUSHROOM_BUILD_MS = 5600;
+inline constexpr Uint32 NUCLEAR_MUSHROOM_SPAWN_INTERVAL_MS = 68;
+inline constexpr int NUCLEAR_MUSHROOM_STEM_PUFFS_PER_SPAWN = 4;
+inline constexpr int NUCLEAR_MUSHROOM_CAP_PUFFS_PER_SPAWN = 9;
+inline constexpr float NUCLEAR_MUSHROOM_STEM_HEIGHT_CELLS = 12.4f;
+inline constexpr float NUCLEAR_MUSHROOM_CAP_RADIUS_CELLS = 5.2f;
+inline constexpr float NUCLEAR_MUSHROOM_CAP_THICKNESS_CELLS = 2.3f;
+
+inline constexpr Uint32 NUCLEAR_RING_SMOKE_LIFETIME_MS = 2100;
+inline constexpr float NUCLEAR_RING_SMOKE_INITIAL_RADIUS_CELLS = 0.22f;
+inline constexpr float NUCLEAR_RING_SMOKE_FINAL_RADIUS_CELLS = 0.86f;
+inline constexpr Uint8 NUCLEAR_RING_SMOKE_INITIAL_ALPHA = 108;
+inline constexpr SDL_Color NUCLEAR_RING_SMOKE_COLOR{92, 88, 84, 255};
+inline constexpr SDL_Color NUCLEAR_RING_SMOKE_HIGHLIGHT_COLOR{150, 144, 138,
+                                                              255};
+inline constexpr int NUCLEAR_RING_SMOKE_BLOB_MIN_COUNT = 6;
+inline constexpr int NUCLEAR_RING_SMOKE_BLOB_MAX_COUNT = 11;
+inline constexpr float NUCLEAR_RING_SMOKE_BLOB_OFFSET_FACTOR = 1.08f;
+inline constexpr float NUCLEAR_RING_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.46f;
+inline constexpr float NUCLEAR_RING_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.18f;
+inline constexpr float NUCLEAR_RING_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.06f;
+inline constexpr float NUCLEAR_RING_SMOKE_WOBBLE_FREQUENCY_HZ = 1.15f;
+inline constexpr float NUCLEAR_RING_SMOKE_VERTICAL_RISE_CELLS = 0.20f;
+
+inline constexpr Uint32 NUCLEAR_CORE_SMOKE_LIFETIME_MS = 3200;
+inline constexpr float NUCLEAR_CORE_SMOKE_INITIAL_RADIUS_CELLS = 0.24f;
+inline constexpr float NUCLEAR_CORE_SMOKE_FINAL_RADIUS_CELLS = 1.12f;
+inline constexpr Uint8 NUCLEAR_CORE_SMOKE_INITIAL_ALPHA = 104;
+inline constexpr SDL_Color NUCLEAR_CORE_SMOKE_COLOR{82, 78, 74, 255};
+inline constexpr SDL_Color NUCLEAR_CORE_SMOKE_HIGHLIGHT_COLOR{142, 138, 132,
+                                                              255};
+inline constexpr int NUCLEAR_CORE_SMOKE_BLOB_MIN_COUNT = 6;
+inline constexpr int NUCLEAR_CORE_SMOKE_BLOB_MAX_COUNT = 12;
+inline constexpr float NUCLEAR_CORE_SMOKE_BLOB_OFFSET_FACTOR = 1.02f;
+inline constexpr float NUCLEAR_CORE_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.48f;
+inline constexpr float NUCLEAR_CORE_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.24f;
+inline constexpr float NUCLEAR_CORE_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.075f;
+inline constexpr float NUCLEAR_CORE_SMOKE_WOBBLE_FREQUENCY_HZ = 0.96f;
+inline constexpr float NUCLEAR_CORE_SMOKE_VERTICAL_RISE_CELLS = 1.9f;
+
+inline constexpr Uint32 NUCLEAR_MUSHROOM_SMOKE_LIFETIME_MS = 4300;
+inline constexpr float NUCLEAR_MUSHROOM_SMOKE_INITIAL_RADIUS_CELLS = 0.26f;
+inline constexpr float NUCLEAR_MUSHROOM_SMOKE_FINAL_RADIUS_CELLS = 1.48f;
+inline constexpr Uint8 NUCLEAR_MUSHROOM_SMOKE_INITIAL_ALPHA = 128;
+inline constexpr SDL_Color NUCLEAR_MUSHROOM_SMOKE_COLOR{76, 72, 70, 255};
+inline constexpr SDL_Color NUCLEAR_MUSHROOM_SMOKE_HIGHLIGHT_COLOR{
+    134, 128, 122, 255};
+inline constexpr int NUCLEAR_MUSHROOM_SMOKE_BLOB_MIN_COUNT = 6;
+inline constexpr int NUCLEAR_MUSHROOM_SMOKE_BLOB_MAX_COUNT = 13;
+inline constexpr float NUCLEAR_MUSHROOM_SMOKE_BLOB_OFFSET_FACTOR = 1.16f;
+inline constexpr float NUCLEAR_MUSHROOM_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.46f;
+inline constexpr float NUCLEAR_MUSHROOM_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.32f;
+inline constexpr float NUCLEAR_MUSHROOM_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.09f;
+inline constexpr float NUCLEAR_MUSHROOM_SMOKE_WOBBLE_FREQUENCY_HZ = 0.84f;
+inline constexpr float NUCLEAR_MUSHROOM_SMOKE_VERTICAL_RISE_CELLS = 2.6f;
+
 inline constexpr int WALL_RUBBLE_CENTER_MIN_COUNT = 16;
 inline constexpr int WALL_RUBBLE_CENTER_MAX_COUNT = 25;
 inline constexpr int WALL_RUBBLE_NEIGHBOR_ORTHOGONAL_MIN_COUNT = 3;

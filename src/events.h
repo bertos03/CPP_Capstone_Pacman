@@ -35,6 +35,7 @@ public:
   bool is_quit() { return quit; }
   Directions get_next_move() { return current_direction; }
   bool ConsumeExtraUseRequest(ExtraSlot slot);
+  bool ConsumeNuclearTestRequest();
   bool ConsumePauseToggleRequest();
   bool ConsumeExitDialogRequest();
   bool ConsumeConfirmRequest();
@@ -45,6 +46,7 @@ private:
   bool quit;
   Directions current_direction;
   ExtraSlot requested_extra;
+  bool nuclear_test_requested;
   bool pause_toggle_requested;
   bool exit_dialog_requested;
   bool confirm_requested;

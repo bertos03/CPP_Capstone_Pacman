@@ -198,6 +198,17 @@ struct ActiveBiohazardBeam {
   SDL_FPoint locked_end_world_center{0.0f, 0.0f};
 };
 
+struct ActiveNuclearExplosion {
+  bool is_active = false;
+  Uint32 started_ticks = 0;
+  Uint32 last_ring_spawn_ticks = 0;
+  Uint32 last_center_smoke_spawn_ticks = 0;
+  Uint32 last_mushroom_smoke_spawn_ticks = 0;
+  int animation_seed = 0;
+  MapCoord center_coord{0, 0};
+  SDL_FPoint world_center{0.0f, 0.0f};
+};
+
 enum class ExplosionParticleKind {
   MonsterExplosion,
   WallDebris
@@ -218,11 +229,15 @@ enum class ExplosionSmokePuffKind {
   WallDust,
   BlastSmoke,
   RocketBlastSmoke,
-  RocketTrailSmoke
+  RocketTrailSmoke,
+  NuclearRingSmoke,
+  NuclearCoreSmoke,
+  NuclearMushroomSmoke
 };
 
 struct ExplosionSmokePuff {
   SDL_FPoint world_position{0.0f, 0.0f};
+  float vertical_offset_cells = 0.0f;
   Uint32 spawned_ticks = 0;
   Uint32 shape_seed = 0;
   ExplosionSmokePuffKind kind = ExplosionSmokePuffKind::MonsterSmoke;
@@ -243,7 +258,8 @@ enum class EffectType {
   DynamiteExplosion,
   AirstrikeExplosion,
   SlimeSplash,
-  PlasmaShockwave
+  PlasmaShockwave,
+  NuclearExplosion
 };
 
 struct GameEffect {
@@ -302,6 +318,7 @@ private:
   ActiveAirstrike active_airstrike;
   std::vector<RocketProjectile> active_rockets;
   ActiveBiohazardBeam active_biohazard_beam;
+  ActiveNuclearExplosion active_nuclear_explosion;
   std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
   std::vector<ExplosionParticle> explosion_particles;
@@ -351,7 +368,9 @@ private:
   void TryUseAirstrike(Uint32 now);
   void TryFireRocket(Uint32 now);
   void TryUseBiohazardBeam(Uint32 now);
+  void TryTriggerNuclearExplosion(Uint32 now);
   void UpdateBiohazardBeam(Uint32 now);
+  void UpdateNuclearExplosion(Uint32 now);
   void StopBiohazardBeam();
   void UpdateAirstrike(Uint32 now);
   void UpdateRockets(Uint32 now);
@@ -393,6 +412,9 @@ private:
                                 Uint32 now);
   void SpawnRocketBlastSmokeCloud(SDL_FPoint world_center, Uint32 now);
   void SpawnRocketTrailSmoke(const RocketProjectile &rocket, Uint32 now);
+  void SpawnNuclearRingSmoke(float ring_progress, Uint32 now);
+  void SpawnNuclearCenterSmoke(float center_smoke_progress, Uint32 now);
+  void SpawnNuclearMushroomSmoke(float mushroom_progress, Uint32 now);
   void UpdateExplosionParticles(Uint32 now);
   SDL_FPoint PreciseWorldCenter(const MapElement *element) const;
   SDL_FPoint FireballWorldCenter(const Fireball &fireball, Uint32 now) const;
