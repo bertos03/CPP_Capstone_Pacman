@@ -215,7 +215,8 @@ struct ExplosionParticle {
 enum class ExplosionSmokePuffKind {
   MonsterSmoke,
   WallDust,
-  BlastSmoke
+  BlastSmoke,
+  RocketBlastSmoke
 };
 
 struct ExplosionSmokePuff {
@@ -374,7 +375,6 @@ private:
   bool IsPacmanInvulnerable(Uint32 now) const;
   bool IsPacmanRecoveringFromLifeLoss(Uint32 now) const;
   Monster *FindMonsterById(int monster_id) const;
-  bool IsMonsterHitByBiohazardBeam(const Monster *monster) const;
   void ElectrifyMonster(Monster *monster, Uint32 now);
   void UpdateFireballs(Uint32 now);
   void UpdateSlimeballs(Uint32 now);
@@ -389,7 +389,17 @@ private:
   void SpawnWallRubble(MapCoord destroyed_coord);
   void SpawnExplosionSmokeCloud(SDL_FPoint world_center, int radius_cells,
                                 Uint32 now);
+  void SpawnRocketBlastSmokeCloud(SDL_FPoint world_center, Uint32 now);
   void UpdateExplosionParticles(Uint32 now);
+  SDL_FPoint PreciseWorldCenter(const MapElement *element) const;
+  SDL_FPoint FireballWorldCenter(const Fireball &fireball, Uint32 now) const;
+  SDL_FPoint SlimeballWorldCenter(const Slimeball &slimeball, Uint32 now) const;
+  SDL_FPoint RocketWorldCenter(const RocketProjectile &rocket,
+                               Uint32 now) const;
+  static bool CirclesOverlap(SDL_FPoint a, float radius_a, SDL_FPoint b,
+                             float radius_b);
+  static bool SegmentHitsCircle(SDL_FPoint segment_start, SDL_FPoint segment_end,
+                                SDL_FPoint circle_center, float circle_radius);
 };
 
 #endif

@@ -80,6 +80,8 @@ Uint32 GetSmokePuffLifetimeMs(ExplosionSmokePuffKind kind) {
   switch (kind) {
   case ExplosionSmokePuffKind::BlastSmoke:
     return EXPLOSION_SMOKE_CLOUD_LIFETIME_MS;
+  case ExplosionSmokePuffKind::RocketBlastSmoke:
+    return ROCKET_BLAST_SMOKE_LIFETIME_MS;
   case ExplosionSmokePuffKind::WallDust:
     return PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS;
   case ExplosionSmokePuffKind::MonsterSmoke:
@@ -511,13 +513,17 @@ void Game::Update() {
     return;
   }
 
-  // Check for collision with Monsters ... game is lost if collision occurs
+  // Check for collision with Monsters ... game is lost if collision occurs.
+  // Use precise sub-cell positions and hitbox circles so the collision matches
+  // what the player sees on screen.
+  const SDL_FPoint pacman_center = PreciseWorldCenter(pacman);
   for (auto i : monsters) {
     if (!i->is_alive || i->is_electrified) {
       continue;
     }
-    if (pacman->map_coord.u == i->map_coord.u &&
-        pacman->map_coord.v == i->map_coord.v) {
+    const SDL_FPoint monster_center = PreciseWorldCenter(i);
+    if (CirclesOverlap(pacman_center, PACMAN_HITBOX_RADIUS_CELLS,
+                       monster_center, MONSTER_HITBOX_RADIUS_CELLS)) {
       if (!IsPacmanInvulnerable(now)) {
         TriggerLoss(pacman->map_coord, now);
       }
@@ -1897,28 +1903,92 @@ void Game::UpdateBiohazardBeam(Uint32 now) {
     return;
   }
 
+  // Cast the beam from pacman's precise center along the active direction.
+  // It terminates either at the closest wall edge along the path or at the
+  // closest monster the beam segment touches.
+  const SDL_FPoint beam_origin = PreciseWorldCenter(pacman);
+  SDL_FPoint beam_endpoint = beam_origin;
+  const int rows = static_cast<int>(map->get_map_rows());
+  const int cols = static_cast<int>(map->get_map_cols());
+  const int origin_u = pacman->map_coord.u;
+  const int origin_v = pacman->map_coord.v;
+  switch (active_biohazard_beam.direction) {
+  case Directions::Up: {
+    float stop_y = 0.0f;
+    for (int u = origin_u - 1; u >= 0; --u) {
+      if (map->map_entry(u, origin_v) == ElementType::TYPE_WALL) {
+        stop_y = static_cast<float>(u) + 1.0f;
+        break;
+      }
+    }
+    beam_endpoint = SDL_FPoint{beam_origin.x, stop_y};
+    break;
+  }
+  case Directions::Down: {
+    float stop_y = static_cast<float>(rows);
+    for (int u = origin_u + 1; u < rows; ++u) {
+      if (map->map_entry(u, origin_v) == ElementType::TYPE_WALL) {
+        stop_y = static_cast<float>(u);
+        break;
+      }
+    }
+    beam_endpoint = SDL_FPoint{beam_origin.x, stop_y};
+    break;
+  }
+  case Directions::Left: {
+    float stop_x = 0.0f;
+    for (int v = origin_v - 1; v >= 0; --v) {
+      if (map->map_entry(origin_u, v) == ElementType::TYPE_WALL) {
+        stop_x = static_cast<float>(v) + 1.0f;
+        break;
+      }
+    }
+    beam_endpoint = SDL_FPoint{stop_x, beam_origin.y};
+    break;
+  }
+  case Directions::Right: {
+    float stop_x = static_cast<float>(cols);
+    for (int v = origin_v + 1; v < cols; ++v) {
+      if (map->map_entry(origin_u, v) == ElementType::TYPE_WALL) {
+        stop_x = static_cast<float>(v);
+        break;
+      }
+    }
+    beam_endpoint = SDL_FPoint{stop_x, beam_origin.y};
+    break;
+  }
+  case Directions::None:
+  default:
+    break;
+  }
+
   Monster *closest_target = nullptr;
-  int closest_distance = std::numeric_limits<int>::max();
+  float closest_distance_squared = std::numeric_limits<float>::max();
   for (Monster *monster : monsters) {
-    if (monster == nullptr || !monster->is_alive || monster->is_electrified ||
-        !IsMonsterHitByBiohazardBeam(monster)) {
+    if (monster == nullptr || !monster->is_alive || monster->is_electrified) {
       continue;
     }
 
-    const int distance = std::abs(monster->map_coord.u - pacman->map_coord.u) +
-                         std::abs(monster->map_coord.v - pacman->map_coord.v);
-    if (distance >= closest_distance) {
+    const SDL_FPoint monster_center = PreciseWorldCenter(monster);
+    if (!SegmentHitsCircle(beam_origin, beam_endpoint, monster_center,
+                           MONSTER_HITBOX_RADIUS_CELLS +
+                               BEAM_HITBOX_RADIUS_CELLS)) {
       continue;
     }
 
-    closest_distance = distance;
+    const float dx = monster_center.x - beam_origin.x;
+    const float dy = monster_center.y - beam_origin.y;
+    const float distance_squared = dx * dx + dy * dy;
+    if (distance_squared >= closest_distance_squared) {
+      continue;
+    }
+
+    closest_distance_squared = distance_squared;
     closest_target = monster;
   }
 
   if (closest_target != nullptr) {
-    SDL_FPoint impact_point = MakeCellCenter(closest_target->map_coord);
-    impact_point.x += static_cast<float>(closest_target->px_delta.x) / 100.0f;
-    impact_point.y += static_cast<float>(closest_target->px_delta.y) / 100.0f;
+    SDL_FPoint impact_point = PreciseWorldCenter(closest_target);
     const float impact_offset = 0.24f;
     switch (active_biohazard_beam.direction) {
     case Directions::Up:
@@ -2226,6 +2296,9 @@ void Game::UpdateRockets(Uint32 now) {
         break;
       }
 
+      const SDL_FPoint rocket_segment_start =
+          MakeCellCenter(rocket.current_coord);
+      const SDL_FPoint rocket_segment_end = MakeCellCenter(next_coord);
       rocket.current_coord = next_coord;
       rocket.segment_started_ticks += step_duration_ms;
 
@@ -2234,7 +2307,11 @@ void Game::UpdateRockets(Uint32 now) {
           continue;
         }
 
-        if (SameCoord(monster->map_coord, rocket.current_coord)) {
+        const SDL_FPoint monster_center = PreciseWorldCenter(monster);
+        if (SegmentHitsCircle(rocket_segment_start, rocket_segment_end,
+                              monster_center,
+                              MONSTER_HITBOX_RADIUS_CELLS +
+                                  ROCKET_HITBOX_RADIUS_CELLS)) {
           hit_monster = monster;
           impact_coord = rocket.current_coord;
           detonate_rocket = true;
@@ -2317,12 +2394,12 @@ void Game::UpdateElectrifiedMonsters(Uint32 now) {
         continue;
       }
 
-      if (!SameCoord(monster->map_coord, other->map_coord)) {
-        continue;
-      }
-
       const SDL_FPoint monster_center = get_monster_world_center(monster);
       const SDL_FPoint other_center = get_monster_world_center(other);
+      if (!CirclesOverlap(monster_center, MONSTER_HITBOX_RADIUS_CELLS,
+                          other_center, MONSTER_HITBOX_RADIUS_CELLS)) {
+        continue;
+      }
       const SDL_FPoint shared_center =
           ScalePoint(AddPoint(monster_center, other_center), 0.5f);
       GameEffect shockwave_effect{monster->map_coord, now,
@@ -2479,9 +2556,10 @@ void Game::DetonateRocket(const RocketProjectile &rocket, MapCoord impact_coord,
                           Monster *hit_monster, bool hit_wall, Uint32 now) {
 #ifdef AUDIO
   audio->StopRocketLaunch();
-  audio->PlayAirstrikeExplosion();
+  audio->PlayDynamiteExplosion();
 #endif
-  GameEffect explosion_effect{impact_coord, now, EffectType::AirstrikeExplosion, 1};
+  GameEffect explosion_effect{impact_coord, now, EffectType::DynamiteExplosion,
+                              ROCKET_EXPLOSION_VISIBLE_RADIUS_CELLS};
   if (hit_wall) {
     explosion_effect.has_precise_world_center = true;
     explosion_effect.precise_world_center = MakeCellCenter(rocket.current_coord);
@@ -2508,13 +2586,29 @@ void Game::DetonateRocket(const RocketProjectile &rocket, MapCoord impact_coord,
       explosion_effect.has_precise_world_center
           ? explosion_effect.precise_world_center
           : MakeCellCenter(impact_coord);
-  SpawnExplosionSmokeCloud(explosion_center,
-                           std::max(1, explosion_effect.radius_cells), now);
+  SpawnRocketBlastSmokeCloud(explosion_center, now);
 
-  if (hit_monster != nullptr && hit_monster->is_alive &&
-      SameCoord(hit_monster->map_coord, impact_coord)) {
-    EliminateMonsterWithDynamiteBlast(hit_monster, now);
+  for (auto *monster : monsters) {
+    if (!monster->is_alive ||
+        !IsWithinDynamiteRadius(impact_coord, monster->map_coord)) {
+      continue;
+    }
+
+    const int distance_steps =
+        std::max(std::abs(monster->map_coord.u - impact_coord.u),
+                 std::abs(monster->map_coord.v - impact_coord.v));
+    const Uint32 trigger_ticks =
+        now + kDynamiteChainDelayMs +
+        static_cast<Uint32>(std::max(0, distance_steps) * 80);
+    ScheduleMonsterBlast(monster, trigger_ticks);
   }
+
+  if (!IsPacmanInvulnerable(now) &&
+      IsWithinDynamiteRadius(impact_coord, pacman->map_coord)) {
+    TriggerLoss(pacman->map_coord, now);
+  }
+
+  (void)hit_monster;
 }
 
 void Game::UpdatePlacedDynamites(Uint32 now) {
@@ -2635,21 +2729,6 @@ Monster *Game::FindMonsterById(int monster_id) const {
   return nullptr;
 }
 
-bool Game::IsMonsterHitByBiohazardBeam(const Monster *monster) const {
-  if (monster == nullptr || !active_biohazard_beam.is_active || pacman == nullptr ||
-      map == nullptr || !monster->is_alive || SameCoord(monster->map_coord, pacman->map_coord)) {
-    return false;
-  }
-
-  Directions beam_direction = Directions::None;
-  if (!HasLineOfSight(map, pacman->map_coord, monster->map_coord,
-                      beam_direction)) {
-    return false;
-  }
-
-  return beam_direction == active_biohazard_beam.direction;
-}
-
 void Game::ElectrifyMonster(Monster *monster, Uint32 now) {
   if (monster == nullptr || !monster->is_alive) {
     return;
@@ -2661,6 +2740,105 @@ void Game::ElectrifyMonster(Monster *monster, Uint32 now) {
   monster->electrified_visual_seed =
       static_cast<int>((now % 997) + monster->id * 41 + monster->map_coord.u * 13 +
                        monster->map_coord.v * 17);
+}
+
+SDL_FPoint Game::PreciseWorldCenter(const MapElement *element) const {
+  if (element == nullptr) {
+    return SDL_FPoint{0.0f, 0.0f};
+  }
+  SDL_FPoint center = MakeCellCenter(element->map_coord);
+  center.x += static_cast<float>(element->px_delta.x) / 100.0f;
+  center.y += static_cast<float>(element->px_delta.y) / 100.0f;
+  return center;
+}
+
+namespace {
+SDL_FPoint DirectionVector(Directions direction) {
+  switch (direction) {
+  case Directions::Up:
+    return SDL_FPoint{0.0f, -1.0f};
+  case Directions::Down:
+    return SDL_FPoint{0.0f, 1.0f};
+  case Directions::Left:
+    return SDL_FPoint{-1.0f, 0.0f};
+  case Directions::Right:
+    return SDL_FPoint{1.0f, 0.0f};
+  default:
+    return SDL_FPoint{0.0f, 0.0f};
+  }
+}
+}  // namespace
+
+SDL_FPoint Game::FireballWorldCenter(const Fireball &fireball,
+                                     Uint32 now) const {
+  const Uint32 step_duration_ms =
+      std::max<Uint32>(1, fireball.step_duration_ms);
+  const Uint32 elapsed = (now > fireball.segment_started_ticks)
+                             ? (now - fireball.segment_started_ticks)
+                             : 0;
+  const float progress = std::min(
+      1.0f, static_cast<float>(elapsed) / static_cast<float>(step_duration_ms));
+  const SDL_FPoint start_center = MakeCellCenter(fireball.current_coord);
+  const SDL_FPoint dir = DirectionVector(fireball.direction);
+  return SDL_FPoint{start_center.x + dir.x * progress,
+                    start_center.y + dir.y * progress};
+}
+
+SDL_FPoint Game::SlimeballWorldCenter(const Slimeball &slimeball,
+                                      Uint32 now) const {
+  const Uint32 step_duration_ms =
+      std::max<Uint32>(1, slimeball.step_duration_ms);
+  const Uint32 elapsed = (now > slimeball.segment_started_ticks)
+                             ? (now - slimeball.segment_started_ticks)
+                             : 0;
+  const float progress = std::min(
+      1.0f, static_cast<float>(elapsed) / static_cast<float>(step_duration_ms));
+  const SDL_FPoint start_center = MakeCellCenter(slimeball.current_coord);
+  const SDL_FPoint dir = DirectionVector(slimeball.direction);
+  return SDL_FPoint{start_center.x + dir.x * progress,
+                    start_center.y + dir.y * progress};
+}
+
+SDL_FPoint Game::RocketWorldCenter(const RocketProjectile &rocket,
+                                   Uint32 now) const {
+  const Uint32 step_duration_ms =
+      std::max<Uint32>(1, rocket.step_duration_ms);
+  const Uint32 elapsed = (now > rocket.segment_started_ticks)
+                             ? (now - rocket.segment_started_ticks)
+                             : 0;
+  const float progress = std::min(
+      1.0f, static_cast<float>(elapsed) / static_cast<float>(step_duration_ms));
+  const SDL_FPoint start_center = MakeCellCenter(rocket.current_coord);
+  const SDL_FPoint dir = DirectionVector(rocket.direction);
+  return SDL_FPoint{start_center.x + dir.x * progress,
+                    start_center.y + dir.y * progress};
+}
+
+bool Game::CirclesOverlap(SDL_FPoint a, float radius_a, SDL_FPoint b,
+                          float radius_b) {
+  const float dx = a.x - b.x;
+  const float dy = a.y - b.y;
+  const float reach = radius_a + radius_b;
+  return (dx * dx + dy * dy) <= (reach * reach);
+}
+
+bool Game::SegmentHitsCircle(SDL_FPoint segment_start, SDL_FPoint segment_end,
+                             SDL_FPoint circle_center, float circle_radius) {
+  const float seg_dx = segment_end.x - segment_start.x;
+  const float seg_dy = segment_end.y - segment_start.y;
+  const float length_squared = seg_dx * seg_dx + seg_dy * seg_dy;
+  float t = 0.0f;
+  if (length_squared > 0.0f) {
+    t = ((circle_center.x - segment_start.x) * seg_dx +
+         (circle_center.y - segment_start.y) * seg_dy) /
+        length_squared;
+    t = std::clamp(t, 0.0f, 1.0f);
+  }
+  const float closest_x = segment_start.x + seg_dx * t;
+  const float closest_y = segment_start.y + seg_dy * t;
+  const float dx = circle_center.x - closest_x;
+  const float dy = circle_center.y - closest_y;
+  return (dx * dx + dy * dy) <= (circle_radius * circle_radius);
 }
 
 void Game::UpdateFireballs(Uint32 now) {
@@ -2682,10 +2860,15 @@ void Game::UpdateFireballs(Uint32 now) {
         break;
       }
 
+      const SDL_FPoint segment_start = MakeCellCenter(fireball.current_coord);
+      const SDL_FPoint segment_end = MakeCellCenter(next_coord);
       fireball.current_coord = next_coord;
       fireball.segment_started_ticks += step_duration_ms;
 
-      if (SameCoord(pacman->map_coord, fireball.current_coord)) {
+      const SDL_FPoint pacman_center = PreciseWorldCenter(pacman);
+      if (SegmentHitsCircle(segment_start, segment_end, pacman_center,
+                            PACMAN_HITBOX_RADIUS_CELLS +
+                                FIREBALL_HITBOX_RADIUS_CELLS)) {
 #ifdef AUDIO
         audio->PlayFireballWallHit();
 #endif
@@ -2703,7 +2886,10 @@ void Game::UpdateFireballs(Uint32 now) {
           continue;
         }
 
-        if (SameCoord(monster->map_coord, fireball.current_coord)) {
+        const SDL_FPoint monster_center = PreciseWorldCenter(monster);
+        if (SegmentHitsCircle(segment_start, segment_end, monster_center,
+                              MONSTER_HITBOX_RADIUS_CELLS +
+                                  FIREBALL_HITBOX_RADIUS_CELLS)) {
           EliminateMonster(monster, now);
           remove_fireball = true;
           break;
@@ -2761,10 +2947,17 @@ void Game::UpdateSlimeballs(Uint32 now) {
         break;
       }
 
+      const SDL_FPoint slime_segment_start =
+          MakeCellCenter(slimeball.current_coord);
+      const SDL_FPoint slime_segment_end = MakeCellCenter(next_coord);
       slimeball.current_coord = next_coord;
       slimeball.segment_started_ticks += step_duration_ms;
 
-      if (SameCoord(pacman->map_coord, slimeball.current_coord)) {
+      const SDL_FPoint pacman_center = PreciseWorldCenter(pacman);
+      if (SegmentHitsCircle(slime_segment_start, slime_segment_end,
+                            pacman_center,
+                            PACMAN_HITBOX_RADIUS_CELLS +
+                                SLIMEBALL_HITBOX_RADIUS_CELLS)) {
 #ifdef AUDIO
         audio->PlaySlimeImpact();
 #endif
@@ -3133,6 +3326,36 @@ void Game::SpawnExplosionSmokeCloud(SDL_FPoint world_center, int radius_cells,
     puff.spawned_ticks = now;
     puff.shape_seed = seed_dist(rng);
     puff.kind = ExplosionSmokePuffKind::BlastSmoke;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnRocketBlastSmokeCloud(SDL_FPoint world_center, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_int_distribution<int> count_dist(
+      ROCKET_BLAST_SMOKE_MIN_PUFF_COUNT,
+      ROCKET_BLAST_SMOKE_MAX_PUFF_COUNT);
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> ring_dist(0.0f, 1.0f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  const float inner_radius = ROCKET_BLAST_SMOKE_RING_INNER_RADIUS_CELLS;
+  const float outer_radius = std::max(inner_radius + 0.12f,
+                                      ROCKET_BLAST_SMOKE_RING_OUTER_RADIUS_CELLS);
+
+  const int puff_count = count_dist(rng);
+  for (int i = 0; i < puff_count; ++i) {
+    const float angle = angle_dist(rng);
+    const float radius =
+        inner_radius + (outer_radius - inner_radius) * ring_dist(rng);
+    ExplosionSmokePuff puff;
+    puff.world_position = {
+        world_center.x + std::cos(angle) * radius,
+        world_center.y + std::sin(angle) * radius};
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.kind = ExplosionSmokePuffKind::RocketBlastSmoke;
     explosion_smoke_puffs.push_back(puff);
   }
 }

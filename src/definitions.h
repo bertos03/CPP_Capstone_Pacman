@@ -179,6 +179,22 @@ inline constexpr int SPEED_PACMAN = 8;
 inline constexpr int SPEED_MONSTER = 6;
 
 /**
+ * @brief Hitbox radii for visually accurate collision detection.
+ *
+ * All values are expressed in cell units (1.0 == one cell width). Sprites and
+ * projectiles collide when their hitbox circles overlap, so the gameplay
+ * matches what the eye sees instead of waiting for cell-coordinate centers
+ * to align. Tweaking individual values up or down makes specific entities
+ * easier or harder to hit without affecting their visuals.
+ */
+inline constexpr float PACMAN_HITBOX_RADIUS_CELLS = 0.40f;
+inline constexpr float MONSTER_HITBOX_RADIUS_CELLS = 0.40f;
+inline constexpr float FIREBALL_HITBOX_RADIUS_CELLS = 0.22f;
+inline constexpr float SLIMEBALL_HITBOX_RADIUS_CELLS = 0.24f;
+inline constexpr float ROCKET_HITBOX_RADIUS_CELLS = 0.28f;
+inline constexpr float BEAM_HITBOX_RADIUS_CELLS = 0.18f;
+
+/**
  * @brief Score and loss-recovery tuning.
  *
  * `SCORE_PER_GOODIE` controls how rewarding each pellet is. The extra-life
@@ -368,6 +384,34 @@ inline constexpr float EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MIN_FACTOR = 0.44f;
 inline constexpr float EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MAX_FACTOR = 0.98f;
 inline constexpr float EXPLOSION_SMOKE_CLOUD_WOBBLE_AMPLITUDE_CELLS = 0.03f;
 inline constexpr float EXPLOSION_SMOKE_CLOUD_WOBBLE_FREQUENCY_HZ = 1.0f;
+
+/**
+ * @brief Rocket impact smoke and blast tuning.
+ *
+ * The rocket impact uses a separate, larger smoke ring that surrounds a
+ * deliberately empty center so the bright explosion core stays readable.
+ * Compared to the generic blast smoke, this variant spawns more puffs over a
+ * larger radius, but each puff is more transparent and fades faster so the
+ * scene clears quickly.
+ */
+inline constexpr int ROCKET_EXPLOSION_VISIBLE_RADIUS_CELLS = 1;
+inline constexpr int ROCKET_BLAST_SMOKE_MIN_PUFF_COUNT = 28;
+inline constexpr int ROCKET_BLAST_SMOKE_MAX_PUFF_COUNT = 40;
+inline constexpr float ROCKET_BLAST_SMOKE_RING_INNER_RADIUS_CELLS = 1.05f;
+inline constexpr float ROCKET_BLAST_SMOKE_RING_OUTER_RADIUS_CELLS = 2.20f;
+inline constexpr Uint32 ROCKET_BLAST_SMOKE_LIFETIME_MS = 700;
+inline constexpr float ROCKET_BLAST_SMOKE_INITIAL_RADIUS_CELLS = 0.14f;
+inline constexpr float ROCKET_BLAST_SMOKE_FINAL_RADIUS_CELLS = 0.46f;
+inline constexpr Uint8 ROCKET_BLAST_SMOKE_INITIAL_ALPHA = 36;
+inline constexpr SDL_Color ROCKET_BLAST_SMOKE_COLOR{86, 80, 76, 255};
+inline constexpr SDL_Color ROCKET_BLAST_SMOKE_HIGHLIGHT_COLOR{132, 124, 118, 255};
+inline constexpr int ROCKET_BLAST_SMOKE_BLOB_MIN_COUNT = 4;
+inline constexpr int ROCKET_BLAST_SMOKE_BLOB_MAX_COUNT = 7;
+inline constexpr float ROCKET_BLAST_SMOKE_BLOB_OFFSET_FACTOR = 0.86f;
+inline constexpr float ROCKET_BLAST_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.42f;
+inline constexpr float ROCKET_BLAST_SMOKE_BLOB_RADIUS_MAX_FACTOR = 0.96f;
+inline constexpr float ROCKET_BLAST_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.05f;
+inline constexpr float ROCKET_BLAST_SMOKE_WOBBLE_FREQUENCY_HZ = 1.4f;
 
 inline constexpr int WALL_RUBBLE_CENTER_MIN_COUNT = 16;
 inline constexpr int WALL_RUBBLE_CENTER_MAX_COUNT = 25;
