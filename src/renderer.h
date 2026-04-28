@@ -255,7 +255,7 @@ private:
   void recreateSupersampleTarget();
 
   SDL_Texture *sdl_supersample_target = nullptr;
-  int supersample_factor = 2;
+  int supersample_factor = 1;
   int supersample_target_w = 0;
   int supersample_target_h = 0;
 

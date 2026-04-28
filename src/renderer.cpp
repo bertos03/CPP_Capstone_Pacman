@@ -8708,23 +8708,23 @@ void Renderer::drawWallVegetation(const SDL_Rect &wall_rect, Uint8 shade,
       static_cast<Uint8>(std::clamp(WALL_MOSS_BASE_ALPHA * 0.48, 0.0, 255.0)));
 
   const SDL_Color stem_shadow_color = WithAlpha(
-      ScaleColor(WALL_VINE_STEM_DARK_COLOR, shade_factor * 0.62f),
+      ScaleColor(WALL_VINE_DARK_COLOR, shade_factor * 0.62f),
       static_cast<Uint8>(std::clamp(WALL_VINE_BASE_ALPHA * 0.42, 0.0, 255.0)));
   const SDL_Color stem_base_color = WithAlpha(
-      ScaleColor(WALL_VINE_STEM_MID_COLOR, shade_factor * 0.96f),
+      ScaleColor(WALL_VINE_MID_COLOR, shade_factor * 0.96f),
       WALL_VINE_BASE_ALPHA);
   const SDL_Color stem_highlight_color = WithAlpha(
-      ScaleColor(WALL_VINE_STEM_HIGHLIGHT_COLOR, shade_factor * 1.02f),
+      ScaleColor(WALL_VINE_HIGHLIGHT_COLOR, shade_factor * 1.02f),
       static_cast<Uint8>(std::clamp(WALL_VINE_BASE_ALPHA * 0.62, 0.0, 255.0)));
 
   const SDL_Color leaf_shadow_color = WithAlpha(
-      ScaleColor(WALL_VINE_LEAF_DARK_COLOR, shade_factor * 0.64f),
+      ScaleColor(WALL_VINE_DARK_COLOR, shade_factor * 0.64f),
       static_cast<Uint8>(std::clamp(WALL_VINE_BASE_ALPHA * 0.44, 0.0, 255.0)));
   const SDL_Color leaf_base_color = WithAlpha(
-      ScaleColor(WALL_VINE_LEAF_MID_COLOR, shade_factor * 1.00f),
+      ScaleColor(WALL_VINE_MID_COLOR, shade_factor * 1.00f),
       WALL_VINE_BASE_ALPHA);
   const SDL_Color leaf_highlight_color = WithAlpha(
-      ScaleColor(WALL_VINE_LEAF_HIGHLIGHT_COLOR, shade_factor * 1.04f),
+      ScaleColor(WALL_VINE_HIGHLIGHT_COLOR, shade_factor * 1.04f),
       static_cast<Uint8>(std::clamp(WALL_VINE_BASE_ALPHA * 0.72, 0.0, 255.0)));
 
   auto random_count = [&](int seed, int minimum, int maximum) {
