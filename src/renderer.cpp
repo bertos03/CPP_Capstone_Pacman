@@ -979,6 +979,7 @@ void Renderer::renderFrame(bool show_hud) {
   SDL_RenderClear(sdl_renderer);
   if (ENABLE_3D_VIEW) {
     drawmap3DBase();
+    drawWallRubble();
 
     if (map != nullptr) {
       struct DepthDrawCommand {
@@ -1547,6 +1548,8 @@ void Renderer::renderFrame(bool show_hud) {
           const bool life_recovery_active =
               game->IsPacmanRecoveringFromLifeLoss(now);
           const bool slimed = game->pacman->slimed_until_ticks > now;
+          const bool front_facing_due_to_gas =
+              slimed && game->pacman->paralyzed_until_ticks > now;
           const bool walking =
               game->pacman->px_delta.x != 0 || game->pacman->px_delta.y != 0;
           const Uint32 flicker_phase_ms =
@@ -1555,10 +1558,11 @@ void Renderer::renderFrame(bool show_hud) {
               (!life_recovery_active || ((now / flicker_phase_ms) % 2 == 0))
                   ? 255
                   : PACMAN_RECOVERY_ALPHA;
-          const Directions facing_direction =
-              (game->pacman->facing_direction == Directions::None)
-                  ? Directions::Down
-                  : game->pacman->facing_direction;
+          Directions facing_direction = game->pacman->facing_direction;
+          if (front_facing_due_to_gas ||
+              facing_direction == Directions::None) {
+            facing_direction = Directions::Down;
+          }
           SDL_Texture *pacman_texture =
               getPacmanTexture(facing_direction, walking);
 
@@ -1588,46 +1592,8 @@ void Renderer::renderFrame(bool show_hud) {
                 return;
               }
 
-              const int center_x = anchor_rect.x + anchor_rect.w / 2;
-              const int center_y = anchor_rect.y + anchor_rect.h / 2;
-              if (sdl_slime_overlay_texture != nullptr &&
-                  sdl_slime_overlay_size.x > 0 &&
-                  sdl_slime_overlay_size.y > 0) {
-                const int max_dimension = std::max(
-                    1, static_cast<int>(std::lround(
-                           element_size * kSlimeOverlayRenderScale)));
-                const double scale =
-                    static_cast<double>(max_dimension) /
-                    static_cast<double>(std::max(sdl_slime_overlay_size.x,
-                                                 sdl_slime_overlay_size.y));
-                const int draw_width = std::max(
-                    1, static_cast<int>(std::lround(sdl_slime_overlay_size.x *
-                                                    scale)));
-                const int draw_height = std::max(
-                    1, static_cast<int>(std::lround(sdl_slime_overlay_size.y *
-                                                    scale)));
-                const SDL_Rect overlay_rect{center_x - draw_width / 2,
-                                            center_y - draw_height / 2,
-                                            draw_width, draw_height};
-                SDL_SetTextureAlphaMod(
-                    sdl_slime_overlay_texture,
-                    static_cast<Uint8>(std::clamp(
-                        kSlimeOverlayBaseAlpha * alpha_factor, 0.0, 255.0)));
-                SDL_RenderCopyEx(sdl_renderer, sdl_slime_overlay_texture,
-                                 nullptr, &overlay_rect, rotation_degrees,
-                                 nullptr, SDL_FLIP_NONE);
-                SDL_SetTextureAlphaMod(sdl_slime_overlay_texture, 255);
-                return;
-              }
-
-              const Uint8 alpha = static_cast<Uint8>(
-                  std::clamp(110.0 * alpha_factor, 0.0, 110.0));
-              SDL_SetRenderDrawColor(sdl_renderer, 78, 255, 88, alpha / 2);
-              SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
-                                   std::max(8, anchor_rect.w / 2 + 5));
-              SDL_SetRenderDrawColor(sdl_renderer, 174, 255, 138, alpha);
-              SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
-                                   std::max(8, anchor_rect.w / 2 + 6));
+              (void)rotation_degrees;
+              drawPacmanGasCloudlets(anchor_rect, alpha_factor, now);
             };
 
             if (game->pacman->teleport_animation_active) {
@@ -1817,18 +1783,15 @@ void Renderer::renderFrame(bool show_hud) {
                       static_cast<Uint8>(
                           std::clamp(72.0 + urgency * 90.0, 0.0, 190.0)));
                   SDL_RenderFillCircle(
-                      sdl_renderer, center_x,
-                      center_y +
-                          static_cast<int>(std::lround(element_size * 0.08)),
+                      sdl_renderer, center_x, center_y,
                       std::max(6,
                                static_cast<int>(element_size * 0.24 * pulse)));
 
                   const int icon_size =
-                      std::max(12, static_cast<int>(element_size * 0.78));
+                      std::max(12, static_cast<int>(element_size * 0.74));
                   const SDL_Rect icon_rect{
                       center_x - icon_size / 2,
-                      center_y - icon_size / 2 -
-                          static_cast<int>(std::lround(element_size * 0.10)),
+                      center_y - icon_size / 2,
                       icon_size, icon_size};
                   drawDynamiteIcon(icon_rect, true, pulse_clock, 255, urgency);
 
@@ -2087,6 +2050,7 @@ void Renderer::renderFrame(bool show_hud) {
   }
 
   drawmap();
+  drawWallRubble();
   drawteleporters();
   if (game != nullptr) {
     drawgoodies();
@@ -4314,6 +4278,8 @@ void Renderer::drawpacman() {
   const bool potion_invulnerable = game->pacman->invulnerable_until_ticks > now;
   const bool life_recovery_active = game->IsPacmanRecoveringFromLifeLoss(now);
   const bool slimed = game->pacman->slimed_until_ticks > now;
+  const bool front_facing_due_to_gas =
+      slimed && game->pacman->paralyzed_until_ticks > now;
   const bool walking =
       game->pacman->px_delta.x != 0 || game->pacman->px_delta.y != 0;
   const Uint32 flicker_phase_ms =
@@ -4322,10 +4288,10 @@ void Renderer::drawpacman() {
       (!life_recovery_active || ((now / flicker_phase_ms) % 2 == 0))
           ? 255
           : PACMAN_RECOVERY_ALPHA;
-  const Directions facing_direction =
-      (game->pacman->facing_direction == Directions::None)
-          ? Directions::Down
-          : game->pacman->facing_direction;
+  Directions facing_direction = game->pacman->facing_direction;
+  if (front_facing_due_to_gas || facing_direction == Directions::None) {
+    facing_direction = Directions::Down;
+  }
   SDL_Texture *pacman_texture = getPacmanTexture(facing_direction, walking);
 
   if (game->dead || final_loss_sequence_active) {
@@ -4356,41 +4322,8 @@ void Renderer::drawpacman() {
       return;
     }
 
-    const int center_x = anchor_rect.x + anchor_rect.w / 2;
-    const int center_y = anchor_rect.y + anchor_rect.h / 2;
-    if (sdl_slime_overlay_texture != nullptr && sdl_slime_overlay_size.x > 0 &&
-        sdl_slime_overlay_size.y > 0) {
-      const int max_dimension = std::max(
-          1, static_cast<int>(std::lround(element_size * kSlimeOverlayRenderScale)));
-      const double scale =
-          static_cast<double>(max_dimension) /
-          static_cast<double>(std::max(sdl_slime_overlay_size.x,
-                                       sdl_slime_overlay_size.y));
-      const int draw_width = std::max(
-          1, static_cast<int>(std::lround(sdl_slime_overlay_size.x * scale)));
-      const int draw_height = std::max(
-          1, static_cast<int>(std::lround(sdl_slime_overlay_size.y * scale)));
-      const SDL_Rect overlay_rect{center_x - draw_width / 2,
-                                  center_y - draw_height / 2, draw_width,
-                                  draw_height};
-      SDL_SetTextureAlphaMod(
-          sdl_slime_overlay_texture,
-          static_cast<Uint8>(std::clamp(kSlimeOverlayBaseAlpha * alpha_factor,
-                                        0.0, 255.0)));
-      SDL_RenderCopyEx(sdl_renderer, sdl_slime_overlay_texture, nullptr,
-                       &overlay_rect, rotation_degrees, nullptr, SDL_FLIP_NONE);
-      SDL_SetTextureAlphaMod(sdl_slime_overlay_texture, 255);
-      return;
-    }
-
-    const Uint8 alpha = static_cast<Uint8>(
-        std::clamp(110.0 * alpha_factor, 0.0, 110.0));
-    SDL_SetRenderDrawColor(sdl_renderer, 78, 255, 88, alpha / 2);
-    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
-                         std::max(8, anchor_rect.w / 2 + 5));
-    SDL_SetRenderDrawColor(sdl_renderer, 174, 255, 138, alpha);
-    SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
-                         std::max(8, anchor_rect.w / 2 + 6));
+    (void)rotation_degrees;
+    drawPacmanGasCloudlets(anchor_rect, alpha_factor, now);
   };
 
   if (game->pacman->teleport_animation_active) {
@@ -5015,6 +4948,160 @@ void Renderer::drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
+void Renderer::drawOrganicGasCloud(int center_x, int center_y, int base_size,
+                                   double animation_clock,
+                                   double alpha_factor, int animation_seed,
+                                   double scale_multiplier) {
+  if (base_size <= 0 || alpha_factor <= 0.0) {
+    return;
+  }
+
+  constexpr double kPi = 3.14159265358979323846;
+  const std::array<SDL_Color, 5> palette{{
+      SDL_Color{64, 154, 78, 255},
+      SDL_Color{82, 178, 86, 255},
+      SDL_Color{102, 196, 102, 255},
+      SDL_Color{126, 214, 126, 255},
+      SDL_Color{160, 226, 150, 255},
+  }};
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const int haze_radius = std::max(
+      4, static_cast<int>(std::lround(base_size * (0.82 + 0.10 * scale_multiplier))));
+  SDL_SetRenderDrawColor(
+      sdl_renderer, 72, 156, 76,
+      static_cast<Uint8>(std::clamp(46.0 * alpha_factor, 0.0, 120.0)));
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, haze_radius + 3);
+  SDL_SetRenderDrawColor(
+      sdl_renderer, 118, 208, 116,
+      static_cast<Uint8>(std::clamp(22.0 * alpha_factor, 0.0, 80.0)));
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y - haze_radius / 3,
+                       haze_radius + 1);
+
+  const int minimum_particle_count =
+      std::max(1, std::min(GAS_CLOUD_MIN_PARTICLE_COUNT,
+                           GAS_CLOUD_MAX_PARTICLE_COUNT));
+  const int maximum_particle_count =
+      std::max(minimum_particle_count,
+               std::max(GAS_CLOUD_MIN_PARTICLE_COUNT,
+                        GAS_CLOUD_MAX_PARTICLE_COUNT));
+  const int particle_range =
+      maximum_particle_count - minimum_particle_count + 1;
+  const int particle_count =
+      minimum_particle_count +
+      std::abs(animation_seed * 17 + 11) % particle_range;
+
+  for (int puff = 0; puff < particle_count; ++puff) {
+    const int seed = animation_seed * 97 + puff * 31;
+    const double phase =
+        animation_clock * (0.58 + 0.18 * HashUnit(seed + 1)) +
+        HashUnit(seed + 2) * 2.0 * kPi;
+    const double wobble =
+        0.5 + 0.5 *
+                  std::sin(animation_clock * (1.24 + 0.22 * HashUnit(seed + 3)) +
+                           HashUnit(seed + 4) * 2.0 * kPi);
+    const double orbit =
+        base_size * scale_multiplier * (0.18 + 0.18 * HashUnit(seed + 5));
+    const int offset_x = static_cast<int>(std::lround(
+        std::cos(phase) * orbit * (0.76 + 0.34 * wobble)));
+    const int offset_y = static_cast<int>(std::lround(
+        std::sin(phase * 1.19 + HashSigned(seed + 6) * 0.45) * orbit *
+            (0.52 + 0.20 * wobble) -
+        base_size * scale_multiplier * (0.06 + 0.07 * wobble)));
+    const int puff_radius =
+        std::max(3, static_cast<int>(std::lround(
+                        base_size * scale_multiplier *
+                        (0.26 + 0.16 * HashUnit(seed + 7) + 0.16 * wobble))));
+    const SDL_Color color = palette[static_cast<size_t>(puff) % palette.size()];
+    const Uint8 puff_alpha = static_cast<Uint8>(std::clamp(
+        (56.0 + 18.0 * puff + 54.0 * wobble) * alpha_factor, 0.0, 186.0));
+    SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, puff_alpha);
+    SDL_RenderFillCircle(sdl_renderer, center_x + offset_x, center_y + offset_y,
+                         puff_radius);
+
+    const int highlight_radius = std::max(2, puff_radius / 2);
+    SDL_SetRenderDrawColor(
+        sdl_renderer, static_cast<Uint8>(std::min(255, color.r + 26)),
+        static_cast<Uint8>(std::min(255, color.g + 24)),
+        static_cast<Uint8>(std::min(255, color.b + 18)),
+        static_cast<Uint8>(std::clamp(puff_alpha * 0.46, 0.0, 120.0)));
+    SDL_RenderFillCircle(sdl_renderer, center_x + offset_x + puff_radius / 4,
+                         center_y + offset_y - puff_radius / 3,
+                         highlight_radius);
+  }
+
+  const int wisp_count = std::clamp(2 + particle_count / 3, 3, 6);
+  for (int wisp = 0; wisp < wisp_count; ++wisp) {
+    const int seed = animation_seed * 149 + wisp * 43;
+    const double angle =
+        animation_clock * (0.92 + 0.14 * HashUnit(seed + 1)) +
+        HashUnit(seed + 2) * 2.0 * kPi;
+    const double distance =
+        base_size * scale_multiplier * (0.44 + 0.16 * HashUnit(seed + 3));
+    const int x1 =
+        center_x + static_cast<int>(std::lround(std::cos(angle) * distance * 0.4));
+    const int y1 = center_y - base_size / 6 +
+                   static_cast<int>(std::lround(std::sin(angle * 1.13) *
+                                                distance * 0.3));
+    const int x2 = x1 + static_cast<int>(std::lround(std::cos(angle) * distance));
+    const int y2 = y1 - static_cast<int>(std::lround(distance * 0.35));
+    SDL_SetRenderDrawColor(
+        sdl_renderer, 174, 230, 166,
+        static_cast<Uint8>(std::clamp(38.0 * alpha_factor, 0.0, 90.0)));
+    SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
+void Renderer::drawPacmanGasCloudlets(const SDL_Rect &anchor_rect,
+                                      double alpha_factor, Uint32 now) {
+  if (anchor_rect.w <= 0 || anchor_rect.h <= 0 || alpha_factor <= 0.0) {
+    return;
+  }
+
+  constexpr double kPi = 3.14159265358979323846;
+  const int center_x = anchor_rect.x + anchor_rect.w / 2;
+  const int center_y = anchor_rect.y + anchor_rect.h / 2;
+  const int orbit_radius =
+      std::max(anchor_rect.w, anchor_rect.h) / 2 + std::max(6, element_size / 10);
+  const double aura_clock = static_cast<double>(now) / 230.0;
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(
+      sdl_renderer, 78, 176, 82,
+      static_cast<Uint8>(std::clamp(26.0 * alpha_factor, 0.0, 80.0)));
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(10, anchor_rect.w / 2 + 6));
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+
+  for (int cloudlet = 0; cloudlet < 6; ++cloudlet) {
+    const double angle = aura_clock * 0.72 +
+                         cloudlet * (2.0 * kPi / 6.0) +
+                         HashSigned(300 + cloudlet * 19) * 0.34;
+    const double radial_pulse =
+        0.84 + 0.16 * std::sin(aura_clock * 1.3 + cloudlet * 0.9);
+    const int cloudlet_x =
+        center_x + static_cast<int>(std::lround(std::cos(angle) * orbit_radius *
+                                                radial_pulse));
+    const int cloudlet_y =
+        center_y - anchor_rect.h / 6 +
+        static_cast<int>(std::lround(std::sin(angle * 1.18) *
+                                     orbit_radius * 0.46));
+    const int base_size =
+        std::max(4, static_cast<int>(std::lround(
+                        element_size * (0.11 + 0.02 * (cloudlet % 3)))));
+    drawOrganicGasCloud(cloudlet_x, cloudlet_y, base_size,
+                        aura_clock + cloudlet * 0.78, alpha_factor * 0.92,
+                        700 + cloudlet * 41, 0.86);
+  }
+}
+
 void Renderer::drawPlasticExplosiveIcon(const SDL_Rect &icon_rect,
                                         double animation_clock, Uint8 alpha,
                                         bool armed) {
@@ -5336,12 +5423,11 @@ void Renderer::drawplaceddynamites() {
     SDL_SetRenderDrawColor(
         sdl_renderer, 255, 88, 32,
         static_cast<Uint8>(std::clamp(72.0 + urgency * 90.0, 0.0, 190.0)));
-    SDL_RenderFillCircle(sdl_renderer, center_x, center_y + element_size / 6,
+    SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
                          std::max(6, static_cast<int>(element_size * 0.24 * pulse)));
 
-    const int icon_size = std::max(12, static_cast<int>(element_size * 0.78));
-    const SDL_Rect icon_rect{center_x - icon_size / 2,
-                             center_y - icon_size / 2 - element_size / 10,
+    const int icon_size = std::max(12, static_cast<int>(element_size * 0.74));
+    const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
                              icon_size, icon_size};
     drawDynamiteIcon(icon_rect, true, pulse_clock, 255, urgency);
 
@@ -6400,6 +6486,117 @@ void Renderer::drawExplosionParticles() {
 
   const float cell_to_px = static_cast<float>(element_size + 1);
 
+  struct SmokeRenderTuning {
+    Uint32 lifetime_ms;
+    float initial_radius_cells;
+    float final_radius_cells;
+    Uint8 initial_alpha;
+    SDL_Color base_color;
+    SDL_Color highlight_color;
+    int blob_min_count;
+    int blob_max_count;
+    float blob_offset_factor;
+    float blob_radius_min_factor;
+    float blob_radius_max_factor;
+    float wobble_amplitude_cells;
+    float wobble_frequency_hz;
+  };
+  auto get_smoke_tuning = [](ExplosionSmokePuffKind kind) {
+    switch (kind) {
+    case ExplosionSmokePuffKind::BlastSmoke:
+      return SmokeRenderTuning{
+          EXPLOSION_SMOKE_CLOUD_LIFETIME_MS,
+          EXPLOSION_SMOKE_CLOUD_INITIAL_RADIUS_CELLS,
+          EXPLOSION_SMOKE_CLOUD_FINAL_RADIUS_CELLS,
+          EXPLOSION_SMOKE_CLOUD_INITIAL_ALPHA,
+          EXPLOSION_SMOKE_CLOUD_COLOR,
+          EXPLOSION_SMOKE_CLOUD_HIGHLIGHT_COLOR,
+          EXPLOSION_SMOKE_CLOUD_BLOB_MIN_COUNT,
+          EXPLOSION_SMOKE_CLOUD_BLOB_MAX_COUNT,
+          EXPLOSION_SMOKE_CLOUD_BLOB_OFFSET_FACTOR,
+          EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MIN_FACTOR,
+          EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MAX_FACTOR,
+          EXPLOSION_SMOKE_CLOUD_WOBBLE_AMPLITUDE_CELLS,
+          EXPLOSION_SMOKE_CLOUD_WOBBLE_FREQUENCY_HZ};
+    case ExplosionSmokePuffKind::WallDust:
+      return SmokeRenderTuning{
+          PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS,
+          PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_RADIUS_CELLS,
+          PLASTIC_EXPLOSIVE_WALL_DUST_FINAL_RADIUS_CELLS,
+          PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_ALPHA,
+          PLASTIC_EXPLOSIVE_WALL_DUST_COLOR,
+          PLASTIC_EXPLOSIVE_WALL_DUST_HIGHLIGHT_COLOR,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_MIN_COUNT,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_MAX_COUNT,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_OFFSET_FACTOR,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_RADIUS_MIN_FACTOR,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_RADIUS_MAX_FACTOR,
+          PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_AMPLITUDE_CELLS,
+          PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_FREQUENCY_HZ};
+    case ExplosionSmokePuffKind::MonsterSmoke:
+    default:
+      return SmokeRenderTuning{
+          MONSTER_EXPLOSION_SMOKE_LIFETIME_MS,
+          MONSTER_EXPLOSION_SMOKE_INITIAL_RADIUS_CELLS,
+          MONSTER_EXPLOSION_SMOKE_FINAL_RADIUS_CELLS,
+          MONSTER_EXPLOSION_SMOKE_INITIAL_ALPHA,
+          MONSTER_EXPLOSION_SMOKE_COLOR,
+          MONSTER_EXPLOSION_SMOKE_HIGHLIGHT_COLOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_MIN_COUNT,
+          MONSTER_EXPLOSION_SMOKE_BLOB_MAX_COUNT,
+          MONSTER_EXPLOSION_SMOKE_BLOB_OFFSET_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MAX_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_AMPLITUDE_CELLS,
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ};
+    }
+  };
+
+  struct ParticleRenderTuning {
+    Uint32 lifetime_ms;
+    Uint8 initial_alpha;
+    SDL_Color base_color;
+    SDL_Color highlight_color;
+    int blob_min_count;
+    int blob_max_count;
+    float blob_offset_factor;
+    float blob_radius_min_factor;
+    float blob_radius_max_factor;
+    float growth_factor;
+    bool render_as_chunks;
+  };
+  auto get_particle_tuning = [](ExplosionParticleKind kind) {
+    switch (kind) {
+    case ExplosionParticleKind::WallDebris:
+      return ParticleRenderTuning{
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_LIFETIME_MS,
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_INITIAL_ALPHA,
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_COLOR,
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_HIGHLIGHT_COLOR,
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_BLOB_MIN_COUNT,
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_BLOB_MAX_COUNT,
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_BLOB_OFFSET_FACTOR,
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_BLOB_RADIUS_MIN_FACTOR,
+          PLASTIC_EXPLOSIVE_WALL_DEBRIS_BLOB_RADIUS_MAX_FACTOR,
+          0.24f,
+          true};
+    case ExplosionParticleKind::MonsterExplosion:
+    default:
+      return ParticleRenderTuning{
+          MONSTER_EXPLOSION_PARTICLE_LIFETIME_MS,
+          MONSTER_EXPLOSION_PARTICLE_INITIAL_ALPHA,
+          MONSTER_EXPLOSION_PARTICLE_COLOR,
+          MONSTER_EXPLOSION_PARTICLE_HIGHLIGHT_COLOR,
+          MONSTER_EXPLOSION_PARTICLE_BLOB_MIN_COUNT,
+          MONSTER_EXPLOSION_PARTICLE_BLOB_MAX_COUNT,
+          MONSTER_EXPLOSION_PARTICLE_BLOB_OFFSET_FACTOR,
+          MONSTER_EXPLOSION_PARTICLE_BLOB_RADIUS_MIN_FACTOR,
+          MONSTER_EXPLOSION_PARTICLE_BLOB_RADIUS_MAX_FACTOR,
+          0.55f,
+          false};
+    }
+  };
+
   auto world_to_screen = [&](SDL_FPoint world) {
     if (ENABLE_3D_VIEW) {
       return projectScene(world.x, world.y, 0.0);
@@ -6409,55 +6606,48 @@ void Renderer::drawExplosionParticles() {
         static_cast<float>(offset_y) + world.y * cell_to_px};
   };
 
-  const double wobble_clock =
-      static_cast<double>(now) / 1000.0 *
-      (2.0 * 3.14159265358979323846 *
-       MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ);
-
   for (const ExplosionSmokePuff &puff : game->explosion_smoke_puffs) {
+    const SmokeRenderTuning tuning = get_smoke_tuning(puff.kind);
     if (now < puff.spawned_ticks) {
       continue;
     }
     const Uint32 age = now - puff.spawned_ticks;
-    if (age >= MONSTER_EXPLOSION_SMOKE_LIFETIME_MS) {
+    if (age >= tuning.lifetime_ms) {
       continue;
     }
     const double progress =
-        static_cast<double>(age) /
-        static_cast<double>(MONSTER_EXPLOSION_SMOKE_LIFETIME_MS);
+        static_cast<double>(age) / static_cast<double>(tuning.lifetime_ms);
     const float radius_cells =
-        MONSTER_EXPLOSION_SMOKE_INITIAL_RADIUS_CELLS +
-        (MONSTER_EXPLOSION_SMOKE_FINAL_RADIUS_CELLS -
-         MONSTER_EXPLOSION_SMOKE_INITIAL_RADIUS_CELLS) *
+        tuning.initial_radius_cells +
+        (tuning.final_radius_cells - tuning.initial_radius_cells) *
             static_cast<float>(progress);
     const Uint8 base_alpha = static_cast<Uint8>(std::clamp(
-        MONSTER_EXPLOSION_SMOKE_INITIAL_ALPHA * (1.0 - progress), 0.0, 255.0));
+        tuning.initial_alpha * (1.0 - progress), 0.0, 255.0));
     const SDL_FPoint screen = world_to_screen(puff.world_position);
     const float base_radius_px = radius_cells * cell_to_px;
+    const double wobble_clock =
+        static_cast<double>(now) / 1000.0 *
+        (2.0 * 3.14159265358979323846 * tuning.wobble_frequency_hz);
 
     std::mt19937 shape_rng(puff.shape_seed);
     std::uniform_int_distribution<int> blob_count_dist(
-        MONSTER_EXPLOSION_SMOKE_BLOB_MIN_COUNT,
-        MONSTER_EXPLOSION_SMOKE_BLOB_MAX_COUNT);
+        tuning.blob_min_count, tuning.blob_max_count);
     std::uniform_real_distribution<float> offset_dist(-1.0f, 1.0f);
     std::uniform_real_distribution<float> radius_factor_dist(
-        MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MIN_FACTOR,
-        MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MAX_FACTOR);
+        tuning.blob_radius_min_factor, tuning.blob_radius_max_factor);
     std::uniform_real_distribution<float> shade_dist(0.0f, 1.0f);
     std::uniform_real_distribution<float> phase_dist(
         0.0f, static_cast<float>(2.0 * 3.14159265358979323846));
 
     const int blob_count = blob_count_dist(shape_rng);
     const float wobble_px =
-        MONSTER_EXPLOSION_SMOKE_WOBBLE_AMPLITUDE_CELLS * cell_to_px;
+        tuning.wobble_amplitude_cells * cell_to_px;
 
     for (int blob = 0; blob < blob_count; ++blob) {
       const float base_offset_x =
-          offset_dist(shape_rng) *
-          MONSTER_EXPLOSION_SMOKE_BLOB_OFFSET_FACTOR * base_radius_px;
+          offset_dist(shape_rng) * tuning.blob_offset_factor * base_radius_px;
       const float base_offset_y =
-          offset_dist(shape_rng) *
-          MONSTER_EXPLOSION_SMOKE_BLOB_OFFSET_FACTOR * base_radius_px;
+          offset_dist(shape_rng) * tuning.blob_offset_factor * base_radius_px;
       const float blob_radius =
           base_radius_px * radius_factor_dist(shape_rng);
       const float shade_mix = shade_dist(shape_rng);
@@ -6468,14 +6658,14 @@ void Renderer::drawExplosionParticles() {
       const float wobble_y =
           wobble_px * static_cast<float>(std::cos(wobble_clock * 0.83 + phase_y));
       const Uint8 r = static_cast<Uint8>(
-          MONSTER_EXPLOSION_SMOKE_COLOR.r * (1.0f - shade_mix) +
-          MONSTER_EXPLOSION_SMOKE_HIGHLIGHT_COLOR.r * shade_mix);
+          tuning.base_color.r * (1.0f - shade_mix) +
+          tuning.highlight_color.r * shade_mix);
       const Uint8 g = static_cast<Uint8>(
-          MONSTER_EXPLOSION_SMOKE_COLOR.g * (1.0f - shade_mix) +
-          MONSTER_EXPLOSION_SMOKE_HIGHLIGHT_COLOR.g * shade_mix);
+          tuning.base_color.g * (1.0f - shade_mix) +
+          tuning.highlight_color.g * shade_mix);
       const Uint8 b = static_cast<Uint8>(
-          MONSTER_EXPLOSION_SMOKE_COLOR.b * (1.0f - shade_mix) +
-          MONSTER_EXPLOSION_SMOKE_HIGHLIGHT_COLOR.b * shade_mix);
+          tuning.base_color.b * (1.0f - shade_mix) +
+          tuning.highlight_color.b * shade_mix);
       SDL_SetRenderDrawColor(sdl_renderer, r, g, b, base_alpha);
       SDL_RenderFillCircle(
           sdl_renderer,
@@ -6488,31 +6678,30 @@ void Renderer::drawExplosionParticles() {
   }
 
   for (const ExplosionParticle &particle : game->explosion_particles) {
+    const ParticleRenderTuning tuning = get_particle_tuning(particle.kind);
     if (now < particle.spawned_ticks) {
       continue;
     }
     const Uint32 age = now - particle.spawned_ticks;
-    if (age >= MONSTER_EXPLOSION_PARTICLE_LIFETIME_MS) {
+    if (age >= tuning.lifetime_ms) {
       continue;
     }
     const double life_progress =
-        static_cast<double>(age) /
-        static_cast<double>(MONSTER_EXPLOSION_PARTICLE_LIFETIME_MS);
+        static_cast<double>(age) / static_cast<double>(tuning.lifetime_ms);
     const double fade =
         std::clamp(1.0 - life_progress * life_progress, 0.0, 1.0);
     const Uint8 base_alpha = static_cast<Uint8>(std::clamp(
-        MONSTER_EXPLOSION_PARTICLE_INITIAL_ALPHA * fade, 0.0, 255.0));
-    const float growth = 1.0f + 0.55f * static_cast<float>(life_progress);
+        tuning.initial_alpha * fade, 0.0, 255.0));
+    const float growth =
+        1.0f + tuning.growth_factor * static_cast<float>(life_progress);
     const SDL_FPoint screen = world_to_screen(particle.world_position);
 
     std::mt19937 shape_rng(particle.shape_seed);
     std::uniform_int_distribution<int> blob_count_dist(
-        MONSTER_EXPLOSION_PARTICLE_BLOB_MIN_COUNT,
-        MONSTER_EXPLOSION_PARTICLE_BLOB_MAX_COUNT);
+        tuning.blob_min_count, tuning.blob_max_count);
     std::uniform_real_distribution<float> offset_dist(-1.0f, 1.0f);
     std::uniform_real_distribution<float> radius_factor_dist(
-        MONSTER_EXPLOSION_PARTICLE_BLOB_RADIUS_MIN_FACTOR,
-        MONSTER_EXPLOSION_PARTICLE_BLOB_RADIUS_MAX_FACTOR);
+        tuning.blob_radius_min_factor, tuning.blob_radius_max_factor);
     std::uniform_real_distribution<float> shade_dist(0.0f, 1.0f);
 
     const int blob_count = blob_count_dist(shape_rng);
@@ -6520,29 +6709,227 @@ void Renderer::drawExplosionParticles() {
 
     for (int blob = 0; blob < blob_count; ++blob) {
       const float offset_x =
-          offset_dist(shape_rng) *
-          MONSTER_EXPLOSION_PARTICLE_BLOB_OFFSET_FACTOR * base_radius_px;
+          offset_dist(shape_rng) * tuning.blob_offset_factor * base_radius_px;
       const float offset_y =
-          offset_dist(shape_rng) *
-          MONSTER_EXPLOSION_PARTICLE_BLOB_OFFSET_FACTOR * base_radius_px;
+          offset_dist(shape_rng) * tuning.blob_offset_factor * base_radius_px;
       const float blob_radius =
           base_radius_px * radius_factor_dist(shape_rng);
       const float shade_mix = shade_dist(shape_rng);
       const Uint8 r = static_cast<Uint8>(
-          MONSTER_EXPLOSION_PARTICLE_COLOR.r * (1.0f - shade_mix) +
-          MONSTER_EXPLOSION_PARTICLE_HIGHLIGHT_COLOR.r * shade_mix);
+          tuning.base_color.r * (1.0f - shade_mix) +
+          tuning.highlight_color.r * shade_mix);
       const Uint8 g = static_cast<Uint8>(
-          MONSTER_EXPLOSION_PARTICLE_COLOR.g * (1.0f - shade_mix) +
-          MONSTER_EXPLOSION_PARTICLE_HIGHLIGHT_COLOR.g * shade_mix);
+          tuning.base_color.g * (1.0f - shade_mix) +
+          tuning.highlight_color.g * shade_mix);
       const Uint8 b = static_cast<Uint8>(
-          MONSTER_EXPLOSION_PARTICLE_COLOR.b * (1.0f - shade_mix) +
-          MONSTER_EXPLOSION_PARTICLE_HIGHLIGHT_COLOR.b * shade_mix);
-      SDL_SetRenderDrawColor(sdl_renderer, r, g, b, base_alpha);
-      SDL_RenderFillCircle(
-          sdl_renderer,
-          static_cast<int>(std::lround(screen.x + offset_x)),
-          static_cast<int>(std::lround(screen.y + offset_y)),
-          std::max(1, static_cast<int>(std::lround(blob_radius))));
+          tuning.base_color.b * (1.0f - shade_mix) +
+          tuning.highlight_color.b * shade_mix);
+      if (tuning.render_as_chunks) {
+        const int chunk_width = std::max(
+            1, static_cast<int>(std::lround(blob_radius * (1.15f + 0.30f * shade_mix))));
+        const int chunk_height = std::max(
+            1, static_cast<int>(std::lround(blob_radius * (0.82f + 0.22f * (1.0f - shade_mix)))));
+        const SDL_Rect chunk_rect{
+            static_cast<int>(std::lround(screen.x + offset_x - chunk_width / 2.0f)),
+            static_cast<int>(std::lround(screen.y + offset_y - chunk_height / 2.0f)),
+            chunk_width,
+            chunk_height};
+        SDL_SetRenderDrawColor(sdl_renderer, r, g, b, base_alpha);
+        SDL_RenderFillRect(sdl_renderer, &chunk_rect);
+
+        const SDL_Rect highlight_rect{
+            chunk_rect.x,
+            chunk_rect.y,
+            std::max(1, chunk_rect.w * 2 / 3),
+            std::max(1, chunk_rect.h / 2)};
+        SDL_SetRenderDrawColor(
+            sdl_renderer,
+            static_cast<Uint8>(std::min(255, static_cast<int>(r) + 18)),
+            static_cast<Uint8>(std::min(255, static_cast<int>(g) + 16)),
+            static_cast<Uint8>(std::min(255, static_cast<int>(b) + 14)),
+            static_cast<Uint8>(std::clamp(base_alpha * 0.72, 0.0, 255.0)));
+        SDL_RenderFillRect(sdl_renderer, &highlight_rect);
+      } else {
+        SDL_SetRenderDrawColor(sdl_renderer, r, g, b, base_alpha);
+        SDL_RenderFillCircle(
+            sdl_renderer,
+            static_cast<int>(std::lround(screen.x + offset_x)),
+            static_cast<int>(std::lround(screen.y + offset_y)),
+            std::max(1, static_cast<int>(std::lround(blob_radius))));
+      }
+    }
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
+void Renderer::buildWallRubblePieceVertices(const WallRubblePiece &piece,
+                                            SDL_FPoint (&out_vertices)[4]) const {
+  const double cos_angle = std::cos(piece.rotation_radians);
+  const double sin_angle = std::sin(piece.rotation_radians);
+  const std::array<SDL_FPoint, 4> local_vertices{{
+      SDL_FPoint{
+          -piece.half_width_cells * static_cast<float>(0.92 + 0.20 * HashUnit(
+                                                                   static_cast<int>(
+                                                                       piece.shape_seed ^ 11u))),
+          -piece.half_height_cells * static_cast<float>(0.88 + 0.22 * HashUnit(
+                                                                    static_cast<int>(
+                                                                        piece.shape_seed ^ 23u)))},
+      SDL_FPoint{
+          piece.half_width_cells * static_cast<float>(0.86 + 0.26 * HashUnit(
+                                                                  static_cast<int>(
+                                                                      piece.shape_seed ^ 37u))),
+          -piece.half_height_cells * static_cast<float>(0.74 + 0.22 * HashUnit(
+                                                                    static_cast<int>(
+                                                                        piece.shape_seed ^ 41u)))},
+      SDL_FPoint{
+          piece.half_width_cells * static_cast<float>(0.94 + 0.18 * HashUnit(
+                                                                  static_cast<int>(
+                                                                      piece.shape_seed ^ 53u))),
+          piece.half_height_cells * static_cast<float>(0.84 + 0.24 * HashUnit(
+                                                                   static_cast<int>(
+                                                                       piece.shape_seed ^ 67u)))},
+      SDL_FPoint{
+          -piece.half_width_cells * static_cast<float>(0.82 + 0.24 * HashUnit(
+                                                                   static_cast<int>(
+                                                                       piece.shape_seed ^ 79u))),
+          piece.half_height_cells * static_cast<float>(0.90 + 0.18 * HashUnit(
+                                                                   static_cast<int>(
+                                                                       piece.shape_seed ^ 97u)))},
+  }};
+
+  const float tile_span = static_cast<float>(element_size + 1);
+  for (size_t index = 0; index < local_vertices.size(); ++index) {
+    const double rotated_x =
+        static_cast<double>(local_vertices[index].x) * cos_angle -
+        static_cast<double>(local_vertices[index].y) * sin_angle;
+    const double rotated_y =
+        static_cast<double>(local_vertices[index].x) * sin_angle +
+        static_cast<double>(local_vertices[index].y) * cos_angle;
+    const double world_col = static_cast<double>(piece.world_position.x) + rotated_x;
+    const double world_row = static_cast<double>(piece.world_position.y) + rotated_y;
+    if (ENABLE_3D_VIEW) {
+      out_vertices[index] = projectScene(world_col, world_row, 0.0);
+    } else {
+      out_vertices[index] = SDL_FPoint{
+          static_cast<float>(offset_x + 1) +
+              static_cast<float>(world_col) * tile_span,
+          static_cast<float>(offset_y + 1) +
+              static_cast<float>(world_row) * tile_span};
+    }
+  }
+}
+
+SDL_Rect Renderer::getWallRubblePieceBounds(const WallRubblePiece &piece) const {
+  SDL_FPoint vertices[4];
+  buildWallRubblePieceVertices(piece, vertices);
+  return makeProjectedFaceRect(vertices[0], vertices[1], vertices[3], vertices[2]);
+}
+
+void Renderer::drawWallRubblePiece(const WallRubblePiece &piece) {
+  SDL_FPoint vertices[4];
+  buildWallRubblePieceVertices(piece, vertices);
+
+  const double shade_mix = HashUnit(static_cast<int>(piece.shape_seed ^ 131u));
+  const double highlight_mix = HashUnit(static_cast<int>(piece.shape_seed ^ 173u));
+  const SDL_Color base_color{
+      static_cast<Uint8>(WALL_RUBBLE_DARK_COLOR.r * (1.0 - shade_mix) +
+                         WALL_RUBBLE_LIGHT_COLOR.r * shade_mix),
+      static_cast<Uint8>(WALL_RUBBLE_DARK_COLOR.g * (1.0 - shade_mix) +
+                         WALL_RUBBLE_LIGHT_COLOR.g * shade_mix),
+      static_cast<Uint8>(WALL_RUBBLE_DARK_COLOR.b * (1.0 - shade_mix) +
+                         WALL_RUBBLE_LIGHT_COLOR.b * shade_mix),
+      WALL_RUBBLE_BASE_ALPHA};
+  const SDL_Color light_color{
+      static_cast<Uint8>(std::min(
+          255, static_cast<int>(base_color.r + 18 + 18 * highlight_mix))),
+      static_cast<Uint8>(std::min(
+          255, static_cast<int>(base_color.g + 16 + 14 * highlight_mix))),
+      static_cast<Uint8>(std::min(
+          255, static_cast<int>(base_color.b + 14 + 10 * highlight_mix))),
+      static_cast<Uint8>(std::clamp(WALL_RUBBLE_BASE_ALPHA * 0.92, 0.0, 255.0))};
+  const SDL_Color shadow_color{
+      static_cast<Uint8>(base_color.r * 0.72),
+      static_cast<Uint8>(base_color.g * 0.70),
+      static_cast<Uint8>(base_color.b * 0.68),
+      static_cast<Uint8>(std::clamp(WALL_RUBBLE_BASE_ALPHA * 0.96, 0.0, 255.0))};
+
+  const SDL_FPoint center{
+      (vertices[0].x + vertices[1].x + vertices[2].x + vertices[3].x) * 0.25f,
+      (vertices[0].y + vertices[1].y + vertices[2].y + vertices[3].y) * 0.25f};
+
+  SDL_Vertex quad_vertices[4];
+  quad_vertices[0].position = vertices[0];
+  quad_vertices[0].color = light_color;
+  quad_vertices[1].position = vertices[1];
+  quad_vertices[1].color = base_color;
+  quad_vertices[2].position = vertices[2];
+  quad_vertices[2].color = shadow_color;
+  quad_vertices[3].position = vertices[3];
+  quad_vertices[3].color = base_color;
+  for (SDL_Vertex &vertex : quad_vertices) {
+    vertex.tex_coord = SDL_FPoint{0.0f, 0.0f};
+  }
+  const int quad_indices[6] = {0, 1, 2, 0, 2, 3};
+  SDL_RenderGeometry(sdl_renderer, nullptr, quad_vertices, 4, quad_indices, 6);
+
+  SDL_Vertex highlight_vertices[3];
+  highlight_vertices[0].position = SDL_FPoint{
+      center.x + (vertices[0].x - center.x) * 0.52f,
+      center.y + (vertices[0].y - center.y) * 0.52f};
+  highlight_vertices[1].position = SDL_FPoint{
+      center.x + (vertices[1].x - center.x) * 0.46f,
+      center.y + (vertices[1].y - center.y) * 0.46f};
+  highlight_vertices[2].position = SDL_FPoint{
+      center.x + (vertices[3].x - center.x) * 0.38f,
+      center.y + (vertices[3].y - center.y) * 0.38f};
+  const SDL_Color glint_color{
+      static_cast<Uint8>(std::min(255, static_cast<int>(light_color.r + 10))),
+      static_cast<Uint8>(std::min(255, static_cast<int>(light_color.g + 10))),
+      static_cast<Uint8>(std::min(255, static_cast<int>(light_color.b + 8))),
+      static_cast<Uint8>(std::clamp(WALL_RUBBLE_BASE_ALPHA * 0.52, 0.0, 255.0))};
+  for (SDL_Vertex &vertex : highlight_vertices) {
+    vertex.color = glint_color;
+    vertex.tex_coord = SDL_FPoint{0.0f, 0.0f};
+  }
+  const int highlight_indices[3] = {0, 1, 2};
+  SDL_RenderGeometry(sdl_renderer, nullptr, highlight_vertices, 3,
+                     highlight_indices, 3);
+}
+
+void Renderer::drawWallRubble() {
+  if (game == nullptr || game->wall_rubble_pieces.empty()) {
+    return;
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  std::vector<const WallRubblePiece *> sorted_pieces;
+  sorted_pieces.reserve(game->wall_rubble_pieces.size());
+  for (const WallRubblePiece &piece : game->wall_rubble_pieces) {
+    sorted_pieces.push_back(&piece);
+  }
+  std::stable_sort(sorted_pieces.begin(), sorted_pieces.end(),
+                   [](const WallRubblePiece *left, const WallRubblePiece *right) {
+                     if (left->world_position.y == right->world_position.y) {
+                       return left->world_position.x < right->world_position.x;
+                     }
+                     return left->world_position.y < right->world_position.y;
+                   });
+
+  for (const WallRubblePiece *piece : sorted_pieces) {
+    if (piece == nullptr) {
+      continue;
+    }
+
+    if (ENABLE_3D_VIEW) {
+      const SDL_Rect bounds = getWallRubblePieceBounds(*piece);
+      drawWithWallOcclusion(bounds, piece->world_position.y,
+                            [this, piece]() { drawWallRubblePiece(*piece); });
+    } else {
+      drawWallRubblePiece(*piece);
     }
   }
 
@@ -7240,44 +7627,6 @@ void Renderer::drawgasclouds() {
     const int center_x = cloud_px.x + element_size / 2;
     const int center_y =
         cloud_px.y + element_size / 2 - non_character_sprite_lift_px;
-    const bool has_cloud_texture =
-        sdl_fart_cloud_texture != nullptr && sdl_fart_cloud_size.x > 0 &&
-        sdl_fart_cloud_size.y > 0;
-    const auto draw_procedural_cloud = [&]() {
-      const double wobble_clock =
-          static_cast<double>(now + cloud.animation_seed * 67) / 210.0;
-      const int base_radius =
-          std::max(5, static_cast<int>(element_size * 0.23));
-      const Uint8 base_alpha =
-          static_cast<Uint8>(std::clamp(145.0 * alpha_factor, 0.0, 190.0));
-
-      for (int puff = 0; puff < 5; puff++) {
-        const double puff_phase = wobble_clock + puff * 1.17;
-        const int offset_x =
-            static_cast<int>(std::cos(puff_phase) * element_size * 0.14);
-        const int offset_y =
-            static_cast<int>(std::sin(puff_phase * 1.23) * element_size * 0.11);
-        const int puff_radius =
-            base_radius + static_cast<int>((1.0 + std::sin(puff_phase * 1.4)) *
-                                           element_size * 0.08);
-
-        SDL_SetRenderDrawColor(sdl_renderer, 118, 168, 82, base_alpha);
-        SDL_RenderFillCircle(sdl_renderer, center_x + offset_x,
-                             center_y + offset_y, puff_radius);
-        SDL_SetRenderDrawColor(sdl_renderer, 170, 190, 104,
-                               std::min(255, base_alpha / 2 + 30));
-        SDL_RenderFillCircle(sdl_renderer,
-                             center_x + offset_x / 2 + puff_radius / 3,
-                             center_y + offset_y / 2 - puff_radius / 4,
-                             std::max(3, puff_radius / 2));
-      }
-
-      SDL_SetRenderDrawColor(
-          sdl_renderer, 150, 214, 128,
-          static_cast<Uint8>(std::clamp(80.0 * alpha_factor, 0.0, 100.0)));
-      SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
-                           std::max(7, static_cast<int>(element_size * 0.34)));
-    };
 
     const Uint32 elapsed = now - cloud.started_ticks;
     double scale_multiplier = 1.0;
@@ -7303,50 +7652,20 @@ void Renderer::drawgasclouds() {
                                                  kFartCloudRenderScale)));
     const int max_dimension = std::max(
         1, static_cast<int>(std::lround(base_max_dimension * scale_multiplier)));
-    const int render_center_x = has_cloud_texture ? center_x + drift_x : center_x;
-    const int render_center_y = has_cloud_texture ? center_y + drift_y : center_y;
+    const int render_center_x = center_x + drift_x;
+    const int render_center_y = center_y + drift_y;
     const int half_extent = std::max(8, max_dimension / 2) + 4;
     const SDL_Rect occlusion_bounds{render_center_x - half_extent,
                                     render_center_y - half_extent,
                                     half_extent * 2, half_extent * 2};
     const auto draw_cloud = [&]() {
-      if (!has_cloud_texture) {
-        draw_procedural_cloud();
-        return;
-      }
-
-      const int frame_index =
-          std::clamp(static_cast<int>(elapsed /
-                                      std::max<Uint32>(1, kFartCloudFrameMs)),
-                     0, kFartCloudFrames - 1);
-      const int src_x =
-          (frame_index * sdl_fart_cloud_size.x) / kFartCloudFrames;
-      const int src_x_next =
-          ((frame_index + 1) * sdl_fart_cloud_size.x) / kFartCloudFrames;
-      const SDL_Rect src_rect{src_x, 0, std::max(1, src_x_next - src_x),
-                              sdl_fart_cloud_size.y};
-      if (src_rect.w <= 0 || src_rect.h <= 0) {
-        draw_procedural_cloud();
-        return;
-      }
-
-      const double scale =
-          static_cast<double>(max_dimension) /
-          static_cast<double>(std::max(src_rect.w, src_rect.h));
-      const int draw_width =
-          std::max(1, static_cast<int>(std::lround(src_rect.w * scale)));
-      const int draw_height =
-          std::max(1, static_cast<int>(std::lround(src_rect.h * scale)));
-      const SDL_Rect destination{render_center_x - draw_width / 2,
-                                 render_center_y - draw_height / 2,
-                                 draw_width, draw_height};
-
-      SDL_SetTextureAlphaMod(
-          sdl_fart_cloud_texture,
-          static_cast<Uint8>(std::clamp(255.0 * alpha_factor, 0.0, 255.0)));
-      SDL_RenderCopy(sdl_renderer, sdl_fart_cloud_texture, &src_rect,
-                     &destination);
-      SDL_SetTextureAlphaMod(sdl_fart_cloud_texture, 255);
+      const double wobble_clock =
+          static_cast<double>(now + cloud.animation_seed * 67) / 210.0;
+      const int base_radius =
+          std::max(5, static_cast<int>(std::lround(element_size * 0.23)));
+      drawOrganicGasCloud(render_center_x, render_center_y, base_radius,
+                          wobble_clock, alpha_factor, cloud.animation_seed,
+                          scale_multiplier);
     };
     if (ENABLE_3D_VIEW) {
       drawWithWallOcclusion(

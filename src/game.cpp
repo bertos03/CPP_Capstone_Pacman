@@ -52,6 +52,42 @@ struct DifficultyTuning {
   double extra_spawn_interval_scale;
 };
 
+struct ExplosionParticleMotionTuning {
+  float gravity_cells_per_sec2;
+  Uint32 lifetime_ms;
+  Uint32 smoke_spawn_interval_ms;
+  ExplosionSmokePuffKind smoke_kind;
+};
+
+ExplosionParticleMotionTuning
+GetExplosionParticleMotionTuning(ExplosionParticleKind kind) {
+  switch (kind) {
+  case ExplosionParticleKind::WallDebris:
+    return {PLASTIC_EXPLOSIVE_WALL_DEBRIS_GRAVITY_CELLS_PER_SEC2,
+            PLASTIC_EXPLOSIVE_WALL_DEBRIS_LIFETIME_MS,
+            PLASTIC_EXPLOSIVE_WALL_DUST_SPAWN_INTERVAL_MS,
+            ExplosionSmokePuffKind::WallDust};
+  case ExplosionParticleKind::MonsterExplosion:
+  default:
+    return {MONSTER_EXPLOSION_PARTICLE_GRAVITY_CELLS_PER_SEC2,
+            MONSTER_EXPLOSION_PARTICLE_LIFETIME_MS,
+            MONSTER_EXPLOSION_SMOKE_SPAWN_INTERVAL_MS,
+            ExplosionSmokePuffKind::MonsterSmoke};
+  }
+}
+
+Uint32 GetSmokePuffLifetimeMs(ExplosionSmokePuffKind kind) {
+  switch (kind) {
+  case ExplosionSmokePuffKind::BlastSmoke:
+    return EXPLOSION_SMOKE_CLOUD_LIFETIME_MS;
+  case ExplosionSmokePuffKind::WallDust:
+    return PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS;
+  case ExplosionSmokePuffKind::MonsterSmoke:
+  default:
+    return MONSTER_EXPLOSION_SMOKE_LIFETIME_MS;
+  }
+}
+
 std::mt19937 &RandomGenerator() {
   static std::mt19937 generator(std::random_device{}());
   return generator;
@@ -2334,6 +2370,8 @@ void Game::DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now) {
   effects.push_back(
       {dynamite.coord, now, EffectType::DynamiteExplosion,
        DYNAMITE_EXPLOSION_RADIUS_CELLS});
+  SpawnExplosionSmokeCloud(MakeCellCenter(dynamite.coord),
+                           DYNAMITE_EXPLOSION_RADIUS_CELLS, now);
 #ifdef AUDIO
   audio->PlayDynamiteExplosion();
 #endif
@@ -2362,6 +2400,8 @@ void Game::DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now) {
 void Game::DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
                                     Uint32 now) {
   effects.push_back({explosive.coord, now, EffectType::DynamiteExplosion, 1});
+  const SDL_FPoint explosive_center = MakeCellCenter(explosive.coord);
+  SpawnExplosionSmokeCloud(explosive_center, 1, now);
 
   const bool targets_breakable_wall =
       IsInsideMapBounds(map, explosive.coord) &&
@@ -2371,13 +2411,14 @@ void Game::DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
       !IsOuterWallCoord(map, explosive.coord);
   if (targets_breakable_wall) {
     map->SetEntry(explosive.coord, ElementType::TYPE_PATH);
+    SpawnWallDestructionParticles(explosive_center, now);
+    SpawnWallRubble(explosive.coord);
 #ifdef AUDIO
     audio->PlayPlasticExplosiveWallBreak();
 #endif
   }
 
   bool eliminated_monster = false;
-  const SDL_FPoint explosive_center = MakeCellCenter(explosive.coord);
   for (auto *monster : monsters) {
     if (!monster->is_alive) {
       continue;
@@ -2411,6 +2452,8 @@ void Game::DetonateAirstrikeBomb(const AirstrikeBomb &bomb, Uint32 now) {
   effects.push_back(
       {bomb.coord, now, EffectType::AirstrikeExplosion,
        AIRSTRIKE_EXPLOSION_RADIUS_CELLS});
+  SpawnExplosionSmokeCloud(MakeCellCenter(bomb.coord),
+                           AIRSTRIKE_EXPLOSION_RADIUS_CELLS, now);
 #ifdef AUDIO
   audio->PlayAirstrikeExplosion();
 #endif
@@ -2461,6 +2504,12 @@ void Game::DetonateRocket(const RocketProjectile &rocket, MapCoord impact_coord,
     }
   }
   effects.push_back(explosion_effect);
+  const SDL_FPoint explosion_center =
+      explosion_effect.has_precise_world_center
+          ? explosion_effect.precise_world_center
+          : MakeCellCenter(impact_coord);
+  SpawnExplosionSmokeCloud(explosion_center,
+                           std::max(1, explosion_effect.radius_cells), now);
 
   if (hit_monster != nullptr && hit_monster->is_alive &&
       SameCoord(hit_monster->map_coord, impact_coord)) {
@@ -2761,6 +2810,7 @@ void Game::UpdateGasClouds(Uint32 now) {
             std::max(pacman->paralyzed_until_ticks, now + PACMAN_PARALYSIS_MS);
         pacman->px_delta.x = 0;
         pacman->px_delta.y = 0;
+        ActivateSlimeCover(now);
 #ifdef AUDIO
         audio->PlayPacmanGag();
 #endif
@@ -2895,7 +2945,195 @@ void Game::SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now) {
     particle.shape_seed = seed_dist(rng);
     particle.radius_cells =
         MONSTER_EXPLOSION_PARTICLE_RADIUS_CELLS * radius_dist(rng);
+    particle.kind = ExplosionParticleKind::MonsterExplosion;
     explosion_particles.push_back(particle);
+  }
+}
+
+void Game::SpawnWallDestructionParticles(SDL_FPoint world_center, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_int_distribution<int> count_dist(
+      PLASTIC_EXPLOSIVE_WALL_DEBRIS_MIN_COUNT,
+      PLASTIC_EXPLOSIVE_WALL_DEBRIS_MAX_COUNT);
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> speed_dist(
+      PLASTIC_EXPLOSIVE_WALL_DEBRIS_MIN_SPEED_CELLS_PER_SEC,
+      PLASTIC_EXPLOSIVE_WALL_DEBRIS_MAX_SPEED_CELLS_PER_SEC);
+  std::uniform_real_distribution<float> radius_dist(0.75f, 1.35f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+  std::uniform_int_distribution<int> dust_count_dist(
+      PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_PUFF_MIN_COUNT,
+      PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_PUFF_MAX_COUNT);
+  std::uniform_real_distribution<float> dust_offset_dist(
+      -PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_SPREAD_CELLS,
+      PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_SPREAD_CELLS);
+
+  const int count = count_dist(rng);
+  for (int i = 0; i < count; ++i) {
+    const float angle = angle_dist(rng);
+    const float speed = speed_dist(rng);
+    ExplosionParticle particle;
+    particle.world_position = world_center;
+    particle.velocity_cells_per_sec.x = std::cos(angle) * speed;
+    particle.velocity_cells_per_sec.y =
+        std::sin(angle) * speed -
+        PLASTIC_EXPLOSIVE_WALL_DEBRIS_INITIAL_UPWARD_BIAS * speed;
+    particle.spawned_ticks = now;
+    particle.last_smoke_spawn_ticks =
+        (now > PLASTIC_EXPLOSIVE_WALL_DUST_SPAWN_INTERVAL_MS)
+            ? (now - PLASTIC_EXPLOSIVE_WALL_DUST_SPAWN_INTERVAL_MS)
+            : 0;
+    particle.shape_seed = seed_dist(rng);
+    particle.radius_cells =
+        PLASTIC_EXPLOSIVE_WALL_DEBRIS_RADIUS_CELLS * radius_dist(rng);
+    particle.kind = ExplosionParticleKind::WallDebris;
+    explosion_particles.push_back(particle);
+  }
+
+  const int dust_count = dust_count_dist(rng);
+  for (int i = 0; i < dust_count; ++i) {
+    ExplosionSmokePuff puff;
+    puff.world_position = {
+        world_center.x + dust_offset_dist(rng),
+        world_center.y + dust_offset_dist(rng)};
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.kind = ExplosionSmokePuffKind::WallDust;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnWallRubble(MapCoord destroyed_coord) {
+  if (map == nullptr || !IsInsideMapBounds(map, destroyed_coord)) {
+    return;
+  }
+
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> half_size_dist(
+      WALL_RUBBLE_MIN_HALF_SIZE_CELLS, WALL_RUBBLE_MAX_HALF_SIZE_CELLS);
+  std::uniform_real_distribution<float> aspect_dist(
+      WALL_RUBBLE_MIN_ASPECT_RATIO, WALL_RUBBLE_MAX_ASPECT_RATIO);
+  std::uniform_real_distribution<float> rotation_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  auto add_piece = [&](MapCoord tile, float min_local_x, float max_local_x,
+                       float min_local_y, float max_local_y, float size_scale) {
+    if (!IsInsideMapBounds(map, tile)) {
+      return;
+    }
+
+    const ElementType entry =
+        map->map_entry(static_cast<size_t>(tile.u), static_cast<size_t>(tile.v));
+    if (entry == ElementType::TYPE_WALL || entry == ElementType::TYPE_TELEPORTER) {
+      return;
+    }
+
+    std::uniform_real_distribution<float> local_x_dist(min_local_x, max_local_x);
+    std::uniform_real_distribution<float> local_y_dist(min_local_y, max_local_y);
+
+    WallRubblePiece piece;
+    piece.world_position = {
+        static_cast<float>(tile.v) + local_x_dist(rng),
+        static_cast<float>(tile.u) + local_y_dist(rng)};
+    const float base_half_size = half_size_dist(rng) * size_scale;
+    const float aspect_ratio = aspect_dist(rng);
+    piece.half_width_cells = base_half_size;
+    piece.half_height_cells =
+        std::max(WALL_RUBBLE_MIN_HALF_SIZE_CELLS * 0.75f,
+                 base_half_size / aspect_ratio);
+    piece.rotation_radians = rotation_dist(rng);
+    piece.shape_seed = seed_dist(rng);
+    wall_rubble_pieces.push_back(piece);
+  };
+
+  std::uniform_int_distribution<int> center_count_dist(
+      WALL_RUBBLE_CENTER_MIN_COUNT, WALL_RUBBLE_CENTER_MAX_COUNT);
+  const int center_count = center_count_dist(rng);
+  for (int i = 0; i < center_count; ++i) {
+    add_piece(destroyed_coord, 0.12f, 0.88f, 0.14f, 0.88f, 1.0f);
+  }
+
+  for (int delta_u = -1; delta_u <= 1; ++delta_u) {
+    for (int delta_v = -1; delta_v <= 1; ++delta_v) {
+      if (delta_u == 0 && delta_v == 0) {
+        continue;
+      }
+
+      const MapCoord tile{destroyed_coord.u + delta_u, destroyed_coord.v + delta_v};
+      const bool diagonal = delta_u != 0 && delta_v != 0;
+      std::uniform_int_distribution<int> count_dist(
+          diagonal ? WALL_RUBBLE_NEIGHBOR_DIAGONAL_MIN_COUNT
+                   : WALL_RUBBLE_NEIGHBOR_ORTHOGONAL_MIN_COUNT,
+          diagonal ? WALL_RUBBLE_NEIGHBOR_DIAGONAL_MAX_COUNT
+                   : WALL_RUBBLE_NEIGHBOR_ORTHOGONAL_MAX_COUNT);
+      const int piece_count = count_dist(rng);
+      if (piece_count <= 0) {
+        continue;
+      }
+
+      float min_local_x = 0.20f;
+      float max_local_x = 0.80f;
+      float min_local_y = 0.20f;
+      float max_local_y = 0.80f;
+      if (delta_v < 0) {
+        min_local_x = 0.62f;
+        max_local_x = 0.96f;
+      } else if (delta_v > 0) {
+        min_local_x = 0.04f;
+        max_local_x = 0.38f;
+      }
+      if (delta_u < 0) {
+        min_local_y = 0.62f;
+        max_local_y = 0.96f;
+      } else if (delta_u > 0) {
+        min_local_y = 0.04f;
+        max_local_y = 0.38f;
+      }
+
+      const float size_scale = diagonal ? 0.72f : 0.82f;
+      for (int i = 0; i < piece_count; ++i) {
+        add_piece(tile, min_local_x, max_local_x, min_local_y, max_local_y,
+                  size_scale);
+      }
+    }
+  }
+}
+
+void Game::SpawnExplosionSmokeCloud(SDL_FPoint world_center, int radius_cells,
+                                    Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_int_distribution<int> count_dist(
+      EXPLOSION_SMOKE_CLOUD_MIN_PUFF_COUNT,
+      EXPLOSION_SMOKE_CLOUD_MAX_PUFF_COUNT);
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> ring_dist(0.0f, 1.0f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  const float inner_radius = std::max(
+      EXPLOSION_SMOKE_CLOUD_RING_MIN_RADIUS_CELLS,
+      static_cast<float>(std::max(1, radius_cells)) *
+          EXPLOSION_SMOKE_CLOUD_RING_INNER_RADIUS_FACTOR);
+  const float outer_radius = std::max(
+      inner_radius + 0.12f,
+      static_cast<float>(std::max(1, radius_cells)) *
+          EXPLOSION_SMOKE_CLOUD_RING_OUTER_RADIUS_FACTOR);
+
+  const int puff_count = count_dist(rng);
+  for (int i = 0; i < puff_count; ++i) {
+    const float angle = angle_dist(rng);
+    const float radius =
+        inner_radius + (outer_radius - inner_radius) * ring_dist(rng);
+    ExplosionSmokePuff puff;
+    puff.world_position = {
+        world_center.x + std::cos(angle) * radius,
+        world_center.y + std::sin(angle) * radius};
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.kind = ExplosionSmokePuffKind::BlastSmoke;
+    explosion_smoke_puffs.push_back(puff);
   }
 }
 
@@ -2912,12 +3150,14 @@ void Game::UpdateExplosionParticles(Uint32 now) {
 
   for (size_t index = 0; index < explosion_particles.size();) {
     ExplosionParticle &particle = explosion_particles[index];
+    const ExplosionParticleMotionTuning tuning =
+        GetExplosionParticleMotionTuning(particle.kind);
     if (now < particle.spawned_ticks) {
       ++index;
       continue;
     }
     const Uint32 age = now - particle.spawned_ticks;
-    if (age >= MONSTER_EXPLOSION_PARTICLE_LIFETIME_MS) {
+    if (age >= tuning.lifetime_ms) {
       explosion_particles.erase(explosion_particles.begin() +
                                 static_cast<long>(index));
       continue;
@@ -2925,13 +3165,12 @@ void Game::UpdateExplosionParticles(Uint32 now) {
 
     if (dt > 0.0f) {
       particle.velocity_cells_per_sec.y +=
-          MONSTER_EXPLOSION_PARTICLE_GRAVITY_CELLS_PER_SEC2 * dt;
+          tuning.gravity_cells_per_sec2 * dt;
       particle.world_position.x += particle.velocity_cells_per_sec.x * dt;
       particle.world_position.y += particle.velocity_cells_per_sec.y * dt;
     }
 
-    if (now - particle.last_smoke_spawn_ticks >=
-        MONSTER_EXPLOSION_SMOKE_SPAWN_INTERVAL_MS) {
+    if (now - particle.last_smoke_spawn_ticks >= tuning.smoke_spawn_interval_ms) {
       ExplosionSmokePuff puff;
       puff.world_position = particle.world_position;
       puff.spawned_ticks = now;
@@ -2941,6 +3180,7 @@ void Game::UpdateExplosionParticles(Uint32 now) {
       if (puff.shape_seed == 0) {
         puff.shape_seed = 1;
       }
+      puff.kind = tuning.smoke_kind;
       explosion_smoke_puffs.push_back(puff);
       particle.last_smoke_spawn_ticks = now;
     }
@@ -2956,7 +3196,7 @@ void Game::UpdateExplosionParticles(Uint32 now) {
                          return false;
                        }
                        return now - puff.spawned_ticks >=
-                              MONSTER_EXPLOSION_SMOKE_LIFETIME_MS;
+                              GetSmokePuffLifetimeMs(puff.kind);
                      }),
       explosion_smoke_puffs.end());
 }

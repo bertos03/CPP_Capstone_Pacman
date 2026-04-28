@@ -197,6 +197,11 @@ struct ActiveBiohazardBeam {
   SDL_FPoint locked_end_world_center{0.0f, 0.0f};
 };
 
+enum class ExplosionParticleKind {
+  MonsterExplosion,
+  WallDebris
+};
+
 struct ExplosionParticle {
   SDL_FPoint world_position{0.0f, 0.0f};
   SDL_FPoint velocity_cells_per_sec{0.0f, 0.0f};
@@ -204,11 +209,27 @@ struct ExplosionParticle {
   Uint32 last_smoke_spawn_ticks = 0;
   Uint32 shape_seed = 0;
   float radius_cells = 0.0f;
+  ExplosionParticleKind kind = ExplosionParticleKind::MonsterExplosion;
+};
+
+enum class ExplosionSmokePuffKind {
+  MonsterSmoke,
+  WallDust,
+  BlastSmoke
 };
 
 struct ExplosionSmokePuff {
   SDL_FPoint world_position{0.0f, 0.0f};
   Uint32 spawned_ticks = 0;
+  Uint32 shape_seed = 0;
+  ExplosionSmokePuffKind kind = ExplosionSmokePuffKind::MonsterSmoke;
+};
+
+struct WallRubblePiece {
+  SDL_FPoint world_position{0.0f, 0.0f};
+  float half_width_cells = 0.0f;
+  float half_height_cells = 0.0f;
+  float rotation_radians = 0.0f;
   Uint32 shape_seed = 0;
 };
 
@@ -282,6 +303,7 @@ private:
   std::vector<GameEffect> effects;
   std::vector<ExplosionParticle> explosion_particles;
   std::vector<ExplosionSmokePuff> explosion_smoke_puffs;
+  std::vector<WallRubblePiece> wall_rubble_pieces;
   Uint32 explosion_particles_last_update_ticks = 0;
   Uint32 last_update_ticks;
   int dynamite_inventory;
@@ -363,6 +385,10 @@ private:
   void EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now);
   void EliminateMonster(Monster *monster, Uint32 now);
   void SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now);
+  void SpawnWallDestructionParticles(SDL_FPoint world_center, Uint32 now);
+  void SpawnWallRubble(MapCoord destroyed_coord);
+  void SpawnExplosionSmokeCloud(SDL_FPoint world_center, int radius_cells,
+                                Uint32 now);
   void UpdateExplosionParticles(Uint32 now);
 };
 

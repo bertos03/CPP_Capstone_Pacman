@@ -32,6 +32,7 @@
 
 class Map;
 class Game;
+struct WallRubblePiece;
 
 class Renderer {
 public:
@@ -136,6 +137,11 @@ private:
   void drawslimeballs();
   void draweffects();
   void drawExplosionParticles();
+  void drawWallRubble();
+  void drawWallRubblePiece(const WallRubblePiece &piece);
+  void buildWallRubblePieceVertices(const WallRubblePiece &piece,
+                                    SDL_FPoint (&out_vertices)[4]) const;
+  SDL_Rect getWallRubblePieceBounds(const WallRubblePiece &piece) const;
   void drawMonsterFireball(int center_x, int center_y, Uint32 elapsed,
                            Uint32 seed);
   void drawDefeatEffect();
@@ -162,6 +168,11 @@ private:
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
                         double animation_clock, Uint8 alpha,
                         double fuse_burn_progress);
+  void drawOrganicGasCloud(int center_x, int center_y, int base_size,
+                           double animation_clock, double alpha_factor,
+                           int animation_seed, double scale_multiplier);
+  void drawPacmanGasCloudlets(const SDL_Rect &anchor_rect,
+                              double alpha_factor, Uint32 now);
   void drawPlasticExplosiveIcon(const SDL_Rect &icon_rect, double animation_clock,
                                 Uint8 alpha, bool armed);
   void drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
