@@ -411,8 +411,8 @@ private:
   void SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now);
   void SpawnWallDestructionParticles(SDL_FPoint world_center, Uint32 now);
   void SpawnWallRubble(MapCoord destroyed_coord);
-  void SpawnExplosionSmokeCloud(SDL_FPoint world_center, int radius_cells,
-                                Uint32 now);
+  void SpawnExplosionSmokeCloud(SDL_FPoint world_center, float radius_cells,
+                                Uint32 now, float density_multiplier = 1.0f);
   void SpawnRocketBlastSmokeCloud(SDL_FPoint world_center, Uint32 now);
   void SpawnRocketTrailSmoke(const RocketProjectile &rocket, Uint32 now);
   void SpawnNuclearRingSmoke(float ring_progress, Uint32 now);

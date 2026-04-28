@@ -1758,11 +1758,14 @@ void Renderer::renderFrame(bool show_hud) {
           const MapCoord coord = placed_dynamite.coord;
           const double depth =
               projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
-          push_depth_command(depth, [&, coord, placed_dynamite, now]() {
+          push_depth_command(depth, [this, coord, placed_dynamite, now,
+                                     non_character_sprite_lift_px,
+                                     &draw_with_wall_occlusion]() {
             draw_with_wall_occlusion(
                 static_cast<double>(coord.v) + 0.5,
                 static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
-                [&]() {
+                [this, coord, placed_dynamite, now,
+                 non_character_sprite_lift_px]() {
                   const SDL_FPoint center =
                       projectScene(coord.v + 0.5,
                                    coord.u + kFloorObjectDepthRowFactor, 0.0);

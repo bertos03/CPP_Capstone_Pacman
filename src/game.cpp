@@ -2602,7 +2602,8 @@ void Game::DetonateDynamite(const PlacedDynamite &dynamite, Uint32 now) {
       {dynamite.coord, now, EffectType::DynamiteExplosion,
        DYNAMITE_EXPLOSION_RADIUS_CELLS});
   SpawnExplosionSmokeCloud(MakeCellCenter(dynamite.coord),
-                           DYNAMITE_EXPLOSION_RADIUS_CELLS, now);
+                           DYNAMITE_EXPLOSION_SMOKE_RADIUS_CELLS, now,
+                           DYNAMITE_EXPLOSION_SMOKE_DENSITY_MULTIPLIER);
 #ifdef AUDIO
   audio->PlayDynamiteExplosion();
 #endif
@@ -2632,7 +2633,9 @@ void Game::DetonatePlasticExplosive(const PlacedPlasticExplosive &explosive,
                                     Uint32 now) {
   effects.push_back({explosive.coord, now, EffectType::DynamiteExplosion, 1});
   const SDL_FPoint explosive_center = MakeCellCenter(explosive.coord);
-  SpawnExplosionSmokeCloud(explosive_center, 1, now);
+  SpawnExplosionSmokeCloud(explosive_center,
+                           PLASTIC_EXPLOSIVE_SMOKE_RADIUS_CELLS, now,
+                           PLASTIC_EXPLOSIVE_SMOKE_DENSITY_MULTIPLIER);
 
   const bool targets_breakable_wall =
       IsInsideMapBounds(map, explosive.coord) &&
@@ -3450,8 +3453,8 @@ void Game::SpawnWallRubble(MapCoord destroyed_coord) {
   }
 }
 
-void Game::SpawnExplosionSmokeCloud(SDL_FPoint world_center, int radius_cells,
-                                    Uint32 now) {
+void Game::SpawnExplosionSmokeCloud(SDL_FPoint world_center, float radius_cells,
+                                    Uint32 now, float density_multiplier) {
   static thread_local std::mt19937 rng{std::random_device{}()};
   std::uniform_int_distribution<int> count_dist(
       EXPLOSION_SMOKE_CLOUD_MIN_PUFF_COUNT,
@@ -3463,14 +3466,18 @@ void Game::SpawnExplosionSmokeCloud(SDL_FPoint world_center, int radius_cells,
 
   const float inner_radius = std::max(
       EXPLOSION_SMOKE_CLOUD_RING_MIN_RADIUS_CELLS,
-      static_cast<float>(std::max(1, radius_cells)) *
+      std::max(0.1f, radius_cells) *
           EXPLOSION_SMOKE_CLOUD_RING_INNER_RADIUS_FACTOR);
   const float outer_radius = std::max(
       inner_radius + 0.12f,
-      static_cast<float>(std::max(1, radius_cells)) *
+      std::max(0.1f, radius_cells) *
           EXPLOSION_SMOKE_CLOUD_RING_OUTER_RADIUS_FACTOR);
 
-  const int puff_count = count_dist(rng);
+  const int base_puff_count = count_dist(rng);
+  const int puff_count = std::max(
+      1, static_cast<int>(std::lround(
+             static_cast<float>(base_puff_count) *
+             std::max(0.1f, density_multiplier))));
   for (int i = 0; i < puff_count; ++i) {
     const float angle = angle_dist(rng);
     const float radius =
