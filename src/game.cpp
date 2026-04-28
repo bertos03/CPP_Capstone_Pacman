@@ -3548,12 +3548,9 @@ void Game::SpawnNuclearRingSmoke(float ring_progress, Uint32 now) {
   std::uniform_real_distribution<float> speed_unit_dist(0.0f, 1.0f);
   std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
 
-  const float clamped_progress = std::clamp(ring_progress, 0.0f, 1.0f);
-  const float wave_intensity =
-      std::pow(1.0f - clamped_progress, 1.6f) * 1.55f + 0.10f;
-  const int puffs_this_wave = std::max(
-      4, static_cast<int>(std::lround(
-             NUCLEAR_SMOKE_RING_PUFFS_PER_WAVE * wave_intensity)));
+  (void)ring_progress;
+  const int puffs_this_wave =
+      std::max(4, NUCLEAR_SMOKE_RING_PUFFS_PER_WAVE);
 
   const float lifetime_s =
       static_cast<float>(NUCLEAR_RING_SMOKE_LIFETIME_MS) / 1000.0f;
@@ -3574,16 +3571,18 @@ void Game::SpawnNuclearRingSmoke(float ring_progress, Uint32 now) {
     puff.world_position = {
         active_nuclear_explosion.world_center.x + dir_x * origin_jitter_dist(rng),
         active_nuclear_explosion.world_center.y + dir_y * origin_jitter_dist(rng)};
-    const float speed_roll = speed_unit_dist(rng);
+    const float straggler_roll = speed_unit_dist(rng);
     float speed_factor;
-    if (speed_roll < 0.18f) {
-      speed_factor = 0.05f + speed_roll * 0.55f;
+    if (straggler_roll < 0.28f) {
+      const float t = straggler_roll / 0.28f;
+      speed_factor = 0.04f + t * 0.78f;
     } else {
-      speed_factor = 0.85f + (speed_roll - 0.18f) * 0.40f;
+      const float t = (straggler_roll - 0.28f) / 0.72f;
+      speed_factor = 0.92f + t * 0.18f;
     }
     const float speed = fast_speed * speed_factor;
     puff.velocity_cells_per_sec = {dir_x * speed, dir_y * speed};
-    puff.vertical_offset_cells = 0.05f + clamped_progress * 0.18f;
+    puff.vertical_offset_cells = 0.05f;
     puff.spawned_ticks = now;
     puff.shape_seed = seed_dist(rng);
     puff.kind = ExplosionSmokePuffKind::NuclearRingSmoke;

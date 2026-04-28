@@ -8175,6 +8175,35 @@ void Renderer::draweffects() {
                              std::max(6, ring_radius / 4));
       }
     } else if (effect.type == EffectType::NuclearExplosion) {
+      if (elapsed < NUCLEAR_FLASH_DURATION_MS) {
+        const double flash_t =
+            static_cast<double>(elapsed) /
+            static_cast<double>(std::max<Uint32>(1, NUCLEAR_FLASH_DURATION_MS));
+        constexpr double kFlashRiseFraction = 0.12;
+        double flash_intensity;
+        if (flash_t < kFlashRiseFraction) {
+          flash_intensity = flash_t / kFlashRiseFraction;
+        } else {
+          flash_intensity = std::pow(
+              std::max(0.0, 1.0 - (flash_t - kFlashRiseFraction) /
+                                      (1.0 - kFlashRiseFraction)),
+              1.6);
+        }
+        const Uint8 flash_alpha = static_cast<Uint8>(std::clamp(
+            flash_intensity * static_cast<double>(NUCLEAR_FLASH_PEAK_ALPHA),
+            0.0, 255.0));
+        if (flash_alpha > 0) {
+          SDL_BlendMode prev_blend;
+          SDL_GetRenderDrawBlendMode(sdl_renderer, &prev_blend);
+          SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+          SDL_SetRenderDrawColor(sdl_renderer, NUCLEAR_FLASH_COLOR.r,
+                                 NUCLEAR_FLASH_COLOR.g, NUCLEAR_FLASH_COLOR.b,
+                                 flash_alpha);
+          SDL_Rect flash_rect{0, 0, screen_res_x, screen_res_y};
+          SDL_RenderFillRect(sdl_renderer, &flash_rect);
+          SDL_SetRenderDrawBlendMode(sdl_renderer, prev_blend);
+        }
+      }
       const double progress =
           std::clamp(static_cast<double>(elapsed) /
                          static_cast<double>(NUCLEAR_EXPLOSION_TOTAL_DURATION_MS),
