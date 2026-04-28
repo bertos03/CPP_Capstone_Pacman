@@ -1920,7 +1920,8 @@ void Renderer::renderFrame(bool show_hud) {
                                      &monster_rect);
                       if (monster->is_electrified) {
                         drawElectrifiedMonsterAura(
-                            monster_rect, monster->electrified_visual_seed, now);
+                            monster_rect, monster->electrified_visual_seed, now,
+                            monster->electrified_charge_target_id != -1);
                       }
                       SDL_SetTextureAlphaMod(monster_texture, 255);
                     });
@@ -5944,7 +5945,8 @@ void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
 }
 
 void Renderer::drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
-                                          int animation_seed, Uint32 now) {
+                                          int animation_seed, Uint32 now,
+                                          bool aggressive_mode) {
   if (monster_rect.w <= 0 || monster_rect.h <= 0) {
     return;
   }
@@ -5959,9 +5961,18 @@ void Renderer::drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
       8, std::min(monster_rect.w, monster_rect.h) / 3 + std::max(2, element_size / 18));
   const int aura_radius =
       std::max(monster_rect.w, monster_rect.h) / 2 + std::max(9, element_size / 6);
-  const int flicker_phase = static_cast<int>(now / 45) + animation_seed * 19;
+  const int flicker_phase =
+      static_cast<int>(now / (aggressive_mode ? ELECTRIFIED_ATTACK_FLICKER_FRAME_MS
+                                              : 45)) +
+      animation_seed * 19;
   const double pulse =
-      0.72 + 0.28 * std::sin(static_cast<double>(now + animation_seed * 31) / 120.0);
+      aggressive_mode
+          ? (0.58 + 0.42 *
+                        (0.5 + 0.5 * std::sin(static_cast<double>(now + animation_seed * 31) /
+                                              48.0)))
+          : (0.72 + 0.28 *
+                        std::sin(static_cast<double>(now + animation_seed * 31) /
+                                 120.0));
 
   auto draw_lightning_segment = [&](int x1, int y1, int x2, int y2,
                                     Uint8 glow_alpha, Uint8 core_alpha) {
@@ -5977,31 +5988,50 @@ void Renderer::drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
     SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
   };
 
-  SDL_SetRenderDrawColor(sdl_renderer, 18, 68, 255, 28);
+  SDL_SetRenderDrawColor(sdl_renderer, 18, 68, 255,
+                         aggressive_mode ? 42 : 28);
   SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
                        std::max(aura_radius, static_cast<int>(aura_radius * pulse)));
-  SDL_SetRenderDrawColor(sdl_renderer, 90, 212, 255, 56);
+  SDL_SetRenderDrawColor(sdl_renderer, 90, 212, 255,
+                         aggressive_mode ? 82 : 56);
   SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
                        std::max(core_radius + 2,
                                 static_cast<int>(core_radius * (1.10 + 0.10 * pulse))));
-  SDL_SetRenderDrawColor(sdl_renderer, 140, 232, 255, 144);
+  SDL_SetRenderDrawColor(sdl_renderer, 140, 232, 255,
+                         aggressive_mode ? 188 : 144);
   SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
-                       std::max(core_radius + 4, static_cast<int>(aura_radius * 0.72)));
+                       std::max(core_radius + 4, static_cast<int>(
+                                                     aura_radius *
+                                                     (aggressive_mode ? 0.54 : 0.72))));
 
-  const int bolt_count = 10 + std::abs(animation_seed % 4);
+  const int bolt_count = aggressive_mode
+                             ? (ELECTRIFIED_ATTACK_BOLT_MIN_COUNT +
+                                std::abs(animation_seed %
+                                         std::max(1, ELECTRIFIED_ATTACK_BOLT_MAX_COUNT -
+                                                         ELECTRIFIED_ATTACK_BOLT_MIN_COUNT + 1)))
+                             : (10 + std::abs(animation_seed % 4));
   for (int bolt = 0; bolt < bolt_count; ++bolt) {
     const int bolt_seed = flicker_phase * 131 + animation_seed * 29 + bolt * 17;
     const double angle =
         (2.0 * kLogoPi * static_cast<double>(bolt) / static_cast<double>(bolt_count)) +
-        HashSigned(bolt_seed) * 0.45;
+        HashSigned(bolt_seed) * (aggressive_mode ? 0.28 : 0.45);
     const double unit_x = std::cos(angle);
     const double unit_y = std::sin(angle);
     const double normal_x = -unit_y;
     const double normal_y = unit_x;
-    const int segment_count = 4 + (bolt_seed % 4);
-    const double bolt_length =
-        aura_radius * (0.72 + 0.68 * HashUnit(bolt_seed + 5));
-    const double start_radius = core_radius * (0.42 + 0.32 * HashUnit(bolt_seed + 7));
+    const int segment_count =
+        aggressive_mode ? (3 + (bolt_seed % 3)) : (4 + (bolt_seed % 4));
+    const double bolt_length = aura_radius *
+                               (aggressive_mode
+                                    ? (ELECTRIFIED_ATTACK_BOLT_LENGTH_MIN_FACTOR +
+                                       (ELECTRIFIED_ATTACK_BOLT_LENGTH_MAX_FACTOR -
+                                        ELECTRIFIED_ATTACK_BOLT_LENGTH_MIN_FACTOR) *
+                                           HashUnit(bolt_seed + 5))
+                                    : (0.72 + 0.68 * HashUnit(bolt_seed + 5)));
+    const double start_radius = core_radius *
+                                (aggressive_mode
+                                     ? (0.28 + 0.20 * HashUnit(bolt_seed + 7))
+                                     : (0.42 + 0.32 * HashUnit(bolt_seed + 7)));
     int previous_x = static_cast<int>(std::lround(center_x + unit_x * start_radius));
     int previous_y = static_cast<int>(std::lround(center_y + unit_y * start_radius));
 
@@ -6011,43 +6041,65 @@ void Renderer::drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
       const double base_distance = bolt_length * t;
       const double jagged_offset =
           HashSigned(bolt_seed + segment * 23) *
-          (element_size * 0.08 + (1.0 - t) * aura_radius * 0.16);
+          (aggressive_mode
+               ? (element_size * 0.05 + (1.0 - t) * aura_radius * 0.09)
+               : (element_size * 0.08 + (1.0 - t) * aura_radius * 0.16));
       const double forward_offset =
-          HashSigned(bolt_seed + segment * 41) * element_size * 0.04;
+          HashSigned(bolt_seed + segment * 41) *
+          (aggressive_mode ? element_size * 0.02 : element_size * 0.04);
       const int point_x = static_cast<int>(std::lround(
           center_x + unit_x * (start_radius + base_distance + forward_offset) +
           normal_x * jagged_offset));
       const int point_y = static_cast<int>(std::lround(
           center_y + unit_y * (start_radius + base_distance + forward_offset) +
           normal_y * jagged_offset));
-      const Uint8 glow_alpha = static_cast<Uint8>(
-          std::clamp(196.0 - t * 88.0, 72.0, 196.0));
-      const Uint8 core_alpha = static_cast<Uint8>(
-          std::clamp(255.0 - t * 64.0, 118.0, 255.0));
+      const double flicker =
+          aggressive_mode
+              ? (0.22 + 0.78 *
+                            (0.5 + 0.5 * std::sin(static_cast<double>(
+                                                      now + bolt_seed * 9 +
+                                                      segment * 31) /
+                                                  18.0)))
+              : 1.0;
+      const Uint8 glow_alpha = static_cast<Uint8>(std::clamp(
+          (196.0 - t * 88.0) * flicker,
+          aggressive_mode ? 28.0 : 72.0,
+          aggressive_mode ? 228.0 : 196.0));
+      const Uint8 core_alpha = static_cast<Uint8>(std::clamp(
+          (255.0 - t * 64.0) * (aggressive_mode ? (0.34 + 0.66 * flicker) : 1.0),
+          aggressive_mode ? 54.0 : 118.0,
+          255.0));
       draw_lightning_segment(previous_x, previous_y, point_x, point_y, glow_alpha,
                              core_alpha);
 
       if (segment < segment_count &&
-          HashUnit(bolt_seed + segment * 59) > 0.58) {
+          HashUnit(bolt_seed + segment * 59) >
+              (aggressive_mode ? (1.0 - ELECTRIFIED_ATTACK_BRANCH_CHANCE) : 0.58)) {
         const double branch_angle =
             angle + HashSigned(bolt_seed + segment * 61) * 0.95;
         const double branch_length =
-            bolt_length * (0.12 + 0.16 * HashUnit(bolt_seed + segment * 67)) *
+            bolt_length *
+            (aggressive_mode
+                 ? (0.08 + 0.10 * HashUnit(bolt_seed + segment * 67))
+                 : (0.12 + 0.16 * HashUnit(bolt_seed + segment * 67))) *
             (1.0 - t);
         const int branch_x = static_cast<int>(std::lround(
             point_x + std::cos(branch_angle) * branch_length));
         const int branch_y = static_cast<int>(std::lround(
             point_y + std::sin(branch_angle) * branch_length));
         draw_lightning_segment(previous_x, previous_y, branch_x, branch_y,
-                               std::max<Uint8>(48, glow_alpha / 2),
-                               std::max<Uint8>(96, core_alpha / 2));
+                               std::max<Uint8>(aggressive_mode ? 34 : 48,
+                                               glow_alpha / 2),
+                               std::max<Uint8>(aggressive_mode ? 56 : 96,
+                                               core_alpha / 2));
       }
 
       previous_x = point_x;
       previous_y = point_y;
     }
 
-    SDL_SetRenderDrawColor(sdl_renderer, 206, 246, 255, 188);
+    SDL_SetRenderDrawColor(sdl_renderer, 206, 246, 255,
+                           aggressive_mode ? 228 : 188);
     SDL_RenderFillCircle(sdl_renderer, previous_x, previous_y,
                          std::max(1, element_size / 18));
   }
@@ -7551,7 +7603,7 @@ void Renderer::drawmonsters() {
     SDL_RenderCopy(sdl_renderer, monster_texture, nullptr, &sdl_monster_rect);
     if (monster->is_electrified) {
       drawElectrifiedMonsterAura(sdl_monster_rect, monster->electrified_visual_seed,
-                                 now);
+                                 now, monster->electrified_charge_target_id != -1);
     }
     SDL_SetTextureAlphaMod(monster_texture, 255);
   }

@@ -364,6 +364,7 @@ Audio::Audio() {
     SFX_electrified_monster_roar =
         CreateSynthChunk({98, 82, 74, 55}, 760, 0.54, 6.0, 240.0);
   }
+  AmplifyChunk(SFX_electrified_monster_roar, ELECTRIFIED_MONSTER_ROAR_GAIN);
   SFX_electrified_monster_impact =
       Mix_LoadWAV(electrified_monster_impact_sound_path.c_str());
   if (SFX_electrified_monster_impact == nullptr) {
@@ -1358,6 +1359,21 @@ Mix_Chunk *Audio::CreateInvulnerabilityLoopChunk() {
   }
 
   return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
+void Audio::AmplifyChunk(Mix_Chunk *chunk, double gain) {
+  if (chunk == nullptr || chunk->abuf == nullptr || chunk->alen == 0 ||
+      gain <= 1.0) {
+    return;
+  }
+
+  Sint16 *samples = reinterpret_cast<Sint16 *>(chunk->abuf);
+  const Uint32 sample_count = chunk->alen / sizeof(Sint16);
+  for (Uint32 i = 0; i < sample_count; ++i) {
+    const double amplified = static_cast<double>(samples[i]) * gain;
+    samples[i] = static_cast<Sint16>(
+        std::clamp(amplified, -32768.0, 32767.0));
+  }
 }
 
 void Audio::PlayChunk(Mix_Chunk *chunk) {

@@ -179,7 +179,8 @@ private:
   void drawPlasticExplosiveIcon(const SDL_Rect &icon_rect, double animation_clock,
                                 Uint8 alpha, bool armed);
   void drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
-                                  int animation_seed, Uint32 now);
+                                  int animation_seed, Uint32 now,
+                                  bool aggressive_mode);
   void drawhud();
   void drawDimmer(Uint8 alpha);
   void drawPanel(const SDL_Rect &panel, const SDL_Color &fill_color,

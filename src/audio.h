@@ -98,6 +98,7 @@ private:
   Mix_Chunk *CreatePlasticExplosiveWallBreakChunk();
   Mix_Chunk *CreateBiohazardBeamChunk();
   Mix_Chunk *CreateInvulnerabilityLoopChunk();
+  void AmplifyChunk(Mix_Chunk *chunk, double gain);
   void PlayChunk(Mix_Chunk *);
 
   Mix_Chunk *SFX_coin;
