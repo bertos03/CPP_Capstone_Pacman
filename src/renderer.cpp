@@ -5553,6 +5553,12 @@ void Renderer::drawrockets() {
 
   const Uint32 now = SDL_GetTicks();
   const int non_character_sprite_lift_px = getNonCharacterSpriteLiftPixels();
+  const int rocket_extra_lift_px =
+      ENABLE_3D_VIEW
+          ? std::max(
+                1, static_cast<int>(std::lround(static_cast<double>(element_size) *
+                                                ROCKET_FLIGHT_EXTRA_LIFT_FACTOR)))
+          : 0;
   for (const auto &rocket : game->active_rockets) {
     const Uint32 step_duration_ms = std::max<Uint32>(1, rocket.step_duration_ms);
     const double progress = std::clamp(
@@ -5575,7 +5581,8 @@ void Renderer::drawrockets() {
                            (next_px.x - current_px.x) * rendered_progress),
         static_cast<float>(current_px.y + element_size / 2 +
                            (next_px.y - current_px.y) * rendered_progress -
-                           non_character_sprite_lift_px)};
+                           non_character_sprite_lift_px -
+                           rocket_extra_lift_px)};
     const int frame_index =
         static_cast<int>((now / std::max<Uint32>(1, ROCKET_ANIMATION_FRAME_MS) +
                           static_cast<Uint32>(rocket.animation_seed)) %
@@ -6564,6 +6571,14 @@ void Renderer::drawExplosionParticles() {
   SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
 
   const float cell_to_px = static_cast<float>(element_size + 1);
+  const float rocket_trail_screen_lift_px =
+      ENABLE_3D_VIEW
+          ? static_cast<float>(
+                getNonCharacterSpriteLiftPixels() +
+                std::max(1, static_cast<int>(std::lround(
+                                static_cast<double>(element_size) *
+                                ROCKET_FLIGHT_EXTRA_LIFT_FACTOR))))
+          : 0.0f;
 
   struct SmokeRenderTuning {
     Uint32 lifetime_ms;
@@ -6612,6 +6627,21 @@ void Renderer::drawExplosionParticles() {
           ROCKET_BLAST_SMOKE_BLOB_RADIUS_MAX_FACTOR,
           ROCKET_BLAST_SMOKE_WOBBLE_AMPLITUDE_CELLS,
           ROCKET_BLAST_SMOKE_WOBBLE_FREQUENCY_HZ};
+    case ExplosionSmokePuffKind::RocketTrailSmoke:
+      return SmokeRenderTuning{
+          ROCKET_TRAIL_SMOKE_LIFETIME_MS,
+          ROCKET_TRAIL_SMOKE_INITIAL_RADIUS_CELLS,
+          ROCKET_TRAIL_SMOKE_FINAL_RADIUS_CELLS,
+          ROCKET_TRAIL_SMOKE_INITIAL_ALPHA,
+          ROCKET_TRAIL_SMOKE_COLOR,
+          ROCKET_TRAIL_SMOKE_HIGHLIGHT_COLOR,
+          ROCKET_TRAIL_SMOKE_BLOB_MIN_COUNT,
+          ROCKET_TRAIL_SMOKE_BLOB_MAX_COUNT,
+          ROCKET_TRAIL_SMOKE_BLOB_OFFSET_FACTOR,
+          ROCKET_TRAIL_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+          ROCKET_TRAIL_SMOKE_BLOB_RADIUS_MAX_FACTOR,
+          ROCKET_TRAIL_SMOKE_WOBBLE_AMPLITUDE_CELLS,
+          ROCKET_TRAIL_SMOKE_WOBBLE_FREQUENCY_HZ};
     case ExplosionSmokePuffKind::WallDust:
       return SmokeRenderTuning{
           PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS,
@@ -6717,7 +6747,10 @@ void Renderer::drawExplosionParticles() {
             static_cast<float>(progress);
     const Uint8 base_alpha = static_cast<Uint8>(std::clamp(
         tuning.initial_alpha * (1.0 - progress), 0.0, 255.0));
-    const SDL_FPoint screen = world_to_screen(puff.world_position);
+    SDL_FPoint screen = world_to_screen(puff.world_position);
+    if (puff.kind == ExplosionSmokePuffKind::RocketTrailSmoke) {
+      screen.y -= rocket_trail_screen_lift_px;
+    }
     const float base_radius_px = radius_cells * cell_to_px;
     const double wobble_clock =
         static_cast<double>(now) / 1000.0 *

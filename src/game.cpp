@@ -82,6 +82,8 @@ Uint32 GetSmokePuffLifetimeMs(ExplosionSmokePuffKind kind) {
     return EXPLOSION_SMOKE_CLOUD_LIFETIME_MS;
   case ExplosionSmokePuffKind::RocketBlastSmoke:
     return ROCKET_BLAST_SMOKE_LIFETIME_MS;
+  case ExplosionSmokePuffKind::RocketTrailSmoke:
+    return ROCKET_TRAIL_SMOKE_LIFETIME_MS;
   case ExplosionSmokePuffKind::WallDust:
     return PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS;
   case ExplosionSmokePuffKind::MonsterSmoke:
@@ -626,6 +628,7 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
 
   for (RocketProjectile &rocket : active_rockets) {
     ShiftActiveTicks(rocket.segment_started_ticks, paused_duration_ms);
+    ShiftActiveTicks(rocket.last_smoke_spawn_ticks, paused_duration_ms);
   }
 
   ShiftActiveTicks(active_biohazard_beam.started_ticks, paused_duration_ms);
@@ -2127,6 +2130,9 @@ void Game::TryFireRocket(Uint32 now) {
        facing_direction,
        now,
        ROCKET_STEP_DURATION_MS,
+       (now > ROCKET_TRAIL_SMOKE_SPAWN_INTERVAL_MS)
+           ? (now - ROCKET_TRAIL_SMOKE_SPAWN_INTERVAL_MS)
+           : 0,
        static_cast<int>((now % 997) + pacman->map_coord.u * 79 +
                         pacman->map_coord.v * 61 + rocket_inventory * 23)});
   rocket_inventory--;
@@ -2326,6 +2332,11 @@ void Game::UpdateRockets(Uint32 now) {
       active_rockets.erase(active_rockets.begin() + static_cast<long>(index));
       DetonateRocket(detonated_rocket, impact_coord, hit_monster, hit_wall, now);
     } else {
+      if (now - rocket.last_smoke_spawn_ticks >=
+          ROCKET_TRAIL_SMOKE_SPAWN_INTERVAL_MS) {
+        SpawnRocketTrailSmoke(rocket, now);
+        rocket.last_smoke_spawn_ticks = now;
+      }
       index++;
     }
   }
@@ -3357,6 +3368,37 @@ void Game::SpawnRocketBlastSmokeCloud(SDL_FPoint world_center, Uint32 now) {
     puff.spawned_ticks = now;
     puff.shape_seed = seed_dist(rng);
     puff.kind = ExplosionSmokePuffKind::RocketBlastSmoke;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnRocketTrailSmoke(const RocketProjectile &rocket, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> longitudinal_jitter_dist(
+      -ROCKET_TRAIL_SMOKE_LONGITUDINAL_JITTER_CELLS,
+      ROCKET_TRAIL_SMOKE_LONGITUDINAL_JITTER_CELLS);
+  std::uniform_real_distribution<float> lateral_offset_dist(
+      -ROCKET_TRAIL_SMOKE_LATERAL_SPREAD_CELLS,
+      ROCKET_TRAIL_SMOKE_LATERAL_SPREAD_CELLS);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  const SDL_FPoint center = RocketWorldCenter(rocket, now);
+  const SDL_FPoint forward = DirectionVector(rocket.direction);
+  const SDL_FPoint lateral{-forward.y, forward.x};
+
+  for (int i = 0; i < ROCKET_TRAIL_SMOKE_PUFFS_PER_SPAWN; ++i) {
+    const float trailing_distance =
+        ROCKET_TRAIL_SMOKE_BACK_OFFSET_CELLS + longitudinal_jitter_dist(rng) +
+        static_cast<float>(i) * 0.05f;
+    ExplosionSmokePuff puff;
+    puff.world_position = {
+        center.x - forward.x * trailing_distance +
+            lateral.x * lateral_offset_dist(rng),
+        center.y - forward.y * trailing_distance +
+            lateral.y * lateral_offset_dist(rng)};
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.kind = ExplosionSmokePuffKind::RocketTrailSmoke;
     explosion_smoke_puffs.push_back(puff);
   }
 }

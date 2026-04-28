@@ -180,6 +180,7 @@ struct RocketProjectile {
   Directions direction = Directions::Right;
   Uint32 segment_started_ticks = 0;
   Uint32 step_duration_ms = 0;
+  Uint32 last_smoke_spawn_ticks = 0;
   int animation_seed = 0;
 };
 
@@ -216,7 +217,8 @@ enum class ExplosionSmokePuffKind {
   MonsterSmoke,
   WallDust,
   BlastSmoke,
-  RocketBlastSmoke
+  RocketBlastSmoke,
+  RocketTrailSmoke
 };
 
 struct ExplosionSmokePuff {
@@ -390,6 +392,7 @@ private:
   void SpawnExplosionSmokeCloud(SDL_FPoint world_center, int radius_cells,
                                 Uint32 now);
   void SpawnRocketBlastSmokeCloud(SDL_FPoint world_center, Uint32 now);
+  void SpawnRocketTrailSmoke(const RocketProjectile &rocket, Uint32 now);
   void UpdateExplosionParticles(Uint32 now);
   SDL_FPoint PreciseWorldCenter(const MapElement *element) const;
   SDL_FPoint FireballWorldCenter(const Fireball &fireball, Uint32 now) const;
