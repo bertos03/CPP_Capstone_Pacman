@@ -394,7 +394,7 @@ inline constexpr float EXPLOSION_SMOKE_CLOUD_WOBBLE_FREQUENCY_HZ = 1.0f;
  * larger radius, but each puff is more transparent and fades faster so the
  * scene clears quickly.
  */
-inline constexpr int ROCKET_EXPLOSION_VISIBLE_RADIUS_CELLS = 1;
+inline constexpr int ROCKET_EXPLOSION_VISIBLE_RADIUS_CELLS = 3;
 inline constexpr int ROCKET_BLAST_SMOKE_MIN_PUFF_COUNT = 28;
 inline constexpr int ROCKET_BLAST_SMOKE_MAX_PUFF_COUNT = 40;
 inline constexpr float ROCKET_BLAST_SMOKE_RING_INNER_RADIUS_CELLS = 1.05f;
@@ -402,7 +402,7 @@ inline constexpr float ROCKET_BLAST_SMOKE_RING_OUTER_RADIUS_CELLS = 2.20f;
 inline constexpr Uint32 ROCKET_BLAST_SMOKE_LIFETIME_MS = 700;
 inline constexpr float ROCKET_BLAST_SMOKE_INITIAL_RADIUS_CELLS = 0.14f;
 inline constexpr float ROCKET_BLAST_SMOKE_FINAL_RADIUS_CELLS = 0.46f;
-inline constexpr Uint8 ROCKET_BLAST_SMOKE_INITIAL_ALPHA = 90;
+inline constexpr Uint8 ROCKET_BLAST_SMOKE_INITIAL_ALPHA = 150;
 inline constexpr SDL_Color ROCKET_BLAST_SMOKE_COLOR{86, 80, 76, 255};
 inline constexpr SDL_Color ROCKET_BLAST_SMOKE_HIGHLIGHT_COLOR{132, 124, 118, 255};
 inline constexpr int ROCKET_BLAST_SMOKE_BLOB_MIN_COUNT = 4;
