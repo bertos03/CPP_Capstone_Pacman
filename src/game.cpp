@@ -2387,6 +2387,8 @@ void Game::TryUseAirstrike(Uint32 now) {
   airstrike_inventory--;
 #ifdef AUDIO
   audio->PlayAirstrikeRadio();
+  audio->StartAirstrikePlane();
+  active_airstrike.plane_sound_started = true;
 #endif
 }
 
@@ -2394,6 +2396,16 @@ void Game::UpdateAirstrike(Uint32 now) {
   if (!active_airstrike.is_active) {
     return;
   }
+
+#ifdef AUDIO
+  if (!active_airstrike.plane_sound_fadeout_started &&
+      active_airstrike.plane_sound_started &&
+      now >= active_airstrike.plane_finished_ticks) {
+    audio->FadeOutAirstrikePlane(
+        static_cast<int>(AIRSTRIKE_PROPELLER_FADE_OUT_MS));
+    active_airstrike.plane_sound_fadeout_started = true;
+  }
+#endif
 
   for (auto &bomb : active_airstrike.bombs) {
     if (bomb.exploded || now < bomb.explode_ticks) {

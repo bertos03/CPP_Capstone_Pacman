@@ -7417,6 +7417,212 @@ void Renderer::drawMonsterFireball(int center_x, int center_y, Uint32 elapsed,
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
+void Renderer::drawNuclearFireball(int center_x, int center_y, Uint32 elapsed,
+                                   Uint32 seed) {
+  if (elapsed >= NUCLEAR_EXPLOSION_FIREBALL_DURATION_MS) {
+    return;
+  }
+
+  const double burn_duration =
+      static_cast<double>(std::max<Uint32>(1, NUCLEAR_EXPLOSION_FIREBALL_BURN_MS));
+  const double collapse_duration = static_cast<double>(
+      std::max<Uint32>(1, NUCLEAR_EXPLOSION_FIREBALL_COLLAPSE_MS));
+  const double cell_to_px = static_cast<double>(element_size + 1);
+  const double start_radius =
+      NUCLEAR_FIREBALL_START_RADIUS_CELLS * cell_to_px;
+  const double peak_radius = std::max(
+      start_radius + cell_to_px * 0.5,
+      static_cast<double>(NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS) * cell_to_px);
+
+  double radius_px = start_radius;
+  double alpha_scale = 1.0;
+  double collapse_progress = 0.0;
+  if (elapsed < NUCLEAR_EXPLOSION_FIREBALL_BURN_MS) {
+    const double burn_t =
+        std::clamp(static_cast<double>(elapsed) / burn_duration, 0.0, 1.0);
+    const double expansion = 1.0 - std::pow(1.0 - burn_t, 2.15);
+    radius_px = start_radius + (peak_radius - start_radius) * expansion;
+  } else {
+    collapse_progress = std::clamp(
+        static_cast<double>(elapsed - NUCLEAR_EXPLOSION_FIREBALL_BURN_MS) /
+            collapse_duration,
+        0.0, 1.0);
+    const double collapse_ease =
+        1.0 - std::pow(1.0 - collapse_progress, 1.75);
+    radius_px = peak_radius * (1.0 - 0.78 * collapse_ease);
+    alpha_scale = std::pow(1.0 - collapse_progress, 1.65);
+  }
+
+  if (radius_px <= 1.0 || alpha_scale <= 0.0) {
+    return;
+  }
+
+  const double clock =
+      static_cast<double>(elapsed) / 1000.0 *
+      (2.0 * kLogoPi * NUCLEAR_FIREBALL_WOBBLE_FREQUENCY_HZ);
+  const double surface_pulse =
+      0.88 + 0.12 * std::sin(clock * 0.73 + static_cast<double>(seed % 97));
+  const double wobble_px =
+      NUCLEAR_FIREBALL_WOBBLE_AMPLITUDE_CELLS * cell_to_px *
+      (0.45 + 0.55 * alpha_scale);
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const Uint8 halo_alpha = static_cast<Uint8>(
+      std::clamp(150.0 * alpha_scale * surface_pulse, 0.0, 150.0));
+  SDL_RenderFillCircleAA(
+      sdl_renderer, center_x, center_y, radius_px * 1.48,
+      SDL_Color{92, 24, 10, static_cast<Uint8>(halo_alpha / 2)});
+  SDL_RenderFillCircleAA(sdl_renderer, center_x, center_y, radius_px * 1.18,
+                         SDL_Color{184, 42, 14, halo_alpha});
+
+  std::mt19937 flame_rng(seed ^ 0xC2B2AE35u);
+  std::uniform_real_distribution<double> flame_angle_jitter(-0.035, 0.035);
+  std::uniform_real_distribution<double> flame_length_dist(0.64, 1.08);
+  std::uniform_real_distribution<double> flame_inner_dist(0.12, 0.42);
+  std::uniform_real_distribution<double> flame_phase_dist(0.0, 2.0 * kLogoPi);
+  const Uint8 tongue_alpha = static_cast<Uint8>(
+      std::clamp(178.0 * alpha_scale * (1.0 - collapse_progress * 0.42), 0.0,
+                 178.0));
+  for (int tongue = 0; tongue < NUCLEAR_FIREBALL_FLAME_TONGUE_COUNT; ++tongue) {
+    const double base_angle =
+        tongue * (2.0 * kLogoPi / NUCLEAR_FIREBALL_FLAME_TONGUE_COUNT);
+    const double phase = flame_phase_dist(flame_rng);
+    const double angle =
+        base_angle + flame_angle_jitter(flame_rng) + std::sin(clock * 0.22 + phase) * 0.025;
+    const double lick =
+        0.88 + 0.12 * std::sin(clock * (0.52 + 0.01 * tongue) + phase);
+    const double inner = radius_px * flame_inner_dist(flame_rng);
+    const double outer = radius_px * flame_length_dist(flame_rng) * lick;
+    const double middle = inner + (outer - inner) * 0.58;
+    SDL_RenderDrawAALine(
+        sdl_renderer, center_x + std::cos(angle) * inner,
+        center_y + std::sin(angle) * inner,
+        center_x + std::cos(angle) * outer,
+        center_y + std::sin(angle) * outer,
+        SDL_Color{255, 96, 24,
+                  static_cast<Uint8>(std::clamp(tongue_alpha * 0.58, 0.0, 255.0))});
+    SDL_RenderDrawAALine(
+        sdl_renderer, center_x + std::cos(angle) * (inner * 0.92),
+        center_y + std::sin(angle) * (inner * 0.92),
+        center_x + std::cos(angle) * middle,
+        center_y + std::sin(angle) * middle,
+        SDL_Color{255, 204, 74, tongue_alpha});
+  }
+
+  struct NuclearFireballLayer {
+    SDL_Color base;
+    SDL_Color highlight;
+    double radius_factor;
+    int blob_count;
+    Uint8 alpha;
+  };
+  const NuclearFireballLayer layers[] = {
+      {SDL_Color{128, 24, 10, 255}, SDL_Color{226, 58, 18, 255}, 1.00,
+       NUCLEAR_FIREBALL_OUTER_BLOB_COUNT, 218},
+      {SDL_Color{224, 62, 18, 255}, SDL_Color{255, 146, 34, 255}, 0.76,
+       NUCLEAR_FIREBALL_MID_BLOB_COUNT, 236},
+      {SDL_Color{255, 132, 28, 255}, SDL_Color{255, 226, 92, 255}, 0.54,
+       NUCLEAR_FIREBALL_MID_BLOB_COUNT, 248},
+      {SDL_Color{255, 218, 96, 255}, SDL_Color{255, 255, 236, 255}, 0.32,
+       NUCLEAR_FIREBALL_CORE_BLOB_COUNT, 255},
+  };
+
+  for (size_t layer_index = 0;
+       layer_index < sizeof(layers) / sizeof(layers[0]); ++layer_index) {
+    const NuclearFireballLayer &layer = layers[layer_index];
+    const double layer_radius = radius_px * layer.radius_factor;
+    if (layer_radius < 1.0) {
+      continue;
+    }
+    const Uint8 layer_alpha = static_cast<Uint8>(
+        std::clamp(static_cast<double>(layer.alpha) * alpha_scale, 0.0, 255.0));
+    if (layer_alpha == 0) {
+      continue;
+    }
+
+    std::mt19937 rng(seed ^ (0x85EBCA6Bu * (static_cast<Uint32>(layer_index) + 1u)));
+    std::uniform_real_distribution<double> angle_dist(0.0, 2.0 * kLogoPi);
+    std::uniform_real_distribution<double> offset_dist(0.0, 1.0);
+    std::uniform_real_distribution<double> radius_dist(
+        NUCLEAR_FIREBALL_TEXTURE_BLOB_MIN_FACTOR,
+        NUCLEAR_FIREBALL_TEXTURE_BLOB_MAX_FACTOR);
+    std::uniform_real_distribution<double> shade_dist(0.0, 1.0);
+    std::uniform_real_distribution<double> phase_dist(0.0, 2.0 * kLogoPi);
+
+    for (int blob = 0; blob < layer.blob_count; ++blob) {
+      const double angle = angle_dist(rng);
+      const double radial_unit = std::sqrt(offset_dist(rng));
+      const double offset =
+          radial_unit * NUCLEAR_FIREBALL_TEXTURE_OFFSET_FACTOR * layer_radius;
+      const double phase_x = phase_dist(rng);
+      const double phase_y = phase_dist(rng);
+      const double boil =
+          0.90 + 0.10 * std::sin(clock * (0.48 + 0.03 * blob) + phase_x);
+      const double blob_radius =
+          layer_radius * radius_dist(rng) * boil *
+          (1.0 - 0.34 * collapse_progress);
+      const double wobble_x =
+          wobble_px * 0.35 * std::sin(clock * 0.72 + phase_x + layer_index * 0.7);
+      const double wobble_y =
+          wobble_px * 0.35 * std::cos(clock * 0.57 + phase_y + layer_index * 0.4);
+      const double shade_mix = std::clamp(
+          shade_dist(rng) * 0.72 + (1.0 - radial_unit) * 0.42, 0.0, 1.0);
+      const Uint8 r = static_cast<Uint8>(
+          layer.base.r * (1.0 - shade_mix) + layer.highlight.r * shade_mix);
+      const Uint8 g = static_cast<Uint8>(
+          layer.base.g * (1.0 - shade_mix) + layer.highlight.g * shade_mix);
+      const Uint8 b = static_cast<Uint8>(
+          layer.base.b * (1.0 - shade_mix) + layer.highlight.b * shade_mix);
+      SDL_RenderFillCircleAA(
+          sdl_renderer,
+          center_x + std::cos(angle) * offset + wobble_x,
+          center_y + std::sin(angle) * offset + wobble_y,
+          std::max(1.0, blob_radius), SDL_Color{r, g, b, layer_alpha});
+    }
+  }
+
+  const int flare_count = 26;
+  const Uint8 flare_alpha = static_cast<Uint8>(
+      std::clamp(190.0 * alpha_scale * (1.0 - collapse_progress * 0.55), 0.0,
+                 190.0));
+  for (int flare = 0; flare < flare_count; ++flare) {
+    const double angle =
+        clock * 0.09 + flare * (2.0 * kLogoPi / flare_count) +
+        HashSigned(static_cast<int>(seed + flare * 41u)) * 0.14;
+    const double inner = radius_px * (0.48 + 0.08 * (flare % 3));
+    const double outer = radius_px *
+                         (0.92 + 0.18 *
+                                     HashUnit(static_cast<int>(seed + flare * 67u)));
+    SDL_RenderDrawAALine(
+        sdl_renderer, center_x + std::cos(angle) * inner,
+        center_y + std::sin(angle) * inner,
+        center_x + std::cos(angle) * outer,
+        center_y + std::sin(angle) * outer,
+        SDL_Color{255, 220, 118, flare_alpha});
+  }
+
+  const Uint8 ember_alpha = static_cast<Uint8>(
+      std::clamp(92.0 * alpha_scale * (1.0 - collapse_progress), 0.0, 92.0));
+  for (int pocket = 0; pocket < 16; ++pocket) {
+    const double angle =
+        pocket * (2.0 * kLogoPi / 16.0) +
+        HashSigned(static_cast<int>(seed + pocket * 113u)) * 0.28;
+    const double dist =
+        radius_px * (0.52 + 0.36 * HashUnit(static_cast<int>(seed + pocket * 149u)));
+    const double pocket_radius =
+        radius_px * (0.055 + 0.045 * HashUnit(static_cast<int>(seed + pocket * 181u)));
+    SDL_RenderFillCircleAA(
+        sdl_renderer, center_x + std::cos(angle) * dist,
+        center_y + std::sin(angle) * dist, pocket_radius,
+        SDL_Color{74, 18, 8, ember_alpha});
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
 void Renderer::drawDefeatEffect() {
   if (game == nullptr) {
     return;
@@ -8208,164 +8414,11 @@ void Renderer::draweffects() {
           std::clamp(static_cast<double>(elapsed) /
                          static_cast<double>(NUCLEAR_EXPLOSION_TOTAL_DURATION_MS),
                      0.0, 1.0);
-      const double fire_progress =
-          std::clamp(static_cast<double>(elapsed) /
-                         static_cast<double>(
-                             std::max<Uint32>(1, NUCLEAR_EXPLOSION_FIREBALL_DURATION_MS)),
-                     0.0, 1.0);
-      const double bloom = std::sin(fire_progress * kLogoPi);
-      const double rise =
-          1.0 - std::pow(1.0 - std::min(fire_progress * 2.4, 1.0), 2.6);
-      const double shrink = std::pow(std::max(0.0, fire_progress - 0.18) / 0.82,
-                                     1.4);
-      const double fire_fade =
-          std::pow(std::clamp(1.0 - fire_progress, 0.0, 1.0), 2.0);
-      const double afterglow =
-          (progress <= 0.10)
-              ? 1.0
-              : std::pow(std::max(0.0, 1.0 - (progress - 0.10) / 0.32), 1.10);
-      constexpr double kFireballSizeFactor = 0.60;
-      const double size_envelope =
-          std::max(0.0, rise - shrink * 0.95) * kFireballSizeFactor;
-      const int peak_radius = std::max(
-          element_size * std::max(2, effect.radius_cells),
-          static_cast<int>(std::lround(
-              element_size * std::max(2, effect.radius_cells) * 1.95)));
-      auto scaled_radius = [&](double base_factor, int min_value) {
-        return std::max(min_value, static_cast<int>(std::lround(
-                                       peak_radius * base_factor *
-                                       std::max(0.0, size_envelope))));
-      };
-      const int halo_radius = scaled_radius(1.55, 12);
-      const int outer_radius = scaled_radius(1.30, 10);
-      const int orange_radius = scaled_radius(1.05, 8);
-      const int mid_radius = scaled_radius(0.82, 7);
-      const int yellow_radius = scaled_radius(0.58, 5);
-      const int core_radius = scaled_radius(0.38, 4);
-      const int white_radius = scaled_radius(0.20, 3);
-
-      SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, halo_radius + 18,
-          SDL_Color{96, 28, 12,
-                    static_cast<Uint8>(
-                        std::clamp(132.0 * afterglow, 0.0, 132.0))});
-      SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, halo_radius,
-          SDL_Color{172, 50, 16,
-                    static_cast<Uint8>(
-                        std::clamp(200.0 * fire_fade, 0.0, 200.0))});
-      SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, outer_radius,
-          SDL_Color{226, 84, 20,
-                    static_cast<Uint8>(
-                        std::clamp(220.0 * fire_fade, 0.0, 220.0))});
-      SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, orange_radius,
-          SDL_Color{255, 130, 32,
-                    static_cast<Uint8>(
-                        std::clamp(232.0 * fire_fade, 0.0, 232.0))});
-
-      SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
-      SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
-      if (sdl_solid_disc_texture != nullptr) {
-        SDL_SetTextureBlendMode(sdl_solid_disc_texture, SDL_BLENDMODE_ADD);
-      }
-      SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, mid_radius,
-          SDL_Color{255, 168, 40,
-                    static_cast<Uint8>(
-                        std::clamp(220.0 * fire_fade, 0.0, 220.0))});
-      SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, yellow_radius,
-          SDL_Color{255, 218, 100,
-                    static_cast<Uint8>(
-                        std::clamp(232.0 * fire_fade, 0.0, 232.0))});
-      SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, core_radius,
-          SDL_Color{255, 240, 180,
-                    static_cast<Uint8>(
-                        std::clamp(236.0 * fire_fade, 0.0, 236.0))});
-      SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, white_radius,
-          SDL_Color{255, 255, 248,
-                    static_cast<Uint8>(
-                        std::clamp(240.0 * fire_fade, 0.0, 240.0))});
-      if (sdl_solid_disc_texture != nullptr) {
-        SDL_SetTextureBlendMode(sdl_solid_disc_texture, SDL_BLENDMODE_BLEND);
-      }
-      SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
-
-      const int tongue_count = 14;
-      const Uint8 tongue_alpha = static_cast<Uint8>(
-          std::clamp(190.0 * fire_fade, 0.0, 190.0));
-      if (tongue_alpha > 0 && size_envelope > 0.05 &&
-          sdl_solid_disc_texture != nullptr) {
-        std::mt19937 tongue_rng(
-            static_cast<Uint32>(effect.started_ticks) ^ 0xA5C3F00Du);
-        std::uniform_real_distribution<double> jitter_dist(-0.10, 0.10);
-        std::uniform_real_distribution<double> radius_dist(0.62, 1.05);
-        std::uniform_real_distribution<double> size_dist(0.18, 0.34);
-        for (int tongue = 0; tongue < tongue_count; ++tongue) {
-          const double angle = tongue * (2.0 * kLogoPi / tongue_count) +
-                               jitter_dist(tongue_rng) +
-                               fire_progress * 0.6;
-          const double dist =
-              outer_radius * radius_dist(tongue_rng) * (0.55 + 0.45 * bloom);
-          const int tx = center_x + static_cast<int>(std::lround(std::cos(angle) * dist));
-          const int ty = center_y + static_cast<int>(std::lround(std::sin(angle) * dist));
-          const double tongue_size =
-              outer_radius * size_dist(tongue_rng) * std::max(0.2, size_envelope);
-          SDL_RenderFillCircleAA(
-              sdl_renderer, tx, ty, std::max(3.0, tongue_size),
-              SDL_Color{255, 152, 44, tongue_alpha});
-          SDL_RenderFillCircleAA(
-              sdl_renderer, tx, ty, std::max(2.0, tongue_size * 0.55),
-              SDL_Color{255, 214, 110,
-                        static_cast<Uint8>(std::clamp(
-                            tongue_alpha * 0.75, 0.0, 255.0))});
-        }
-      }
-
-      const int flare_count = 34;
-      for (int flare = 0; flare < flare_count; ++flare) {
-        const double angle =
-            fire_progress * 3.6 + flare * (2.0 * kLogoPi / flare_count);
-        const int inner = std::max(
-            10, static_cast<int>(std::lround(
-                    peak_radius * (0.22 + 0.18 * bloom))));
-        const int outer = std::max(
-            inner + 12, static_cast<int>(std::lround(
-                            peak_radius * (0.62 + 0.32 * rise) * size_envelope)));
-        SDL_Color flare_color{255, 188, 70,
-                              static_cast<Uint8>(
-                                  std::clamp(214.0 * fire_fade, 0.0, 214.0))};
-        if (flare % 3 == 1) {
-          flare_color = SDL_Color{
-              255, 232, 140,
-              static_cast<Uint8>(std::clamp(236.0 * fire_fade, 0.0, 236.0))};
-        } else if (flare % 3 == 2) {
-          flare_color = SDL_Color{
-              255, 255, 240,
-              static_cast<Uint8>(std::clamp(196.0 * fire_fade, 0.0, 196.0))};
-        }
-        SDL_SetRenderDrawColor(
-            sdl_renderer, flare_color.r, flare_color.g, flare_color.b,
-            static_cast<Uint8>(std::clamp(flare_color.a * 0.52, 0.0, 255.0)));
-        SDL_RenderDrawLine(
-            sdl_renderer,
-            center_x + static_cast<int>(std::lround(std::cos(angle) * (inner - 8))),
-            center_y + static_cast<int>(std::lround(std::sin(angle) * (inner - 8))),
-            center_x + static_cast<int>(std::lround(std::cos(angle) * (outer + 10))),
-            center_y + static_cast<int>(std::lround(std::sin(angle) * (outer + 10))));
-        SDL_SetRenderDrawColor(sdl_renderer, flare_color.r, flare_color.g,
-                               flare_color.b, flare_color.a);
-        SDL_RenderDrawLine(
-            sdl_renderer,
-            center_x + static_cast<int>(std::lround(std::cos(angle) * inner)),
-            center_y + static_cast<int>(std::lround(std::sin(angle) * inner)),
-            center_x + static_cast<int>(std::lround(std::cos(angle) * outer)),
-            center_y + static_cast<int>(std::lround(std::sin(angle) * outer)));
-      }
+      drawNuclearFireball(
+          center_x, center_y, elapsed,
+          static_cast<Uint32>(effect.started_ticks) ^
+              (static_cast<Uint32>(effect.coord.u) * 73856093u) ^
+              (static_cast<Uint32>(effect.coord.v) * 19349663u));
 
       const double ring_progress =
           std::clamp(static_cast<double>(elapsed) /
@@ -8374,7 +8427,7 @@ void Renderer::draweffects() {
                      0.0, 1.0);
       if (ring_progress > 0.0) {
         const int ring_radius = std::max(
-            outer_radius,
+            element_size * std::max(2, effect.radius_cells),
             static_cast<int>(std::lround(
                 static_cast<double>(element_size + 1) *
                 NUCLEAR_SMOKE_RING_FINAL_RADIUS_CELLS *

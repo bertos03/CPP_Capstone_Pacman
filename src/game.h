@@ -170,6 +170,8 @@ struct ActiveAirstrike {
   Uint32 finished_ticks = 0;
   int animation_seed = 0;
   double target_progress = 0.5;
+  bool plane_sound_started = false;
+  bool plane_sound_fadeout_started = false;
   SDL_FPoint flight_start{0.0f, 0.0f};
   SDL_FPoint flight_end{0.0f, 0.0f};
   std::vector<AirstrikeBomb> bombs;

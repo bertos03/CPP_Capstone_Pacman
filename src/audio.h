@@ -67,6 +67,8 @@ public:
   void PlayPlasticExplosiveWallBreak();
   void PlayAirstrikeRadio();
   void PlayAirstrikeExplosion();
+  void StartAirstrikePlane();
+  void FadeOutAirstrikePlane(int fade_out_ms);
   void PlayRocketLaunch();
   void StopRocketLaunch();
   void StartBiohazardBeam();
@@ -127,6 +129,7 @@ private:
   Mix_Chunk *SFX_plastic_explosive_wall_break;
   Mix_Chunk *SFX_airstrike_radio;
   Mix_Chunk *SFX_airstrike_explosion;
+  Mix_Chunk *SFX_airstrike_propeller;
   Mix_Chunk *SFX_rocket_launch;
   Mix_Chunk *SFX_biohazard_beam;
   Mix_Chunk *SFX_electrified_monster_roar;
@@ -136,6 +139,7 @@ private:
   Mix_Music *win_music;
   Mix_Music *lose_music;
   int rocket_launch_channel;
+  int airstrike_plane_channel;
   int biohazard_beam_channel;
   int invulnerability_loop_channel;
   bool menu_music_active;

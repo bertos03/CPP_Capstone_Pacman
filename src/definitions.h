@@ -120,6 +120,8 @@ inline constexpr const char *AIRSTRIKE_RADIO_SOUND_PATH =
     "airstrike_radio.wav";
 inline constexpr const char *AIRSTRIKE_EXPLOSION_SOUND_PATH =
     "airstrike_explosion.wav";
+inline constexpr const char *AIRSTRIKE_PROPELLER_SOUND_PATH =
+    "airstrike_propeller.mp3";
 inline constexpr const char *ROCKET_LAUNCH_SOUND_PATH = "rocket_launch.mp3";
 inline constexpr const char *BIOHAZARD_BEAM_SOUND_PATH = "biohazard_beam.wav";
 inline constexpr const char *ELECTRIFIED_MONSTER_ROAR_SOUND_PATH =
@@ -440,22 +442,38 @@ inline constexpr float ROCKET_TRAIL_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.035f;
 inline constexpr float ROCKET_TRAIL_SMOKE_WOBBLE_FREQUENCY_HZ = 1.2f;
 
 inline constexpr int NUCLEAR_EXPLOSION_RADIUS_CELLS = 3;
-inline constexpr Uint32 NUCLEAR_EXPLOSION_FIREBALL_DURATION_MS = 1450;
-inline constexpr Uint32 NUCLEAR_EXPLOSION_TOTAL_DURATION_MS = 9200;
+inline constexpr Uint32 NUCLEAR_EXPLOSION_FIREBALL_BURN_MS = 1450;
+inline constexpr Uint32 NUCLEAR_EXPLOSION_FIREBALL_COLLAPSE_MS = 520;
+inline constexpr Uint32 NUCLEAR_EXPLOSION_FIREBALL_DURATION_MS =
+    NUCLEAR_EXPLOSION_FIREBALL_BURN_MS +
+    NUCLEAR_EXPLOSION_FIREBALL_COLLAPSE_MS;
+inline constexpr Uint32 NUCLEAR_EXPLOSION_TOTAL_DURATION_MS = 7200;
 inline constexpr Uint32 NUCLEAR_SMOKE_RING_EXPANSION_MS = 1;
 inline constexpr Uint32 NUCLEAR_SMOKE_RING_SPAWN_INTERVAL_MS = 52;
 inline constexpr int NUCLEAR_SMOKE_RING_PUFFS_PER_WAVE = 72;
 
 inline constexpr Uint32 NUCLEAR_FLASH_DURATION_MS = 950;
 inline constexpr Uint8 NUCLEAR_FLASH_PEAK_ALPHA = 230;
-inline constexpr SDL_Color NUCLEAR_FLASH_COLOR{255, 250, 240, 255};
+inline constexpr SDL_Color NUCLEAR_FLASH_COLOR{205, 205, 240, 180};
+inline constexpr float NUCLEAR_FIREBALL_START_RADIUS_CELLS =
+    static_cast<float>(NUCLEAR_EXPLOSION_RADIUS_CELLS);
+inline constexpr float NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS = 5.8f;
+inline constexpr float NUCLEAR_FIREBALL_TEXTURE_OFFSET_FACTOR = 0.52f;
+inline constexpr float NUCLEAR_FIREBALL_TEXTURE_BLOB_MIN_FACTOR = 0.18f;
+inline constexpr float NUCLEAR_FIREBALL_TEXTURE_BLOB_MAX_FACTOR = 0.42f;
+inline constexpr float NUCLEAR_FIREBALL_WOBBLE_AMPLITUDE_CELLS = 0.045f;
+inline constexpr float NUCLEAR_FIREBALL_WOBBLE_FREQUENCY_HZ = 0.8f;
+inline constexpr int NUCLEAR_FIREBALL_OUTER_BLOB_COUNT = 4;
+inline constexpr int NUCLEAR_FIREBALL_MID_BLOB_COUNT = 20;
+inline constexpr int NUCLEAR_FIREBALL_CORE_BLOB_COUNT = 14;
+inline constexpr int NUCLEAR_FIREBALL_FLAME_TONGUE_COUNT = 88;
 inline constexpr float NUCLEAR_SMOKE_RING_FINAL_RADIUS_CELLS = 18.0f;
 inline constexpr float NUCLEAR_SMOKE_RING_THICKNESS_CELLS = 1.05f;
-inline constexpr Uint32 NUCLEAR_CENTER_SMOKE_EMISSION_MS = 4800;
+inline constexpr Uint32 NUCLEAR_CENTER_SMOKE_EMISSION_MS = 3600;
 inline constexpr Uint32 NUCLEAR_CENTER_SMOKE_SPAWN_INTERVAL_MS = 72;
 inline constexpr int NUCLEAR_CENTER_SMOKE_PUFFS_PER_SPAWN = 7;
 inline constexpr float NUCLEAR_CENTER_SMOKE_SPREAD_CELLS = 1.45f;
-inline constexpr Uint32 NUCLEAR_MUSHROOM_BUILD_MS = 2800;
+inline constexpr Uint32 NUCLEAR_MUSHROOM_BUILD_MS = 1900;
 inline constexpr Uint32 NUCLEAR_MUSHROOM_SPAWN_INTERVAL_MS = 68;
 inline constexpr int NUCLEAR_MUSHROOM_STEM_PUFFS_PER_SPAWN = 4;
 inline constexpr int NUCLEAR_MUSHROOM_CAP_PUFFS_PER_SPAWN = 9;
@@ -479,7 +497,7 @@ inline constexpr float NUCLEAR_RING_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.06f;
 inline constexpr float NUCLEAR_RING_SMOKE_WOBBLE_FREQUENCY_HZ = 1.15f;
 inline constexpr float NUCLEAR_RING_SMOKE_VERTICAL_RISE_CELLS = 0.20f;
 
-inline constexpr Uint32 NUCLEAR_CORE_SMOKE_LIFETIME_MS = 2200;
+inline constexpr Uint32 NUCLEAR_CORE_SMOKE_LIFETIME_MS = 1550;
 inline constexpr float NUCLEAR_CORE_SMOKE_INITIAL_RADIUS_CELLS = 0.24f;
 inline constexpr float NUCLEAR_CORE_SMOKE_FINAL_RADIUS_CELLS = 1.12f;
 inline constexpr Uint8 NUCLEAR_CORE_SMOKE_INITIAL_ALPHA = 104;
@@ -495,7 +513,7 @@ inline constexpr float NUCLEAR_CORE_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.075f;
 inline constexpr float NUCLEAR_CORE_SMOKE_WOBBLE_FREQUENCY_HZ = 0.96f;
 inline constexpr float NUCLEAR_CORE_SMOKE_VERTICAL_RISE_CELLS = 1.9f;
 
-inline constexpr Uint32 NUCLEAR_MUSHROOM_SMOKE_LIFETIME_MS = 3000;
+inline constexpr Uint32 NUCLEAR_MUSHROOM_SMOKE_LIFETIME_MS = 1850;
 inline constexpr float NUCLEAR_MUSHROOM_SMOKE_INITIAL_RADIUS_CELLS = 0.26f;
 inline constexpr float NUCLEAR_MUSHROOM_SMOKE_FINAL_RADIUS_CELLS = 1.48f;
 inline constexpr Uint8 NUCLEAR_MUSHROOM_SMOKE_INITIAL_ALPHA = 128;
@@ -612,6 +630,7 @@ inline constexpr Uint32 AIRSTRIKE_RADIO_DELAY_MS = 2000;
 inline constexpr Uint32 AIRSTRIKE_BOMB_FALL_MS = 320;
 inline constexpr Uint32 AIRSTRIKE_PLANE_CELL_TRAVEL_MS = 105;
 inline constexpr Uint32 AIRSTRIKE_PLANE_MIN_FLIGHT_MS = 2200;
+inline constexpr Uint32 AIRSTRIKE_PROPELLER_FADE_OUT_MS = 650;
 inline constexpr Uint32 AIRSTRIKE_EXPLOSION_FRAME_MS = 110;
 inline constexpr int AIRSTRIKE_EXPLOSION_FRAME_COUNT = 5;
 inline constexpr Uint32 AIRSTRIKE_EXPLOSION_DURATION_MS =

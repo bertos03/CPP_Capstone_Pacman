@@ -147,6 +147,8 @@ private:
   SDL_Rect getWallRubblePieceBounds(const WallRubblePiece &piece) const;
   void drawMonsterFireball(int center_x, int center_y, Uint32 elapsed,
                            Uint32 seed);
+  void drawNuclearFireball(int center_x, int center_y, Uint32 elapsed,
+                           Uint32 seed);
   void drawDefeatEffect();
   void drawDefeatOverlay();
   void drawVictoryOverlay();

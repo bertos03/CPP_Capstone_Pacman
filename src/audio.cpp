@@ -219,6 +219,7 @@ Audio::Audio() {
   SFX_plastic_explosive_wall_break = nullptr;
   SFX_airstrike_radio = nullptr;
   SFX_airstrike_explosion = nullptr;
+  SFX_airstrike_propeller = nullptr;
   SFX_rocket_launch = nullptr;
   SFX_biohazard_beam = nullptr;
   SFX_electrified_monster_roar = nullptr;
@@ -228,6 +229,7 @@ Audio::Audio() {
   win_music = nullptr;
   lose_music = nullptr;
   rocket_launch_channel = 0;
+  airstrike_plane_channel = -1;
   biohazard_beam_channel = -1;
   invulnerability_loop_channel = -1;
   menu_music_active = false;
@@ -268,11 +270,13 @@ Audio::Audio() {
   const std::string plastic_explosive_wall_break_sound_path =
       Paths::GetDataFilePath("plastic_explosive_wall_break.mp3");
   const std::string airstrike_radio_sound_path =
-      Paths::GetDataFilePath("airstrike_radio.wav");
+      Paths::GetDataFilePath(AIRSTRIKE_RADIO_SOUND_PATH);
   const std::string airstrike_explosion_sound_path =
-      Paths::GetDataFilePath("airstrike_explosion.wav");
+      Paths::GetDataFilePath(AIRSTRIKE_EXPLOSION_SOUND_PATH);
+  const std::string airstrike_propeller_sound_path =
+      Paths::GetDataFilePath(AIRSTRIKE_PROPELLER_SOUND_PATH);
   const std::string rocket_launch_sound_path =
-      Paths::GetDataFilePath("rocket_launch.mp3");
+      Paths::GetDataFilePath(ROCKET_LAUNCH_SOUND_PATH);
   const std::string biohazard_beam_sound_path =
       Paths::GetDataFilePath(BIOHAZARD_BEAM_SOUND_PATH);
   const std::string electrified_monster_roar_sound_path =
@@ -349,6 +353,7 @@ Audio::Audio() {
   if (SFX_airstrike_explosion == nullptr) {
     SFX_airstrike_explosion = CreateDynamiteExplosionChunk();
   }
+  SFX_airstrike_propeller = Mix_LoadWAV(airstrike_propeller_sound_path.c_str());
   SFX_rocket_launch = Mix_LoadWAV(rocket_launch_sound_path.c_str());
   if (SFX_rocket_launch == nullptr) {
     SFX_rocket_launch =
@@ -404,6 +409,7 @@ Audio::Audio() {
       SFX_plastic_explosive_wall_break == nullptr ||
       SFX_airstrike_radio == nullptr ||
       SFX_airstrike_explosion == nullptr ||
+      SFX_airstrike_propeller == nullptr ||
       SFX_rocket_launch == nullptr ||
       SFX_biohazard_beam == nullptr ||
       SFX_electrified_monster_roar == nullptr ||
@@ -427,6 +433,7 @@ Audio::~Audio() {
   ClearMenuSpectrumLevels();
   StopInvulnerabilityLoop();
   StopBiohazardBeam();
+  FadeOutAirstrikePlane(0);
   if (audio_ready) {
     Mix_HaltChannel(-1);
     Mix_HaltMusic();
@@ -509,6 +516,9 @@ Audio::~Audio() {
   }
   if (SFX_airstrike_explosion != nullptr) {
     Mix_FreeChunk(SFX_airstrike_explosion);
+  }
+  if (SFX_airstrike_propeller != nullptr) {
+    Mix_FreeChunk(SFX_airstrike_propeller);
   }
   if (SFX_rocket_launch != nullptr) {
     Mix_FreeChunk(SFX_rocket_launch);
@@ -1559,6 +1569,33 @@ void Audio::PlayPlasticExplosiveWallBreak() {
 void Audio::PlayAirstrikeRadio() { PlayChunk(SFX_airstrike_radio); };
 
 void Audio::PlayAirstrikeExplosion() { PlayChunk(SFX_airstrike_explosion); };
+
+void Audio::StartAirstrikePlane() {
+  if (!audio_ready || SFX_airstrike_propeller == nullptr) {
+    return;
+  }
+
+  if (airstrike_plane_channel != -1 &&
+      Mix_Playing(airstrike_plane_channel) != 0) {
+    return;
+  }
+
+  airstrike_plane_channel =
+      Mix_PlayChannel(-1, SFX_airstrike_propeller, -1);
+}
+
+void Audio::FadeOutAirstrikePlane(int fade_out_ms) {
+  if (!audio_ready || airstrike_plane_channel == -1) {
+    return;
+  }
+
+  if (fade_out_ms <= 0) {
+    Mix_HaltChannel(airstrike_plane_channel);
+  } else {
+    Mix_FadeOutChannel(airstrike_plane_channel, fade_out_ms);
+  }
+  airstrike_plane_channel = -1;
+}
 
 void Audio::PlayRocketLaunch() {
   if (!audio_ready || SFX_rocket_launch == nullptr) {
