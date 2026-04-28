@@ -365,25 +365,25 @@ inline constexpr int PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_PUFF_MAX_COUNT = 14;
 inline constexpr float
     PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_SPREAD_CELLS = 0.34f;
 
-inline constexpr int EXPLOSION_SMOKE_CLOUD_MIN_PUFF_COUNT = 34;
-inline constexpr int EXPLOSION_SMOKE_CLOUD_MAX_PUFF_COUNT = 46;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_RING_MIN_RADIUS_CELLS = 0.62f;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_RING_INNER_RADIUS_FACTOR = 0.46f;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_RING_OUTER_RADIUS_FACTOR = 2.12f;
-inline constexpr Uint32 EXPLOSION_SMOKE_CLOUD_LIFETIME_MS = 1380;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_INITIAL_RADIUS_CELLS = 0.11f;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_FINAL_RADIUS_CELLS = 0.42f;
-inline constexpr Uint8 EXPLOSION_SMOKE_CLOUD_INITIAL_ALPHA = 102;
+inline constexpr int EXPLOSION_SMOKE_CLOUD_MIN_PUFF_COUNT = 14;
+inline constexpr int EXPLOSION_SMOKE_CLOUD_MAX_PUFF_COUNT = 22;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_RING_MIN_RADIUS_CELLS = 0.55f;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_RING_INNER_RADIUS_FACTOR = 0.48f;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_RING_OUTER_RADIUS_FACTOR = 0.82f;
+inline constexpr Uint32 EXPLOSION_SMOKE_CLOUD_LIFETIME_MS = 1200;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_INITIAL_RADIUS_CELLS = 0.09f;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_FINAL_RADIUS_CELLS = 0.34f;
+inline constexpr Uint8 EXPLOSION_SMOKE_CLOUD_INITIAL_ALPHA = 84;
 inline constexpr SDL_Color EXPLOSION_SMOKE_CLOUD_COLOR{78, 74, 72, 255};
 inline constexpr SDL_Color EXPLOSION_SMOKE_CLOUD_HIGHLIGHT_COLOR{120, 114, 108,
                                                                  255};
-inline constexpr int EXPLOSION_SMOKE_CLOUD_BLOB_MIN_COUNT = 5;
-inline constexpr int EXPLOSION_SMOKE_CLOUD_BLOB_MAX_COUNT = 8;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_BLOB_OFFSET_FACTOR = 0.92f;
+inline constexpr int EXPLOSION_SMOKE_CLOUD_BLOB_MIN_COUNT = 4;
+inline constexpr int EXPLOSION_SMOKE_CLOUD_BLOB_MAX_COUNT = 7;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_BLOB_OFFSET_FACTOR = 0.86f;
 inline constexpr float EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MIN_FACTOR = 0.44f;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MAX_FACTOR = 1.04f;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_WOBBLE_AMPLITUDE_CELLS = 0.04f;
-inline constexpr float EXPLOSION_SMOKE_CLOUD_WOBBLE_FREQUENCY_HZ = 1.1f;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_BLOB_RADIUS_MAX_FACTOR = 0.98f;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_WOBBLE_AMPLITUDE_CELLS = 0.03f;
+inline constexpr float EXPLOSION_SMOKE_CLOUD_WOBBLE_FREQUENCY_HZ = 1.0f;
 
 /**
  * @brief Rocket impact smoke and blast tuning.
