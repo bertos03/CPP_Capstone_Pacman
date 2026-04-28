@@ -3541,33 +3541,49 @@ void Game::SpawnNuclearRingSmoke(float ring_progress, Uint32 now) {
   }
 
   static thread_local std::mt19937 rng{std::random_device{}()};
-  std::uniform_real_distribution<float> radial_jitter_dist(
-      -NUCLEAR_SMOKE_RING_THICKNESS_CELLS, NUCLEAR_SMOKE_RING_THICKNESS_CELLS);
-  std::uniform_real_distribution<float> angle_jitter_dist(-0.06f, 0.06f);
+  std::uniform_real_distribution<float> origin_jitter_dist(
+      -NUCLEAR_SMOKE_RING_THICKNESS_CELLS * 0.35f,
+      NUCLEAR_SMOKE_RING_THICKNESS_CELLS * 0.35f);
+  std::uniform_real_distribution<float> angle_jitter_dist(-0.10f, 0.10f);
+  std::uniform_real_distribution<float> speed_unit_dist(0.0f, 1.0f);
   std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
 
-  const float base_radius =
-      static_cast<float>(NUCLEAR_EXPLOSION_RADIUS_CELLS) * 0.90f;
-  const float radius =
-      base_radius + (NUCLEAR_SMOKE_RING_FINAL_RADIUS_CELLS - base_radius) *
-                        std::clamp(ring_progress, 0.0f, 1.0f);
-  const float lift =
-      0.05f + std::clamp(ring_progress, 0.0f, 1.0f) * 0.18f;
+  const float clamped_progress = std::clamp(ring_progress, 0.0f, 1.0f);
+  const float wave_intensity =
+      std::pow(1.0f - clamped_progress, 1.6f) * 1.55f + 0.10f;
+  const int puffs_this_wave = std::max(
+      4, static_cast<int>(std::lround(
+             NUCLEAR_SMOKE_RING_PUFFS_PER_WAVE * wave_intensity)));
+
+  const float lifetime_s =
+      static_cast<float>(NUCLEAR_RING_SMOKE_LIFETIME_MS) / 1000.0f;
+  const float fast_speed =
+      NUCLEAR_SMOKE_RING_FINAL_RADIUS_CELLS / std::max(0.1f, lifetime_s);
   const float phase = static_cast<float>(
       active_nuclear_explosion.animation_seed * 0.13 +
       static_cast<double>(now - active_nuclear_explosion.started_ticks) / 310.0);
-  for (int index = 0; index < NUCLEAR_SMOKE_RING_PUFFS_PER_WAVE; ++index) {
+  for (int index = 0; index < puffs_this_wave; ++index) {
     const float angle =
         (static_cast<float>(index) /
-         static_cast<float>(NUCLEAR_SMOKE_RING_PUFFS_PER_WAVE)) *
+         static_cast<float>(puffs_this_wave)) *
             static_cast<float>(2.0 * M_PI) +
         phase + angle_jitter_dist(rng);
+    const float dir_x = std::cos(angle);
+    const float dir_y = std::sin(angle);
     ExplosionSmokePuff puff;
-    const float ring_radius = radius + radial_jitter_dist(rng);
     puff.world_position = {
-        active_nuclear_explosion.world_center.x + std::cos(angle) * ring_radius,
-        active_nuclear_explosion.world_center.y + std::sin(angle) * ring_radius};
-    puff.vertical_offset_cells = lift;
+        active_nuclear_explosion.world_center.x + dir_x * origin_jitter_dist(rng),
+        active_nuclear_explosion.world_center.y + dir_y * origin_jitter_dist(rng)};
+    const float speed_roll = speed_unit_dist(rng);
+    float speed_factor;
+    if (speed_roll < 0.18f) {
+      speed_factor = 0.05f + speed_roll * 0.55f;
+    } else {
+      speed_factor = 0.85f + (speed_roll - 0.18f) * 0.40f;
+    }
+    const float speed = fast_speed * speed_factor;
+    puff.velocity_cells_per_sec = {dir_x * speed, dir_y * speed};
+    puff.vertical_offset_cells = 0.05f + clamped_progress * 0.18f;
     puff.spawned_ticks = now;
     puff.shape_seed = seed_dist(rng);
     puff.kind = ExplosionSmokePuffKind::NuclearRingSmoke;

@@ -536,6 +536,7 @@ void Renderer::initializeRenderer(size_t row_count_value,
   SDL_RenderClear(sdl_renderer);
 
   recreateSupersampleTarget();
+  createSoftPuffTexture();
 
   const std::string font_path = Paths::GetDataFilePath("font.ttf");
   const int hud_fontsize = std::max(22, screen_res_y / 35);
@@ -821,6 +822,14 @@ Renderer::~Renderer() {
   if (sdl_supersample_target != nullptr) {
     SDL_DestroyTexture(sdl_supersample_target);
     sdl_supersample_target = nullptr;
+  }
+  if (sdl_soft_puff_texture != nullptr) {
+    SDL_DestroyTexture(sdl_soft_puff_texture);
+    sdl_soft_puff_texture = nullptr;
+  }
+  if (sdl_solid_disc_texture != nullptr) {
+    SDL_DestroyTexture(sdl_solid_disc_texture);
+    sdl_solid_disc_texture = nullptr;
   }
   if (sdl_renderer != nullptr) {
     SDL_DestroyRenderer(sdl_renderer);
@@ -6622,6 +6631,40 @@ void Renderer::drawExplosionParticles() {
   SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
   SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
 
+  SDL_Texture *const puff_texture = sdl_soft_puff_texture;
+  std::vector<SDL_Vertex> puff_vertices;
+  std::vector<int> puff_indices;
+  if (puff_texture != nullptr) {
+    const size_t expected_blobs =
+        game->explosion_smoke_puffs.size() * 10 +
+        game->explosion_particles.size() * 6;
+    puff_vertices.reserve(expected_blobs * 4);
+    puff_indices.reserve(expected_blobs * 6);
+  }
+  auto draw_soft_puff = [&](float cx, float cy, float radius, Uint8 r, Uint8 g,
+                            Uint8 b, Uint8 a) {
+    if (puff_texture == nullptr || a == 0) {
+      return;
+    }
+    const float half = std::max(1.0f, radius);
+    const SDL_Color color{r, g, b, a};
+    const int base = static_cast<int>(puff_vertices.size());
+    puff_vertices.push_back(SDL_Vertex{SDL_FPoint{cx - half, cy - half}, color,
+                                       SDL_FPoint{0.0f, 0.0f}});
+    puff_vertices.push_back(SDL_Vertex{SDL_FPoint{cx + half, cy - half}, color,
+                                       SDL_FPoint{1.0f, 0.0f}});
+    puff_vertices.push_back(SDL_Vertex{SDL_FPoint{cx + half, cy + half}, color,
+                                       SDL_FPoint{1.0f, 1.0f}});
+    puff_vertices.push_back(SDL_Vertex{SDL_FPoint{cx - half, cy + half}, color,
+                                       SDL_FPoint{0.0f, 1.0f}});
+    puff_indices.push_back(base + 0);
+    puff_indices.push_back(base + 1);
+    puff_indices.push_back(base + 2);
+    puff_indices.push_back(base + 0);
+    puff_indices.push_back(base + 2);
+    puff_indices.push_back(base + 3);
+  };
+
   const float cell_to_px = static_cast<float>(element_size + 1);
   const float rocket_trail_screen_lift_px =
       ENABLE_3D_VIEW
@@ -6857,7 +6900,11 @@ void Renderer::drawExplosionParticles() {
     const float vertical_cells =
         puff.vertical_offset_cells +
         tuning.vertical_rise_cells * static_cast<float>(progress);
-    SDL_FPoint screen = world_to_screen(puff.world_position, vertical_cells);
+    const float age_seconds = static_cast<float>(age) / 1000.0f;
+    const SDL_FPoint displaced_position{
+        puff.world_position.x + puff.velocity_cells_per_sec.x * age_seconds,
+        puff.world_position.y + puff.velocity_cells_per_sec.y * age_seconds};
+    SDL_FPoint screen = world_to_screen(displaced_position, vertical_cells);
     if (puff.kind == ExplosionSmokePuffKind::RocketTrailSmoke) {
       screen.y -= rocket_trail_screen_lift_px;
     }
@@ -6903,14 +6950,9 @@ void Renderer::drawExplosionParticles() {
       const Uint8 b = static_cast<Uint8>(
           tuning.base_color.b * (1.0f - shade_mix) +
           tuning.highlight_color.b * shade_mix);
-      SDL_SetRenderDrawColor(sdl_renderer, r, g, b, base_alpha);
-      SDL_RenderFillCircle(
-          sdl_renderer,
-          static_cast<int>(
-              std::lround(screen.x + base_offset_x + wobble_x)),
-          static_cast<int>(
-              std::lround(screen.y + base_offset_y + wobble_y)),
-          std::max(1, static_cast<int>(std::lround(blob_radius))));
+      draw_soft_puff(screen.x + base_offset_x + wobble_x,
+                     screen.y + base_offset_y + wobble_y,
+                     std::max(1.0f, blob_radius), r, g, b, base_alpha);
     }
   }
 
@@ -6987,14 +7029,19 @@ void Renderer::drawExplosionParticles() {
             static_cast<Uint8>(std::clamp(base_alpha * 0.72, 0.0, 255.0)));
         SDL_RenderFillRect(sdl_renderer, &highlight_rect);
       } else {
-        SDL_SetRenderDrawColor(sdl_renderer, r, g, b, base_alpha);
-        SDL_RenderFillCircle(
-            sdl_renderer,
-            static_cast<int>(std::lround(screen.x + offset_x)),
-            static_cast<int>(std::lround(screen.y + offset_y)),
-            std::max(1, static_cast<int>(std::lround(blob_radius))));
+        draw_soft_puff(screen.x + offset_x, screen.y + offset_y,
+                       std::max(1.0f, blob_radius), r, g, b, base_alpha);
       }
     }
+  }
+
+  if (puff_texture != nullptr && !puff_indices.empty()) {
+    SDL_SetTextureColorMod(puff_texture, 255, 255, 255);
+    SDL_SetTextureAlphaMod(puff_texture, 255);
+    SDL_RenderGeometry(sdl_renderer, puff_texture, puff_vertices.data(),
+                       static_cast<int>(puff_vertices.size()),
+                       puff_indices.data(),
+                       static_cast<int>(puff_indices.size()));
   }
 
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
@@ -8138,81 +8185,117 @@ void Renderer::draweffects() {
                              std::max<Uint32>(1, NUCLEAR_EXPLOSION_FIREBALL_DURATION_MS)),
                      0.0, 1.0);
       const double bloom = std::sin(fire_progress * kLogoPi);
-      const double surge = 1.0 - std::pow(1.0 - fire_progress, 3.1);
+      const double rise =
+          1.0 - std::pow(1.0 - std::min(fire_progress * 2.4, 1.0), 2.6);
+      const double shrink = std::pow(std::max(0.0, fire_progress - 0.18) / 0.82,
+                                     1.4);
       const double fire_fade =
-          (progress <= 0.34)
-              ? 1.0
-              : std::pow(std::max(0.0, 1.0 - (progress - 0.34) / 0.66), 1.10);
+          std::pow(std::clamp(1.0 - fire_progress, 0.0, 1.0), 2.0);
       const double afterglow =
-          (progress <= 0.18)
+          (progress <= 0.10)
               ? 1.0
-              : std::pow(std::max(0.0, 1.0 - (progress - 0.18) / 0.82), 0.78);
+              : std::pow(std::max(0.0, 1.0 - (progress - 0.10) / 0.32), 1.10);
+      constexpr double kFireballSizeFactor = 0.60;
+      const double size_envelope =
+          std::max(0.0, rise - shrink * 0.95) * kFireballSizeFactor;
       const int peak_radius = std::max(
           element_size * std::max(2, effect.radius_cells),
           static_cast<int>(std::lround(
               element_size * std::max(2, effect.radius_cells) * 1.95)));
-      const int halo_radius = std::max(
-          20, static_cast<int>(std::lround(
-                  peak_radius * (0.34 + 1.28 * surge))));
-      const int outer_radius = std::max(
-          16, static_cast<int>(std::lround(
-                  peak_radius * (0.30 + 1.18 * surge))));
-      const int orange_radius = std::max(
-          14, static_cast<int>(std::lround(
-                  peak_radius * (0.24 + 0.96 * bloom))));
-      const int mid_radius = std::max(
-          12, static_cast<int>(std::lround(
-                  peak_radius * (0.20 + 0.84 * bloom))));
-      const int yellow_radius = std::max(
-          10, static_cast<int>(std::lround(
-                  peak_radius * (0.14 + 0.64 * bloom))));
-      const int core_radius = std::max(
-          7, static_cast<int>(std::lround(
-                 peak_radius * (0.10 + 0.56 * bloom))));
-      const int white_radius = std::max(
-          4, static_cast<int>(std::lround(
-                 peak_radius * (0.06 + 0.30 * bloom))));
+      auto scaled_radius = [&](double base_factor, int min_value) {
+        return std::max(min_value, static_cast<int>(std::lround(
+                                       peak_radius * base_factor *
+                                       std::max(0.0, size_envelope))));
+      };
+      const int halo_radius = scaled_radius(1.55, 12);
+      const int outer_radius = scaled_radius(1.30, 10);
+      const int orange_radius = scaled_radius(1.05, 8);
+      const int mid_radius = scaled_radius(0.82, 7);
+      const int yellow_radius = scaled_radius(0.58, 5);
+      const int core_radius = scaled_radius(0.38, 4);
+      const int white_radius = scaled_radius(0.20, 3);
 
       SDL_RenderFillCircleAA(
-          sdl_renderer, center_x, center_y, halo_radius + 34,
-          SDL_Color{112, 32, 14,
+          sdl_renderer, center_x, center_y, halo_radius + 18,
+          SDL_Color{96, 28, 12,
                     static_cast<Uint8>(
-                        std::clamp(150.0 * afterglow, 0.0, 150.0))});
+                        std::clamp(132.0 * afterglow, 0.0, 132.0))});
       SDL_RenderFillCircleAA(
           sdl_renderer, center_x, center_y, halo_radius,
-          SDL_Color{178, 52, 18,
+          SDL_Color{172, 50, 16,
                     static_cast<Uint8>(
-                        std::clamp(212.0 * fire_fade, 0.0, 212.0))});
+                        std::clamp(200.0 * fire_fade, 0.0, 200.0))});
       SDL_RenderFillCircleAA(
           sdl_renderer, center_x, center_y, outer_radius,
-          SDL_Color{232, 86, 20,
+          SDL_Color{226, 84, 20,
                     static_cast<Uint8>(
-                        std::clamp(228.0 * fire_fade, 0.0, 228.0))});
+                        std::clamp(220.0 * fire_fade, 0.0, 220.0))});
       SDL_RenderFillCircleAA(
           sdl_renderer, center_x, center_y, orange_radius,
-          SDL_Color{255, 138, 34,
+          SDL_Color{255, 130, 32,
                     static_cast<Uint8>(
-                        std::clamp(238.0 * fire_fade, 0.0, 238.0))});
+                        std::clamp(232.0 * fire_fade, 0.0, 232.0))});
+
+      SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+      SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+      if (sdl_solid_disc_texture != nullptr) {
+        SDL_SetTextureBlendMode(sdl_solid_disc_texture, SDL_BLENDMODE_ADD);
+      }
       SDL_RenderFillCircleAA(
           sdl_renderer, center_x, center_y, mid_radius,
-          SDL_Color{255, 176, 42,
+          SDL_Color{255, 168, 40,
                     static_cast<Uint8>(
-                        std::clamp(246.0 * fire_fade, 0.0, 246.0))});
+                        std::clamp(220.0 * fire_fade, 0.0, 220.0))});
       SDL_RenderFillCircleAA(
           sdl_renderer, center_x, center_y, yellow_radius,
-          SDL_Color{255, 228, 102,
+          SDL_Color{255, 218, 100,
                     static_cast<Uint8>(
-                        std::clamp(252.0 * fire_fade, 0.0, 252.0))});
+                        std::clamp(232.0 * fire_fade, 0.0, 232.0))});
       SDL_RenderFillCircleAA(
           sdl_renderer, center_x, center_y, core_radius,
-          SDL_Color{255, 245, 184,
+          SDL_Color{255, 240, 180,
                     static_cast<Uint8>(
-                        std::clamp(255.0 * fire_fade, 0.0, 255.0))});
+                        std::clamp(236.0 * fire_fade, 0.0, 236.0))});
       SDL_RenderFillCircleAA(
           sdl_renderer, center_x, center_y, white_radius,
           SDL_Color{255, 255, 248,
                     static_cast<Uint8>(
-                        std::clamp(255.0 * fire_fade, 0.0, 255.0))});
+                        std::clamp(240.0 * fire_fade, 0.0, 240.0))});
+      if (sdl_solid_disc_texture != nullptr) {
+        SDL_SetTextureBlendMode(sdl_solid_disc_texture, SDL_BLENDMODE_BLEND);
+      }
+      SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+
+      const int tongue_count = 14;
+      const Uint8 tongue_alpha = static_cast<Uint8>(
+          std::clamp(190.0 * fire_fade, 0.0, 190.0));
+      if (tongue_alpha > 0 && size_envelope > 0.05 &&
+          sdl_solid_disc_texture != nullptr) {
+        std::mt19937 tongue_rng(
+            static_cast<Uint32>(effect.started_ticks) ^ 0xA5C3F00Du);
+        std::uniform_real_distribution<double> jitter_dist(-0.10, 0.10);
+        std::uniform_real_distribution<double> radius_dist(0.62, 1.05);
+        std::uniform_real_distribution<double> size_dist(0.18, 0.34);
+        for (int tongue = 0; tongue < tongue_count; ++tongue) {
+          const double angle = tongue * (2.0 * kLogoPi / tongue_count) +
+                               jitter_dist(tongue_rng) +
+                               fire_progress * 0.6;
+          const double dist =
+              outer_radius * radius_dist(tongue_rng) * (0.55 + 0.45 * bloom);
+          const int tx = center_x + static_cast<int>(std::lround(std::cos(angle) * dist));
+          const int ty = center_y + static_cast<int>(std::lround(std::sin(angle) * dist));
+          const double tongue_size =
+              outer_radius * size_dist(tongue_rng) * std::max(0.2, size_envelope);
+          SDL_RenderFillCircleAA(
+              sdl_renderer, tx, ty, std::max(3.0, tongue_size),
+              SDL_Color{255, 152, 44, tongue_alpha});
+          SDL_RenderFillCircleAA(
+              sdl_renderer, tx, ty, std::max(2.0, tongue_size * 0.55),
+              SDL_Color{255, 214, 110,
+                        static_cast<Uint8>(std::clamp(
+                            tongue_alpha * 0.75, 0.0, 255.0))});
+        }
+      }
 
       const int flare_count = 34;
       for (int flare = 0; flare < flare_count; ++flare) {
@@ -8223,7 +8306,7 @@ void Renderer::draweffects() {
                     peak_radius * (0.22 + 0.18 * bloom))));
         const int outer = std::max(
             inner + 12, static_cast<int>(std::lround(
-                            peak_radius * (1.04 + 0.58 * surge))));
+                            peak_radius * (0.62 + 0.32 * rise) * size_envelope)));
         SDL_Color flare_color{255, 188, 70,
                               static_cast<Uint8>(
                                   std::clamp(214.0 * fire_fade, 0.0, 214.0))};
@@ -9851,50 +9934,18 @@ void Renderer::SDL_RenderFillEllipseAA(SDL_Renderer *renderer, double x,
                                        double y, double radius_x,
                                        double radius_y, SDL_Color color) {
   if (renderer == nullptr || radius_x <= 0.0 || radius_y <= 0.0 ||
-      color.a == 0) {
+      color.a == 0 || sdl_solid_disc_texture == nullptr) {
     return;
   }
 
-  constexpr int kSampleGrid = 2;
-  constexpr double kSampleStep = 1.0 / static_cast<double>(kSampleGrid);
-  constexpr double kSampleStart = -0.5 + kSampleStep * 0.5;
-  constexpr double kTotalSamples =
-      static_cast<double>(kSampleGrid * kSampleGrid);
-
-  const int min_x = static_cast<int>(std::floor(x - radius_x - 1.0));
-  const int max_x = static_cast<int>(std::ceil(x + radius_x + 1.0));
-  const int min_y = static_cast<int>(std::floor(y - radius_y - 1.0));
-  const int max_y = static_cast<int>(std::ceil(y + radius_y + 1.0));
-
-  for (int py = min_y; py <= max_y; ++py) {
-    for (int px = min_x; px <= max_x; ++px) {
-      int covered_samples = 0;
-      for (int sy = 0; sy < kSampleGrid; ++sy) {
-        const double sample_y =
-            static_cast<double>(py) - y + kSampleStart + sy * kSampleStep;
-        const double normalized_y = sample_y / radius_y;
-        for (int sx = 0; sx < kSampleGrid; ++sx) {
-          const double sample_x =
-              static_cast<double>(px) - x + kSampleStart + sx * kSampleStep;
-          const double normalized_x = sample_x / radius_x;
-          if (normalized_x * normalized_x + normalized_y * normalized_y <=
-              1.0) {
-            ++covered_samples;
-          }
-        }
-      }
-
-      if (covered_samples == 0) {
-        continue;
-      }
-
-      const Uint8 alpha = static_cast<Uint8>(std::lround(
-          static_cast<double>(color.a) *
-          (static_cast<double>(covered_samples) / kTotalSamples)));
-      SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, alpha);
-      SDL_RenderDrawPoint(renderer, px, py);
-    }
-  }
+  SDL_SetTextureColorMod(sdl_solid_disc_texture, color.r, color.g, color.b);
+  SDL_SetTextureAlphaMod(sdl_solid_disc_texture, color.a);
+  const SDL_FRect dst{
+      static_cast<float>(x - radius_x),
+      static_cast<float>(y - radius_y),
+      static_cast<float>(radius_x * 2.0),
+      static_cast<float>(radius_y * 2.0)};
+  SDL_RenderCopyF(renderer, sdl_solid_disc_texture, nullptr, &dst);
 }
 
 PixelCoord Renderer::getPixelCoord(MapCoord in_coord, int delta_x,
@@ -9982,6 +10033,82 @@ void Renderer::SDL_RenderDrawAALine(SDL_Renderer *renderer, double x0,
       plot(x, iy + 1, fpart(intery));
       intery += gradient;
     }
+  }
+}
+
+void Renderer::createSoftPuffTexture() {
+  if (sdl_renderer == nullptr) {
+    return;
+  }
+  if (sdl_soft_puff_texture != nullptr) {
+    SDL_DestroyTexture(sdl_soft_puff_texture);
+    sdl_soft_puff_texture = nullptr;
+  }
+  if (sdl_solid_disc_texture != nullptr) {
+    SDL_DestroyTexture(sdl_solid_disc_texture);
+    sdl_solid_disc_texture = nullptr;
+  }
+
+  auto build_disc_texture = [&](int size, bool soft_falloff) -> SDL_Texture * {
+    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormat(
+        0, size, size, 32, SDL_PIXELFORMAT_RGBA32);
+    if (surface == nullptr) {
+      return nullptr;
+    }
+    SDL_LockSurface(surface);
+    Uint8 *pixels = static_cast<Uint8 *>(surface->pixels);
+    const int pitch = surface->pitch;
+    const double center = (size - 1) * 0.5;
+    const double max_radius = center;
+    for (int y = 0; y < size; ++y) {
+      Uint8 *row = pixels + y * pitch;
+      for (int x = 0; x < size; ++x) {
+        const double dx = x - center;
+        const double dy = y - center;
+        const double dist = std::sqrt(dx * dx + dy * dy) / max_radius;
+        double alpha_norm = 0.0;
+        if (soft_falloff) {
+          if (dist < 1.0) {
+            const double t = 1.0 - dist;
+            alpha_norm = t * t * (3.0 - 2.0 * t);
+          }
+        } else {
+          const double edge_band = 2.0 / max_radius;
+          if (dist <= 1.0 - edge_band) {
+            alpha_norm = 1.0;
+          } else if (dist < 1.0) {
+            alpha_norm = (1.0 - dist) / edge_band;
+          }
+        }
+        const Uint8 alpha = static_cast<Uint8>(
+            std::clamp(alpha_norm * 255.0, 0.0, 255.0));
+        row[x * 4 + 0] = 255;
+        row[x * 4 + 1] = 255;
+        row[x * 4 + 2] = 255;
+        row[x * 4 + 3] = alpha;
+      }
+    }
+    SDL_UnlockSurface(surface);
+    SDL_Texture *texture =
+        SDL_CreateTextureFromSurface(sdl_renderer, surface);
+    SDL_FreeSurface(surface);
+    if (texture != nullptr) {
+      SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+      SDL_SetTextureScaleMode(texture, SDL_ScaleModeLinear);
+    }
+    return texture;
+  };
+
+  constexpr int kPuffTextureSize = 64;
+  sdl_soft_puff_texture = build_disc_texture(kPuffTextureSize, true);
+  if (sdl_soft_puff_texture != nullptr) {
+    sdl_soft_puff_texture_size = kPuffTextureSize;
+  }
+
+  constexpr int kDiscTextureSize = 256;
+  sdl_solid_disc_texture = build_disc_texture(kDiscTextureSize, false);
+  if (sdl_solid_disc_texture != nullptr) {
+    sdl_solid_disc_texture_size = kDiscTextureSize;
   }
 }
 

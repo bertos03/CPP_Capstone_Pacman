@@ -237,6 +237,7 @@ enum class ExplosionSmokePuffKind {
 
 struct ExplosionSmokePuff {
   SDL_FPoint world_position{0.0f, 0.0f};
+  SDL_FPoint velocity_cells_per_sec{0.0f, 0.0f};
   float vertical_offset_cells = 0.0f;
   Uint32 spawned_ticks = 0;
   Uint32 shape_seed = 0;

@@ -254,6 +254,7 @@ private:
   void beginSupersampledFrame();
   void endSupersampledFrameAndPresent();
   void recreateSupersampleTarget();
+  void createSoftPuffTexture();
 
   SDL_Texture *sdl_supersample_target = nullptr;
   int supersample_factor = 1;
@@ -329,6 +330,10 @@ private:
   SDL_Point sdl_slime_overlay_size;
   SDL_Texture *sdl_slime_splash_texture;
   SDL_Point sdl_slime_splash_size;
+  SDL_Texture *sdl_soft_puff_texture = nullptr;
+  int sdl_soft_puff_texture_size = 0;
+  SDL_Texture *sdl_solid_disc_texture = nullptr;
+  int sdl_solid_disc_texture_size = 0;
 
   TTF_Font *sdl_font_hud;
   TTF_Font *sdl_font_menu;
