@@ -2041,16 +2041,17 @@ void Game::TryPlaceDynamite(Uint32 now) {
     return;
   }
 
+  const MapCoord placement_coord = pacman->map_coord;
   for (const auto &placed_dynamite : placed_dynamites) {
-    if (SameCoord(placed_dynamite.coord, pacman->map_coord)) {
+    if (SameCoord(placed_dynamite.coord, placement_coord)) {
       return;
     }
   }
 
   placed_dynamites.push_back(
-      {pacman->map_coord, now, now + DYNAMITE_COUNTDOWN_MS,
-       static_cast<int>((now % 997) + pacman->map_coord.u * 23 +
-                        pacman->map_coord.v * 29 + dynamite_inventory * 17)});
+      {placement_coord, now, now + DYNAMITE_COUNTDOWN_MS,
+       static_cast<int>((now % 997) + placement_coord.u * 23 +
+                        placement_coord.v * 29 + dynamite_inventory * 17)});
   dynamite_inventory--;
 #ifdef AUDIO
   audio->PlayDynamiteIgnite();
