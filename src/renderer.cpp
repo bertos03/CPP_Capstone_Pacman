@@ -5832,29 +5832,108 @@ void Renderer::drawbiohazardbeam() {
 
 void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
                                 double pulse_clock) {
-  const double pulse = 0.72 + 0.28 * std::sin(pulse_clock);
-  const int outer_radius =
-      std::max(base_radius, static_cast<int>(base_radius * (1.08 + 0.16 * pulse)));
-  const int inner_radius =
-      std::max(base_radius - 3, static_cast<int>(base_radius * (0.82 + 0.08 * pulse)));
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
 
-  SDL_SetRenderDrawColor(sdl_renderer, 32, 126, 255, 58);
-  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, outer_radius);
-  SDL_SetRenderDrawColor(sdl_renderer, 86, 196, 255, 78);
-  SDL_RenderFillCircle(sdl_renderer, center_x, center_y, inner_radius);
-  SDL_SetRenderDrawColor(sdl_renderer, 200, 245, 255, 165);
-  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y, outer_radius);
+  const double slow_pulse = 0.5 + 0.5 * std::sin(pulse_clock * 0.6);
+  const int sphere_radius =
+      base_radius + std::max(2, base_radius / 6) +
+      static_cast<int>(std::round(slow_pulse * std::max(1, base_radius / 14)));
 
-  for (int orb = 0; orb < 4; orb++) {
-    const double angle = pulse_clock * 0.85 + orb * (2.0 * 3.1415926535 / 4.0);
-    const int orb_radius =
-        std::max(2, static_cast<int>(element_size * (0.05 + 0.02 * pulse)));
-    const int orbit_radius = std::max(outer_radius - 2, inner_radius);
-    const int orb_x = center_x + static_cast<int>(std::cos(angle) * orbit_radius);
-    const int orb_y = center_y + static_cast<int>(std::sin(angle) * orbit_radius);
-    SDL_SetRenderDrawColor(sdl_renderer, 214, 250, 255, 180);
-    SDL_RenderFillCircle(sdl_renderer, orb_x, orb_y, orb_radius);
+  for (int ring = 0; ring < 5; ++ring) {
+    const int ring_radius = sphere_radius + ring + 1;
+    const Uint8 alpha = static_cast<Uint8>(
+        std::clamp(58.0 - ring * 11.0, 0.0, 80.0));
+    SDL_SetRenderDrawColor(sdl_renderer, 96, 178, 255, alpha);
+    SDL_RenderDrawCircle(sdl_renderer, center_x, center_y, ring_radius);
   }
+
+  const int gradient_steps = 9;
+  for (int step = 0; step < gradient_steps; ++step) {
+    const double t = static_cast<double>(step) /
+                     static_cast<double>(gradient_steps - 1);
+    const int r = static_cast<int>(sphere_radius * (1.0 - t * 0.86));
+    if (r < 1) {
+      break;
+    }
+    const int offset_x =
+        -static_cast<int>(std::round(t * sphere_radius * 0.22));
+    const int offset_y =
+        -static_cast<int>(std::round(t * sphere_radius * 0.22));
+    const Uint8 red = static_cast<Uint8>(std::clamp(18.0 + t * 158.0, 0.0, 255.0));
+    const Uint8 green = static_cast<Uint8>(std::clamp(82.0 + t * 152.0, 0.0, 255.0));
+    const Uint8 blue = static_cast<Uint8>(std::clamp(210.0 + t * 45.0, 0.0, 255.0));
+    const Uint8 alpha = static_cast<Uint8>(std::clamp(34.0 + t * 26.0, 0.0, 100.0));
+    SDL_SetRenderDrawColor(sdl_renderer, red, green, blue, alpha);
+    SDL_RenderFillCircle(sdl_renderer, center_x + offset_x, center_y + offset_y, r);
+  }
+
+  const Uint8 rim_alpha = static_cast<Uint8>(
+      std::clamp(150.0 + 70.0 * slow_pulse, 0.0, 230.0));
+  SDL_SetRenderDrawColor(sdl_renderer, 178, 226, 255, rim_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y, sphere_radius);
+  SDL_SetRenderDrawColor(sdl_renderer, 132, 198, 255, rim_alpha / 2);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(1, sphere_radius - 1));
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y, sphere_radius + 1);
+
+  const int reflection_offset_y = static_cast<int>(sphere_radius * 0.62);
+  const int reflection_radius = std::max(1, sphere_radius - 2);
+  SDL_SetRenderDrawColor(sdl_renderer, 168, 220, 255, 100);
+  for (int arc = 0; arc < 6; ++arc) {
+    const double arc_angle = (3.14159265358979323846 * 0.5) +
+                             (arc - 3) * (3.14159265358979323846 / 24.0);
+    const int rx = center_x +
+                   static_cast<int>(std::round(std::cos(arc_angle) * reflection_radius));
+    const int ry = center_y +
+                   static_cast<int>(std::round(std::sin(arc_angle) * reflection_radius * 0.92)) +
+                   static_cast<int>(reflection_offset_y * 0.0);
+    SDL_RenderDrawPoint(sdl_renderer, rx, ry);
+    SDL_RenderDrawPoint(sdl_renderer, rx, ry + 1);
+  }
+
+  const int spec_cx = center_x -
+                      static_cast<int>(std::round(sphere_radius * 0.40));
+  const int spec_cy = center_y -
+                      static_cast<int>(std::round(sphere_radius * 0.45));
+  const int spec_outer = std::max(2, sphere_radius / 4);
+  const int spec_mid = std::max(1, sphere_radius / 6);
+  const int spec_core = std::max(1, sphere_radius / 9);
+  SDL_SetRenderDrawColor(sdl_renderer, 200, 238, 255, 110);
+  SDL_RenderFillCircle(sdl_renderer, spec_cx, spec_cy, spec_outer);
+  SDL_SetRenderDrawColor(sdl_renderer, 224, 246, 255, 175);
+  SDL_RenderFillCircle(sdl_renderer, spec_cx, spec_cy, spec_mid);
+  SDL_SetRenderDrawColor(sdl_renderer, 248, 254, 255, 230);
+  SDL_RenderFillCircle(sdl_renderer, spec_cx + 1, spec_cy + 1, spec_core);
+
+  const int spec2_cx = center_x +
+                       static_cast<int>(std::round(sphere_radius * 0.22));
+  const int spec2_cy = center_y +
+                       static_cast<int>(std::round(sphere_radius * 0.30));
+  SDL_SetRenderDrawColor(sdl_renderer, 196, 232, 255, 70);
+  SDL_RenderFillCircle(sdl_renderer, spec2_cx, spec2_cy,
+                       std::max(1, sphere_radius / 10));
+
+  const double shimmer_phase = pulse_clock * 0.45;
+  const int shimmer_band_count = 18;
+  for (int i = 0; i < shimmer_band_count; ++i) {
+    const double a = shimmer_phase +
+                     i * (2.0 * 3.14159265358979323846 / shimmer_band_count);
+    const double radial_factor =
+        0.92 + 0.04 * std::sin(a * 3.0 + pulse_clock * 0.8);
+    const int rx = center_x +
+                   static_cast<int>(std::round(std::cos(a) * sphere_radius * radial_factor));
+    const int ry = center_y +
+                   static_cast<int>(std::round(std::sin(a) * sphere_radius * radial_factor));
+    const Uint8 alpha = static_cast<Uint8>(
+        std::clamp(70.0 + 80.0 * (0.5 + 0.5 * std::sin(a * 2.0 + pulse_clock)),
+                   0.0, 200.0));
+    SDL_SetRenderDrawColor(sdl_renderer, 196, 234, 255, alpha);
+    SDL_RenderDrawPoint(sdl_renderer, rx, ry);
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
 void Renderer::drawElectrifiedMonsterAura(const SDL_Rect &monster_rect,
@@ -8843,48 +8922,78 @@ void Renderer::drawWallVegetation(const SDL_Rect &wall_rect, Uint8 shade,
       const float rect_bottom =
           static_cast<float>(wall_rect.y + wall_rect.h - margin);
 
-      std::vector<SDL_FPoint> points;
-      points.reserve(static_cast<size_t>(segment_count) + 1);
-      const double start_selector = HashUnit(vine_seed + 7);
-      SDL_FPoint current;
-      if (vertical_surface || start_selector < 0.60) {
-        current = SDL_FPoint{
-            rect_left + (rect_right - rect_left) *
-                            static_cast<float>(HashUnit(vine_seed + 11)),
-            rect_top + (rect_bottom - rect_top) *
-                           static_cast<float>(0.02 + 0.10 * HashUnit(vine_seed + 13))};
-      } else if (start_selector < 0.80) {
-        current = SDL_FPoint{
-            rect_left,
-            rect_top + (rect_bottom - rect_top) *
-                           static_cast<float>(HashUnit(vine_seed + 17))};
-      } else {
-        current = SDL_FPoint{
-            rect_right,
-            rect_top + (rect_bottom - rect_top) *
-                            static_cast<float>(HashUnit(vine_seed + 19))};
-      }
-      points.push_back(current);
+      auto build_path = [&](SDL_FPoint start, int seg_count, int seg_seed_base,
+                            float initial_drift_factor) {
+        std::vector<SDL_FPoint> pts;
+        pts.reserve(static_cast<size_t>(seg_count) + 1);
+        pts.push_back(start);
+        SDL_FPoint cur = start;
+        for (int i = 0; i < seg_count; ++i) {
+          const int s = seg_seed_base + i * 31;
+          const float step_y =
+              -static_cast<float>(wall_rect.h) *
+              (WALL_VINE_STEP_MIN_FACTOR +
+               static_cast<float>(HashUnit(s + 23)) *
+                   (WALL_VINE_STEP_MAX_FACTOR - WALL_VINE_STEP_MIN_FACTOR)) *
+              (vertical_surface ? 1.0f : 0.85f);
+          const float drift_bias =
+              (i == 0) ? initial_drift_factor *
+                             static_cast<float>(wall_rect.w)
+                       : 0.0f;
+          const float step_x =
+              static_cast<float>(wall_rect.w) * WALL_VINE_DRIFT_FACTOR *
+                  static_cast<float>(HashSigned(s + 29)) *
+                  (vertical_surface ? 1.0f : 1.18f) +
+              drift_bias;
+          cur.x = std::clamp(cur.x + step_x, rect_left, rect_right);
+          cur.y = std::clamp(
+              cur.y + step_y +
+                  static_cast<float>(wall_rect.h) * 0.03f *
+                      static_cast<float>(HashSigned(s + 37)),
+              rect_top, rect_bottom);
+          pts.push_back(cur);
+        }
+        return pts;
+      };
 
-      for (int segment = 0; segment < segment_count; ++segment) {
-        const int segment_seed = vine_seed + segment * 31;
-        const float step_y =
-            static_cast<float>(wall_rect.h) *
-            (WALL_VINE_STEP_MIN_FACTOR +
-             static_cast<float>(HashUnit(segment_seed + 23)) *
-                 (WALL_VINE_STEP_MAX_FACTOR - WALL_VINE_STEP_MIN_FACTOR)) *
-            (vertical_surface ? 1.0f : 0.70f);
-        const float step_x =
-            static_cast<float>(wall_rect.w) * WALL_VINE_DRIFT_FACTOR *
-            static_cast<float>(HashSigned(segment_seed + 29)) *
-            (vertical_surface ? 1.0f : 1.18f);
-        current.x = std::clamp(current.x + step_x, rect_left, rect_right);
-        current.y = std::clamp(
-            current.y + step_y +
-                static_cast<float>(wall_rect.h) * 0.04f *
-                    static_cast<float>(HashSigned(segment_seed + 37)),
-            rect_top, rect_bottom);
-        points.push_back(current);
+      const float main_start_x =
+          rect_left + (rect_right - rect_left) *
+                          (0.12f + 0.76f * static_cast<float>(
+                                              HashUnit(vine_seed + 11)));
+      const SDL_FPoint main_start{main_start_x, rect_bottom};
+
+      struct VinePath {
+        std::vector<SDL_FPoint> points;
+        int thickness;
+      };
+      std::vector<VinePath> paths;
+      paths.push_back({build_path(main_start, segment_count, vine_seed, 0.0f),
+                       thickness_px});
+
+      if (HashUnit(vine_seed + 91) < WALL_VINE_BRANCH_CHANCE &&
+          paths[0].points.size() >= 3) {
+        const int branch_count = (HashUnit(vine_seed + 93) < 0.50) ? 1 : 2;
+        for (int b = 0; b < branch_count; ++b) {
+          const int branch_seed = vine_seed + b * 113 + 401;
+          const auto &main_pts = paths[0].points;
+          const int fork_idx =
+              1 + static_cast<int>(std::abs(branch_seed) %
+                                   static_cast<int>(main_pts.size() - 2));
+          const int branch_segments = random_count(
+              branch_seed + 7, WALL_VINE_BRANCH_MIN_SEGMENTS,
+              WALL_VINE_BRANCH_MAX_SEGMENTS);
+          const float side =
+              (HashUnit(branch_seed + 13) < 0.5) ? -1.0f : 1.0f;
+          const float drift = side * WALL_VINE_BRANCH_ANGLE_SPREAD *
+                              static_cast<float>(
+                                  0.06 + 0.10 * HashUnit(branch_seed + 17));
+          const int branch_thickness = std::max(
+              1, static_cast<int>(std::lround(
+                     thickness_px * WALL_VINE_BRANCH_THICKNESS_FACTOR)));
+          paths.push_back({build_path(main_pts[fork_idx], branch_segments,
+                                      branch_seed + 200, drift),
+                           branch_thickness});
+        }
       }
 
       auto draw_vine_disc = [&](float x, float y, int radius,
@@ -8893,6 +9002,9 @@ void Renderer::drawWallVegetation(const SDL_Rect &wall_rect, Uint8 shade,
                                color);
       };
 
+      for (const auto &path : paths) {
+        const std::vector<SDL_FPoint> &points = path.points;
+        const int thickness_px = path.thickness;
       for (size_t point_index = 1; point_index < points.size(); ++point_index) {
         const SDL_FPoint &from = points[point_index - 1];
         const SDL_FPoint &to = points[point_index];
@@ -9009,6 +9121,7 @@ void Renderer::drawWallVegetation(const SDL_Rect &wall_rect, Uint8 shade,
                                                   255.0))));
           }
         }
+      }
       }
     }
   }

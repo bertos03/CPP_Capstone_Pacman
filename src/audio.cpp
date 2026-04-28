@@ -1315,57 +1315,39 @@ Mix_Chunk *Audio::CreatePlasticExplosiveWallBreakChunk() {
 }
 
 Mix_Chunk *Audio::CreateInvulnerabilityLoopChunk() {
-  struct Note {
-    double frequency;
-    int duration_ms;
-    double volume;
-  };
-
-  const std::vector<Note> melody{
-      {392.0, 160, 0.11}, {523.25, 160, 0.11}, {659.25, 160, 0.11},
-      {783.99, 160, 0.12}, {659.25, 160, 0.11}, {523.25, 160, 0.11},
-      {880.0, 160, 0.12}, {783.99, 220, 0.12}};
+  const double duration_seconds = 4.0;
+  const int total_samples =
+      static_cast<int>(duration_seconds * kSampleRate);
   std::vector<Sint16> pcm_samples;
+  pcm_samples.reserve(static_cast<size_t>(total_samples) * 2);
 
-  double time_offset = 0.0;
-  for (const auto &note : melody) {
-    const int sample_count = std::max(1, note.duration_ms * kSampleRate / 1000);
-    const int attack_samples = std::max(1, sample_count / 20);
-    const int release_samples = std::max(1, sample_count / 8);
+  const double f_root = 110.0;
+  const double f_fifth = 165.0;
+  const double f_octave = 220.0;
+  const double f_high = 330.0;
+  const double f_air = 440.0;
+  const double lfo_slow = 0.25;
+  const double lfo_med = 0.50;
+  const double lfo_shimmer = 1.0;
 
-    for (int i = 0; i < sample_count; i++) {
-      double envelope = 1.0;
-      if (i < attack_samples) {
-        envelope = static_cast<double>(i) / attack_samples;
-      } else if (i > sample_count - release_samples) {
-        envelope =
-            static_cast<double>(sample_count - i) / std::max(1, release_samples);
-      }
-      envelope = std::clamp(envelope, 0.0, 1.0);
+  for (int i = 0; i < total_samples; ++i) {
+    const double t = static_cast<double>(i) / kSampleRate;
+    const double slow = 0.78 + 0.22 * std::sin(2.0 * kPi * lfo_slow * t);
+    const double med = std::sin(2.0 * kPi * lfo_med * t);
+    const double shimmer = std::sin(2.0 * kPi * lfo_shimmer * t);
 
-      const double time = static_cast<double>(i) / kSampleRate;
-      const double absolute_time = time_offset + time;
-      const double square =
-          (std::sin(2.0 * kPi * note.frequency * time) >= 0.0) ? 1.0 : -1.0;
-      const double octave =
-          (std::sin(2.0 * kPi * note.frequency * 2.0 * time + 0.4) >= 0.0)
-              ? 1.0
-              : -1.0;
-      const double bass =
-          std::sin(2.0 * kPi * (note.frequency / 2.0) * time + 0.2);
-      const double shimmer =
-          0.74 + 0.26 * std::sin(2.0 * kPi * 6.0 * absolute_time);
-      double sample_value =
-          (0.58 * square + 0.26 * octave + 0.20 * bass) * shimmer *
-          envelope * note.volume;
+    double sample =
+        0.46 * std::sin(2.0 * kPi * f_root * t) +
+        0.30 * std::sin(2.0 * kPi * f_fifth * t + 0.30 * med) +
+        0.22 * std::sin(2.0 * kPi * f_octave * t) +
+        0.14 * std::sin(2.0 * kPi * f_high * t + 0.45 * med) +
+        0.07 * std::sin(2.0 * kPi * f_air * t + 0.6 * shimmer);
 
-      sample_value = std::clamp(sample_value, -1.0, 1.0);
-      const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
-      pcm_samples.push_back(pcm);
-      pcm_samples.push_back(pcm);
-    }
-
-    time_offset += static_cast<double>(note.duration_ms) / 1000.0;
+    sample *= 0.16 * slow;
+    sample = std::clamp(sample, -1.0, 1.0);
+    const Sint16 pcm = static_cast<Sint16>(sample * 32767.0);
+    pcm_samples.push_back(pcm);
+    pcm_samples.push_back(pcm);
   }
 
   std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
