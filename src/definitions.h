@@ -533,6 +533,125 @@ inline constexpr float NUCLEAR_MUSHROOM_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.09f;
 inline constexpr float NUCLEAR_MUSHROOM_SMOKE_WOBBLE_FREQUENCY_HZ = 0.84f;
 inline constexpr float NUCLEAR_MUSHROOM_SMOKE_VERTICAL_RISE_CELLS = 4.6f;
 
+// === Atomexplosion Variante B (Lichtblitz, Sonnen-Feuerball, abrollender
+// Rauchring + Rauchteppich, sich aufdrehende Pilzwolke mit Feuersäule) ===
+inline constexpr Uint32 NUCLEAR_B_EXPLOSION_TOTAL_DURATION_MS = 7800;
+inline constexpr Uint32 NUCLEAR_B_FLASH_DURATION_MS = 720;
+inline constexpr Uint8 NUCLEAR_B_FLASH_PEAK_ALPHA = 245;
+inline constexpr SDL_Color NUCLEAR_B_FLASH_COLOR{222, 232, 255, 200};
+
+inline constexpr Uint32 NUCLEAR_B_EXPLOSION_FIREBALL_BURN_MS = 820;
+inline constexpr Uint32 NUCLEAR_B_EXPLOSION_FIREBALL_COLLAPSE_MS = 720;
+inline constexpr Uint32 NUCLEAR_B_EXPLOSION_FIREBALL_DURATION_MS =
+    NUCLEAR_B_EXPLOSION_FIREBALL_BURN_MS +
+    NUCLEAR_B_EXPLOSION_FIREBALL_COLLAPSE_MS;
+inline constexpr float NUCLEAR_B_FIREBALL_START_RADIUS_CELLS = 1.4f;
+inline constexpr float NUCLEAR_B_FIREBALL_PEAK_RADIUS_CELLS = 6.6f;
+inline constexpr float NUCLEAR_B_FIREBALL_TEXTURE_OFFSET_FACTOR = 0.55f;
+inline constexpr float NUCLEAR_B_FIREBALL_TEXTURE_BLOB_MIN_FACTOR = 0.16f;
+inline constexpr float NUCLEAR_B_FIREBALL_TEXTURE_BLOB_MAX_FACTOR = 0.46f;
+inline constexpr float NUCLEAR_B_FIREBALL_WOBBLE_AMPLITUDE_CELLS = 0.075f;
+inline constexpr float NUCLEAR_B_FIREBALL_WOBBLE_FREQUENCY_HZ = 1.6f;
+inline constexpr int NUCLEAR_B_FIREBALL_OUTER_BLOB_COUNT = 12;
+inline constexpr int NUCLEAR_B_FIREBALL_MID_BLOB_COUNT = 26;
+inline constexpr int NUCLEAR_B_FIREBALL_CORE_BLOB_COUNT = 18;
+inline constexpr int NUCLEAR_B_FIREBALL_FLAME_TONGUE_COUNT = 132;
+
+// Schnell abrollender Rauchring
+inline constexpr Uint32 NUCLEAR_B_SMOKE_RING_EXPANSION_MS = 1300;
+inline constexpr Uint32 NUCLEAR_B_SMOKE_RING_SPAWN_INTERVAL_MS = 32;
+inline constexpr int NUCLEAR_B_SMOKE_RING_PUFFS_PER_WAVE = 56;
+inline constexpr float NUCLEAR_B_SMOKE_RING_FINAL_RADIUS_CELLS = 13.5f;
+inline constexpr float NUCLEAR_B_SMOKE_RING_THICKNESS_CELLS = 0.55f;
+inline constexpr float NUCLEAR_B_SMOKE_RING_ROLL_SPEED_RAD_PER_SEC = 7.2f;
+
+inline constexpr Uint32 NUCLEAR_B_RING_SMOKE_LIFETIME_MS = 1700;
+inline constexpr float NUCLEAR_B_RING_SMOKE_INITIAL_RADIUS_CELLS = 0.34f;
+inline constexpr float NUCLEAR_B_RING_SMOKE_FINAL_RADIUS_CELLS = 1.05f;
+inline constexpr Uint8 NUCLEAR_B_RING_SMOKE_INITIAL_ALPHA = 178;
+inline constexpr SDL_Color NUCLEAR_B_RING_SMOKE_COLOR{96, 90, 86, 255};
+inline constexpr SDL_Color NUCLEAR_B_RING_SMOKE_HIGHLIGHT_COLOR{172, 162, 152,
+                                                                255};
+inline constexpr int NUCLEAR_B_RING_SMOKE_BLOB_MIN_COUNT = 7;
+inline constexpr int NUCLEAR_B_RING_SMOKE_BLOB_MAX_COUNT = 12;
+inline constexpr float NUCLEAR_B_RING_SMOKE_BLOB_OFFSET_FACTOR = 1.12f;
+inline constexpr float NUCLEAR_B_RING_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.42f;
+inline constexpr float NUCLEAR_B_RING_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.18f;
+inline constexpr float NUCLEAR_B_RING_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.07f;
+inline constexpr float NUCLEAR_B_RING_SMOKE_WOBBLE_FREQUENCY_HZ = 1.30f;
+inline constexpr float NUCLEAR_B_RING_SMOKE_VERTICAL_RISE_CELLS = 0.18f;
+
+// Rauchteppich, der hinter dem Ring stehen bleibt
+inline constexpr Uint32 NUCLEAR_B_TRAIL_SPAWN_INTERVAL_MS = 48;
+inline constexpr int NUCLEAR_B_TRAIL_PUFFS_PER_WAVE = 18;
+inline constexpr Uint32 NUCLEAR_B_TRAIL_SMOKE_LIFETIME_MS = 3800;
+inline constexpr float NUCLEAR_B_TRAIL_SMOKE_INITIAL_RADIUS_CELLS = 0.45f;
+inline constexpr float NUCLEAR_B_TRAIL_SMOKE_FINAL_RADIUS_CELLS = 0.90f;
+inline constexpr Uint8 NUCLEAR_B_TRAIL_SMOKE_INITIAL_ALPHA = 96;
+inline constexpr SDL_Color NUCLEAR_B_TRAIL_SMOKE_COLOR{82, 78, 74, 255};
+inline constexpr SDL_Color NUCLEAR_B_TRAIL_SMOKE_HIGHLIGHT_COLOR{144, 138, 130,
+                                                                 255};
+inline constexpr int NUCLEAR_B_TRAIL_SMOKE_BLOB_MIN_COUNT = 5;
+inline constexpr int NUCLEAR_B_TRAIL_SMOKE_BLOB_MAX_COUNT = 9;
+inline constexpr float NUCLEAR_B_TRAIL_SMOKE_BLOB_OFFSET_FACTOR = 0.95f;
+inline constexpr float NUCLEAR_B_TRAIL_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.42f;
+inline constexpr float NUCLEAR_B_TRAIL_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.10f;
+inline constexpr float NUCLEAR_B_TRAIL_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.04f;
+inline constexpr float NUCLEAR_B_TRAIL_SMOKE_WOBBLE_FREQUENCY_HZ = 0.65f;
+
+// Rauchsäule
+inline constexpr Uint32 NUCLEAR_B_STEM_BUILD_MS = 2400;
+inline constexpr Uint32 NUCLEAR_B_STEM_SPAWN_INTERVAL_MS = 42;
+inline constexpr int NUCLEAR_B_STEM_PUFFS_PER_SPAWN = 4;
+inline constexpr float NUCLEAR_B_STEM_HEIGHT_CELLS = 13.5f;
+inline constexpr float NUCLEAR_B_STEM_RADIUS_CELLS = 0.78f;
+inline constexpr float NUCLEAR_B_STEM_RISE_SPEED_CELLS_PER_SEC = 6.5f;
+
+inline constexpr Uint32 NUCLEAR_B_STEM_SMOKE_LIFETIME_MS = 2400;
+inline constexpr float NUCLEAR_B_STEM_SMOKE_INITIAL_RADIUS_CELLS = 0.34f;
+inline constexpr float NUCLEAR_B_STEM_SMOKE_FINAL_RADIUS_CELLS = 1.30f;
+inline constexpr Uint8 NUCLEAR_B_STEM_SMOKE_INITIAL_ALPHA = 138;
+inline constexpr SDL_Color NUCLEAR_B_STEM_SMOKE_COLOR{72, 68, 66, 255};
+inline constexpr SDL_Color NUCLEAR_B_STEM_SMOKE_HIGHLIGHT_COLOR{132, 126, 122,
+                                                                255};
+inline constexpr int NUCLEAR_B_STEM_SMOKE_BLOB_MIN_COUNT = 6;
+inline constexpr int NUCLEAR_B_STEM_SMOKE_BLOB_MAX_COUNT = 11;
+inline constexpr float NUCLEAR_B_STEM_SMOKE_BLOB_OFFSET_FACTOR = 1.05f;
+inline constexpr float NUCLEAR_B_STEM_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.46f;
+inline constexpr float NUCLEAR_B_STEM_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.22f;
+inline constexpr float NUCLEAR_B_STEM_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.10f;
+inline constexpr float NUCLEAR_B_STEM_SMOKE_WOBBLE_FREQUENCY_HZ = 0.85f;
+inline constexpr float NUCLEAR_B_STEM_SMOKE_VERTICAL_RISE_CELLS = 1.0f;
+
+// Pilzkappe (rotiert und dreht sich von der Spitze nach unten ein)
+inline constexpr Uint32 NUCLEAR_B_CAP_SPAWN_INTERVAL_MS = 60;
+inline constexpr int NUCLEAR_B_CAP_PUFFS_PER_SPAWN = 11;
+inline constexpr float NUCLEAR_B_CAP_RADIUS_CELLS = 5.6f;
+inline constexpr float NUCLEAR_B_CAP_HEIGHT_OFFSET_CELLS = 1.2f;
+inline constexpr float NUCLEAR_B_CAP_CURL_SPEED_RAD_PER_SEC = 1.6f;
+
+inline constexpr Uint32 NUCLEAR_B_CAP_SMOKE_LIFETIME_MS = 2700;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_INITIAL_RADIUS_CELLS = 0.38f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_FINAL_RADIUS_CELLS = 1.55f;
+inline constexpr Uint8 NUCLEAR_B_CAP_SMOKE_INITIAL_ALPHA = 152;
+inline constexpr SDL_Color NUCLEAR_B_CAP_SMOKE_COLOR{74, 70, 68, 255};
+inline constexpr SDL_Color NUCLEAR_B_CAP_SMOKE_HIGHLIGHT_COLOR{138, 130, 126,
+                                                               255};
+inline constexpr int NUCLEAR_B_CAP_SMOKE_BLOB_MIN_COUNT = 7;
+inline constexpr int NUCLEAR_B_CAP_SMOKE_BLOB_MAX_COUNT = 14;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_OFFSET_FACTOR = 1.18f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.45f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.30f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.10f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_WOBBLE_FREQUENCY_HZ = 0.95f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_VERTICAL_RISE_CELLS = 2.4f;
+
+// Feuersäule, die hinter dem Säulenrauch durchschimmert
+inline constexpr int NUCLEAR_B_FIRE_GLOW_BLOB_COUNT = 22;
+inline constexpr float NUCLEAR_B_FIRE_GLOW_RADIUS_CELLS = 0.55f;
+inline constexpr SDL_Color NUCLEAR_B_FIRE_GLOW_INNER_COLOR{255, 224, 96, 255};
+inline constexpr SDL_Color NUCLEAR_B_FIRE_GLOW_OUTER_COLOR{220, 76, 18, 255};
+
 inline constexpr int WALL_RUBBLE_CENTER_MIN_COUNT = 16;
 inline constexpr int WALL_RUBBLE_CENTER_MAX_COUNT = 25;
 inline constexpr int WALL_RUBBLE_NEIGHBOR_ORTHOGONAL_MIN_COUNT = 3;

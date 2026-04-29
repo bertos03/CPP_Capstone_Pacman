@@ -149,6 +149,10 @@ private:
                            Uint32 seed);
   void drawNuclearFireball(int center_x, int center_y, Uint32 elapsed,
                            Uint32 seed);
+  void drawNuclearBFireball(int center_x, int center_y, Uint32 elapsed,
+                            Uint32 seed);
+  void drawNuclearBExplosion(const struct GameEffect &effect, int center_x,
+                             int center_y, Uint32 elapsed);
   void drawDefeatEffect();
   void drawDefeatOverlay();
   void drawVictoryOverlay();

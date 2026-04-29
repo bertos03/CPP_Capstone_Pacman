@@ -33,6 +33,8 @@ constexpr Uint32 kSlimeSplashDurationMs =
     SLIME_SPLASH_FRAME_MS * SLIME_SPLASH_FRAME_COUNT + SLIME_SPLASH_FADE_MS;
 constexpr Uint32 kPlasmaShockwaveDurationMs = PLASMA_SHOCKWAVE_DURATION_MS;
 constexpr Uint32 kNuclearExplosionDurationMs = NUCLEAR_EXPLOSION_TOTAL_DURATION_MS;
+constexpr Uint32 kNuclearExplosionBDurationMs =
+    NUCLEAR_B_EXPLOSION_TOTAL_DURATION_MS;
 constexpr Uint32 kDynamiteChainDelayMs = 140;
 constexpr double kPlasticExplosiveMonsterHitRadiusCells = 0.72;
 constexpr float kAirstrikePlaneMarginCells = 2.0f;
@@ -91,6 +93,14 @@ Uint32 GetSmokePuffLifetimeMs(ExplosionSmokePuffKind kind) {
     return NUCLEAR_CORE_SMOKE_LIFETIME_MS;
   case ExplosionSmokePuffKind::NuclearMushroomSmoke:
     return NUCLEAR_MUSHROOM_SMOKE_LIFETIME_MS;
+  case ExplosionSmokePuffKind::NuclearBRingSmoke:
+    return NUCLEAR_B_RING_SMOKE_LIFETIME_MS;
+  case ExplosionSmokePuffKind::NuclearBTrailSmoke:
+    return NUCLEAR_B_TRAIL_SMOKE_LIFETIME_MS;
+  case ExplosionSmokePuffKind::NuclearBStemSmoke:
+    return NUCLEAR_B_STEM_SMOKE_LIFETIME_MS;
+  case ExplosionSmokePuffKind::NuclearBCapSmoke:
+    return NUCLEAR_B_CAP_SMOKE_LIFETIME_MS;
   case ExplosionSmokePuffKind::WallDust:
     return PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS;
   case ExplosionSmokePuffKind::MonsterSmoke:
@@ -362,6 +372,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   active_airstrike = {};
   active_biohazard_beam = {};
   active_nuclear_explosion = {};
+  active_nuclear_explosion_b = {};
   simulation_started = false;
   death_started_ticks = 0;
   life_recovery_until_ticks = 0;
@@ -463,6 +474,7 @@ void Game::Update() {
   }
   if (dead) {
     UpdateNuclearExplosion(now);
+    UpdateNuclearExplosionB(now);
     UpdateAirstrike(now);
     UpdatePlacedDynamites(now);
     UpdateRockets(now);
@@ -481,6 +493,8 @@ void Game::Update() {
   UpdateBiohazardBeam(now);
   TryTriggerNuclearExplosion(now);
   UpdateNuclearExplosion(now);
+  TryTriggerNuclearExplosionB(now);
+  UpdateNuclearExplosionB(now);
   TryUseAirstrike(now);
   TryPlaceDynamite(now);
   TryUsePlasticExplosive(now);
@@ -656,6 +670,15 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
   ShiftActiveTicks(active_nuclear_explosion.last_center_smoke_spawn_ticks,
                    paused_duration_ms);
   ShiftActiveTicks(active_nuclear_explosion.last_mushroom_smoke_spawn_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(active_nuclear_explosion_b.started_ticks, paused_duration_ms);
+  ShiftActiveTicks(active_nuclear_explosion_b.last_ring_spawn_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(active_nuclear_explosion_b.last_trail_spawn_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(active_nuclear_explosion_b.last_stem_spawn_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(active_nuclear_explosion_b.last_cap_spawn_ticks,
                    paused_duration_ms);
 
   for (ScheduledMonsterBlast &blast : scheduled_monster_blasts) {
@@ -2271,6 +2294,138 @@ void Game::UpdateNuclearExplosion(Uint32 now) {
   }
 }
 
+void Game::TryTriggerNuclearExplosionB(Uint32 now) {
+  if (events == nullptr || map == nullptr) {
+    return;
+  }
+
+  const bool trigger_requested = events->ConsumeNuclearTestBRequest();
+  if (!trigger_requested || active_nuclear_explosion_b.is_active) {
+    return;
+  }
+
+  const int rows = static_cast<int>(map->get_map_rows());
+  const int cols = static_cast<int>(map->get_map_cols());
+  if (rows <= 0 || cols <= 0) {
+    return;
+  }
+
+  const SDL_FPoint world_center{static_cast<float>(cols) * 0.5f,
+                                static_cast<float>(rows) * 0.5f};
+  const MapCoord center_coord{
+      std::clamp(static_cast<int>(std::floor(world_center.y)), 0, rows - 1),
+      std::clamp(static_cast<int>(std::floor(world_center.x)), 0, cols - 1)};
+
+  active_nuclear_explosion_b = {};
+  active_nuclear_explosion_b.is_active = true;
+  active_nuclear_explosion_b.started_ticks = now;
+  active_nuclear_explosion_b.last_ring_spawn_ticks =
+      (now > NUCLEAR_B_SMOKE_RING_SPAWN_INTERVAL_MS)
+          ? (now - NUCLEAR_B_SMOKE_RING_SPAWN_INTERVAL_MS)
+          : 0;
+  active_nuclear_explosion_b.last_trail_spawn_ticks =
+      (now > NUCLEAR_B_TRAIL_SPAWN_INTERVAL_MS)
+          ? (now - NUCLEAR_B_TRAIL_SPAWN_INTERVAL_MS)
+          : 0;
+  active_nuclear_explosion_b.last_stem_spawn_ticks =
+      (now > NUCLEAR_B_STEM_SPAWN_INTERVAL_MS)
+          ? (now - NUCLEAR_B_STEM_SPAWN_INTERVAL_MS)
+          : 0;
+  active_nuclear_explosion_b.last_cap_spawn_ticks =
+      (now > NUCLEAR_B_CAP_SPAWN_INTERVAL_MS)
+          ? (now - NUCLEAR_B_CAP_SPAWN_INTERVAL_MS)
+          : 0;
+  active_nuclear_explosion_b.animation_seed =
+      static_cast<int>((now % 991) + rows * 47 + cols * 67);
+  active_nuclear_explosion_b.center_coord = center_coord;
+  active_nuclear_explosion_b.world_center = world_center;
+
+  GameEffect effect{center_coord, now, EffectType::NuclearExplosionB,
+                    NUCLEAR_EXPLOSION_RADIUS_CELLS};
+  effect.has_precise_world_center = true;
+  effect.precise_world_center = world_center;
+  effects.push_back(effect);
+}
+
+void Game::UpdateNuclearExplosionB(Uint32 now) {
+  if (!active_nuclear_explosion_b.is_active ||
+      now < active_nuclear_explosion_b.started_ticks) {
+    return;
+  }
+
+  const Uint32 age = now - active_nuclear_explosion_b.started_ticks;
+  if (age >= NUCLEAR_B_EXPLOSION_TOTAL_DURATION_MS) {
+    active_nuclear_explosion_b = {};
+    return;
+  }
+
+  while (now >= active_nuclear_explosion_b.last_ring_spawn_ticks +
+                    NUCLEAR_B_SMOKE_RING_SPAWN_INTERVAL_MS &&
+         active_nuclear_explosion_b.last_ring_spawn_ticks <
+             active_nuclear_explosion_b.started_ticks +
+                 NUCLEAR_B_SMOKE_RING_EXPANSION_MS) {
+    active_nuclear_explosion_b.last_ring_spawn_ticks +=
+        NUCLEAR_B_SMOKE_RING_SPAWN_INTERVAL_MS;
+    const float ring_progress = std::clamp(
+        static_cast<float>(active_nuclear_explosion_b.last_ring_spawn_ticks -
+                           active_nuclear_explosion_b.started_ticks) /
+            static_cast<float>(
+                std::max<Uint32>(1, NUCLEAR_B_SMOKE_RING_EXPANSION_MS)),
+        0.0f, 1.0f);
+    SpawnNuclearBRingSmoke(ring_progress,
+                           active_nuclear_explosion_b.last_ring_spawn_ticks);
+  }
+
+  while (now >= active_nuclear_explosion_b.last_trail_spawn_ticks +
+                    NUCLEAR_B_TRAIL_SPAWN_INTERVAL_MS &&
+         active_nuclear_explosion_b.last_trail_spawn_ticks <
+             active_nuclear_explosion_b.started_ticks +
+                 NUCLEAR_B_SMOKE_RING_EXPANSION_MS) {
+    active_nuclear_explosion_b.last_trail_spawn_ticks +=
+        NUCLEAR_B_TRAIL_SPAWN_INTERVAL_MS;
+    const float trail_progress = std::clamp(
+        static_cast<float>(active_nuclear_explosion_b.last_trail_spawn_ticks -
+                           active_nuclear_explosion_b.started_ticks) /
+            static_cast<float>(
+                std::max<Uint32>(1, NUCLEAR_B_SMOKE_RING_EXPANSION_MS)),
+        0.0f, 1.0f);
+    SpawnNuclearBTrailSmoke(trail_progress,
+                            active_nuclear_explosion_b.last_trail_spawn_ticks);
+  }
+
+  while (now >= active_nuclear_explosion_b.last_stem_spawn_ticks +
+                    NUCLEAR_B_STEM_SPAWN_INTERVAL_MS &&
+         active_nuclear_explosion_b.last_stem_spawn_ticks <
+             active_nuclear_explosion_b.started_ticks +
+                 NUCLEAR_B_STEM_BUILD_MS) {
+    active_nuclear_explosion_b.last_stem_spawn_ticks +=
+        NUCLEAR_B_STEM_SPAWN_INTERVAL_MS;
+    const float stem_progress = std::clamp(
+        static_cast<float>(active_nuclear_explosion_b.last_stem_spawn_ticks -
+                           active_nuclear_explosion_b.started_ticks) /
+            static_cast<float>(std::max<Uint32>(1, NUCLEAR_B_STEM_BUILD_MS)),
+        0.0f, 1.0f);
+    SpawnNuclearBStemSmoke(stem_progress,
+                           active_nuclear_explosion_b.last_stem_spawn_ticks);
+  }
+
+  while (now >= active_nuclear_explosion_b.last_cap_spawn_ticks +
+                    NUCLEAR_B_CAP_SPAWN_INTERVAL_MS &&
+         active_nuclear_explosion_b.last_cap_spawn_ticks <
+             active_nuclear_explosion_b.started_ticks +
+                 NUCLEAR_B_STEM_BUILD_MS) {
+    active_nuclear_explosion_b.last_cap_spawn_ticks +=
+        NUCLEAR_B_CAP_SPAWN_INTERVAL_MS;
+    const float cap_progress = std::clamp(
+        static_cast<float>(active_nuclear_explosion_b.last_cap_spawn_ticks -
+                           active_nuclear_explosion_b.started_ticks) /
+            static_cast<float>(std::max<Uint32>(1, NUCLEAR_B_STEM_BUILD_MS)),
+        0.0f, 1.0f);
+    SpawnNuclearBCapSmoke(cap_progress,
+                          active_nuclear_explosion_b.last_cap_spawn_ticks);
+  }
+}
+
 void Game::TryUseAirstrike(Uint32 now) {
   if (events == nullptr || pacman == nullptr) {
     return;
@@ -3209,6 +3364,9 @@ void Game::CleanupEffects(Uint32 now) {
                          max_age = kPlasmaShockwaveDurationMs;
                        } else if (effect.type == EffectType::NuclearExplosion) {
                          max_age = kNuclearExplosionDurationMs;
+                       } else if (effect.type ==
+                                  EffectType::NuclearExplosionB) {
+                         max_age = kNuclearExplosionBDurationMs;
                        }
                        return now - effect.started_ticks > max_age;
                      }),
@@ -3695,6 +3853,183 @@ void Game::SpawnNuclearMushroomSmoke(float mushroom_progress, Uint32 now) {
     puff.spawned_ticks = now;
     puff.shape_seed = seed_dist(rng);
     puff.kind = ExplosionSmokePuffKind::NuclearMushroomSmoke;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnNuclearBRingSmoke(float ring_progress, Uint32 now) {
+  if (!active_nuclear_explosion_b.is_active) {
+    return;
+  }
+
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> origin_jitter_dist(
+      -NUCLEAR_B_SMOKE_RING_THICKNESS_CELLS * 0.4f,
+      NUCLEAR_B_SMOKE_RING_THICKNESS_CELLS * 0.4f);
+  std::uniform_real_distribution<float> angle_jitter_dist(-0.05f, 0.05f);
+  std::uniform_real_distribution<float> speed_unit_dist(0.86f, 1.10f);
+  std::uniform_real_distribution<float> roll_jitter_dist(-1.0f, 1.0f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  (void)ring_progress;
+  const int puffs_this_wave =
+      std::max(4, NUCLEAR_B_SMOKE_RING_PUFFS_PER_WAVE);
+
+  const float lifetime_s =
+      static_cast<float>(NUCLEAR_B_RING_SMOKE_LIFETIME_MS) / 1000.0f;
+  const float fast_speed =
+      NUCLEAR_B_SMOKE_RING_FINAL_RADIUS_CELLS / std::max(0.1f, lifetime_s);
+  const float phase = static_cast<float>(
+      active_nuclear_explosion_b.animation_seed * 0.17 +
+      static_cast<double>(now - active_nuclear_explosion_b.started_ticks) /
+          280.0);
+  for (int index = 0; index < puffs_this_wave; ++index) {
+    const float angle = (static_cast<float>(index) /
+                         static_cast<float>(puffs_this_wave)) *
+                            static_cast<float>(2.0 * M_PI) +
+                        phase + angle_jitter_dist(rng);
+    const float dir_x = std::cos(angle);
+    const float dir_y = std::sin(angle);
+    ExplosionSmokePuff puff;
+    puff.world_position = {active_nuclear_explosion_b.world_center.x +
+                               dir_x * origin_jitter_dist(rng),
+                           active_nuclear_explosion_b.world_center.y +
+                               dir_y * origin_jitter_dist(rng)};
+    const float speed = fast_speed * speed_unit_dist(rng);
+    puff.velocity_cells_per_sec = {dir_x * speed, dir_y * speed};
+    puff.vertical_offset_cells = 0.05f;
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.rotation_radians = angle;
+    puff.rotation_speed_rad_per_sec =
+        NUCLEAR_B_SMOKE_RING_ROLL_SPEED_RAD_PER_SEC *
+        (0.85f + 0.30f * roll_jitter_dist(rng));
+    puff.kind = ExplosionSmokePuffKind::NuclearBRingSmoke;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnNuclearBTrailSmoke(float ring_progress, Uint32 now) {
+  if (!active_nuclear_explosion_b.is_active) {
+    return;
+  }
+
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> angle_jitter_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> radial_jitter_dist(
+      -NUCLEAR_B_SMOKE_RING_THICKNESS_CELLS * 0.55f,
+      NUCLEAR_B_SMOKE_RING_THICKNESS_CELLS * 0.55f);
+  std::uniform_real_distribution<float> spread_unit_dist(0.0f, 1.0f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  const float trail_radius =
+      0.1f +
+      std::clamp(ring_progress, 0.0f, 1.0f) *
+          (NUCLEAR_B_SMOKE_RING_FINAL_RADIUS_CELLS * 0.92f);
+  for (int index = 0; index < NUCLEAR_B_TRAIL_PUFFS_PER_WAVE; ++index) {
+    const float angle = angle_jitter_dist(rng);
+    const float radius =
+        trail_radius * std::sqrt(spread_unit_dist(rng)) +
+        radial_jitter_dist(rng);
+    ExplosionSmokePuff puff;
+    puff.world_position = {active_nuclear_explosion_b.world_center.x +
+                               std::cos(angle) * radius,
+                           active_nuclear_explosion_b.world_center.y +
+                               std::sin(angle) * radius};
+    puff.velocity_cells_per_sec = {0.0f, 0.0f};
+    puff.vertical_offset_cells = 0.02f;
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.rotation_radians = angle;
+    puff.rotation_speed_rad_per_sec = 0.0f;
+    puff.kind = ExplosionSmokePuffKind::NuclearBTrailSmoke;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnNuclearBStemSmoke(float stem_progress, Uint32 now) {
+  if (!active_nuclear_explosion_b.is_active) {
+    return;
+  }
+
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> lateral_dist(-1.0f, 1.0f);
+  std::uniform_real_distribution<float> jitter_dist(-0.18f, 0.18f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  const float progress = std::clamp(stem_progress, 0.0f, 1.0f);
+  const float current_top =
+      0.5f + progress * NUCLEAR_B_STEM_HEIGHT_CELLS;
+  for (int index = 0; index < NUCLEAR_B_STEM_PUFFS_PER_SPAWN; ++index) {
+    const float vertical_position =
+        progress > 0.0f
+            ? jitter_dist(rng) +
+                  current_top *
+                      (static_cast<float>(index) /
+                       static_cast<float>(NUCLEAR_B_STEM_PUFFS_PER_SPAWN))
+            : 0.30f + jitter_dist(rng);
+    ExplosionSmokePuff puff;
+    puff.world_position = {active_nuclear_explosion_b.world_center.x +
+                               lateral_dist(rng) *
+                                   NUCLEAR_B_STEM_RADIUS_CELLS * 0.55f,
+                           active_nuclear_explosion_b.world_center.y +
+                               lateral_dist(rng) *
+                                   NUCLEAR_B_STEM_RADIUS_CELLS * 0.40f};
+    puff.velocity_cells_per_sec = {0.0f, 0.0f};
+    puff.vertical_offset_cells = vertical_position;
+    puff.vertical_velocity_cells_per_sec =
+        NUCLEAR_B_STEM_RISE_SPEED_CELLS_PER_SEC * (0.20f + 0.20f * lateral_dist(rng));
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.rotation_radians = 0.0f;
+    puff.rotation_speed_rad_per_sec = 0.0f;
+    puff.kind = ExplosionSmokePuffKind::NuclearBStemSmoke;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnNuclearBCapSmoke(float cap_progress, Uint32 now) {
+  if (!active_nuclear_explosion_b.is_active) {
+    return;
+  }
+
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> radius_unit_dist(0.0f, 1.0f);
+  std::uniform_real_distribution<float> height_jitter_dist(-0.85f, 0.85f);
+  std::uniform_real_distribution<float> spin_jitter_dist(0.65f, 1.45f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  const float progress = std::clamp(cap_progress, 0.0f, 1.0f);
+  const float cap_radius = 0.6f + progress * NUCLEAR_B_CAP_RADIUS_CELLS;
+  const float cap_height =
+      0.8f + progress * NUCLEAR_B_STEM_HEIGHT_CELLS +
+      NUCLEAR_B_CAP_HEIGHT_OFFSET_CELLS;
+  for (int index = 0; index < NUCLEAR_B_CAP_PUFFS_PER_SPAWN; ++index) {
+    const float angle = angle_dist(rng);
+    const float radius =
+        cap_radius * (0.25f + 0.75f * std::sqrt(radius_unit_dist(rng)));
+    ExplosionSmokePuff puff;
+    puff.world_position = {active_nuclear_explosion_b.world_center.x +
+                               std::cos(angle) * radius,
+                           active_nuclear_explosion_b.world_center.y +
+                               std::sin(angle) * radius * 0.55f};
+    const float tangential_speed =
+        NUCLEAR_B_CAP_CURL_SPEED_RAD_PER_SEC * radius * 0.9f;
+    puff.velocity_cells_per_sec = {-std::sin(angle) * tangential_speed,
+                                   std::cos(angle) * tangential_speed * 0.55f};
+    puff.vertical_offset_cells = cap_height + height_jitter_dist(rng);
+    puff.vertical_velocity_cells_per_sec =
+        -0.45f * (0.5f + radius / std::max(0.1f, cap_radius));
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.rotation_radians = angle;
+    puff.rotation_speed_rad_per_sec =
+        NUCLEAR_B_CAP_CURL_SPEED_RAD_PER_SEC * spin_jitter_dist(rng) *
+        (radius < cap_radius * 0.4f ? -0.6f : 1.0f);
+    puff.kind = ExplosionSmokePuffKind::NuclearBCapSmoke;
     explosion_smoke_puffs.push_back(puff);
   }
 }

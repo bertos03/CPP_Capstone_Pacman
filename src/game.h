@@ -211,6 +211,18 @@ struct ActiveNuclearExplosion {
   SDL_FPoint world_center{0.0f, 0.0f};
 };
 
+struct ActiveNuclearExplosionB {
+  bool is_active = false;
+  Uint32 started_ticks = 0;
+  Uint32 last_ring_spawn_ticks = 0;
+  Uint32 last_trail_spawn_ticks = 0;
+  Uint32 last_stem_spawn_ticks = 0;
+  Uint32 last_cap_spawn_ticks = 0;
+  int animation_seed = 0;
+  MapCoord center_coord{0, 0};
+  SDL_FPoint world_center{0.0f, 0.0f};
+};
+
 enum class ExplosionParticleKind {
   MonsterExplosion,
   WallDebris
@@ -234,13 +246,20 @@ enum class ExplosionSmokePuffKind {
   RocketTrailSmoke,
   NuclearRingSmoke,
   NuclearCoreSmoke,
-  NuclearMushroomSmoke
+  NuclearMushroomSmoke,
+  NuclearBRingSmoke,
+  NuclearBTrailSmoke,
+  NuclearBStemSmoke,
+  NuclearBCapSmoke
 };
 
 struct ExplosionSmokePuff {
   SDL_FPoint world_position{0.0f, 0.0f};
   SDL_FPoint velocity_cells_per_sec{0.0f, 0.0f};
   float vertical_offset_cells = 0.0f;
+  float vertical_velocity_cells_per_sec = 0.0f;
+  float rotation_radians = 0.0f;
+  float rotation_speed_rad_per_sec = 0.0f;
   Uint32 spawned_ticks = 0;
   Uint32 shape_seed = 0;
   ExplosionSmokePuffKind kind = ExplosionSmokePuffKind::MonsterSmoke;
@@ -262,7 +281,8 @@ enum class EffectType {
   AirstrikeExplosion,
   SlimeSplash,
   PlasmaShockwave,
-  NuclearExplosion
+  NuclearExplosion,
+  NuclearExplosionB
 };
 
 struct GameEffect {
@@ -322,6 +342,7 @@ private:
   std::vector<RocketProjectile> active_rockets;
   ActiveBiohazardBeam active_biohazard_beam;
   ActiveNuclearExplosion active_nuclear_explosion;
+  ActiveNuclearExplosionB active_nuclear_explosion_b;
   std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
   std::vector<ExplosionParticle> explosion_particles;
@@ -372,8 +393,10 @@ private:
   void TryFireRocket(Uint32 now);
   void TryUseBiohazardBeam(Uint32 now);
   void TryTriggerNuclearExplosion(Uint32 now);
+  void TryTriggerNuclearExplosionB(Uint32 now);
   void UpdateBiohazardBeam(Uint32 now);
   void UpdateNuclearExplosion(Uint32 now);
+  void UpdateNuclearExplosionB(Uint32 now);
   void StopBiohazardBeam();
   void UpdateAirstrike(Uint32 now);
   void UpdateRockets(Uint32 now);
@@ -418,6 +441,10 @@ private:
   void SpawnNuclearRingSmoke(float ring_progress, Uint32 now);
   void SpawnNuclearCenterSmoke(float center_smoke_progress, Uint32 now);
   void SpawnNuclearMushroomSmoke(float mushroom_progress, Uint32 now);
+  void SpawnNuclearBRingSmoke(float ring_progress, Uint32 now);
+  void SpawnNuclearBTrailSmoke(float ring_progress, Uint32 now);
+  void SpawnNuclearBStemSmoke(float stem_progress, Uint32 now);
+  void SpawnNuclearBCapSmoke(float cap_progress, Uint32 now);
   void UpdateExplosionParticles(Uint32 now);
   SDL_FPoint PreciseWorldCenter(const MapElement *element) const;
   SDL_FPoint FireballWorldCenter(const Fireball &fireball, Uint32 now) const;

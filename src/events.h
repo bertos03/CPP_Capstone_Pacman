@@ -36,6 +36,7 @@ public:
   Directions get_next_move() { return current_direction; }
   bool ConsumeExtraUseRequest(ExtraSlot slot);
   bool ConsumeNuclearTestRequest();
+  bool ConsumeNuclearTestBRequest();
   bool ConsumePauseToggleRequest();
   bool ConsumeExitDialogRequest();
   bool ConsumeConfirmRequest();
@@ -47,6 +48,7 @@ private:
   Directions current_direction;
   ExtraSlot requested_extra;
   bool nuclear_test_requested;
+  bool nuclear_test_b_requested;
   bool pause_toggle_requested;
   bool exit_dialog_requested;
   bool confirm_requested;
