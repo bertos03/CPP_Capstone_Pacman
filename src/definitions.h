@@ -78,7 +78,7 @@ inline constexpr const char *WALKIE_TALKIE_ASSET_PATH = "walkie_talkie.png";
 inline constexpr const char *ROCKET_ASSET_PATH = "rocket.png";
 inline constexpr const char *AIRSTRIKE_PLANE_ASSET_PATH =
     "airstrike_plane.png";
-inline constexpr int HUD_KEYCAP_ASSET_COUNT = 5;
+inline constexpr int HUD_KEYCAP_ASSET_COUNT = 6;
 inline constexpr std::array<const char *, HUD_KEYCAP_ASSET_COUNT>
     HUD_KEYCAP_ASSET_PATHS{
         "hud_keycaps/key_1.png",
@@ -86,6 +86,7 @@ inline constexpr std::array<const char *, HUD_KEYCAP_ASSET_COUNT>
         "hud_keycaps/key_3.png",
         "hud_keycaps/key_4.png",
         "hud_keycaps/key_5.png",
+        "hud_keycaps/key_6.png",
     };
 inline constexpr const char *AIRSTRIKE_EXPLOSION_SHEET_ASSET_PATH =
     "airstrike_explosion_sheet.png";
@@ -98,6 +99,10 @@ inline constexpr const char *SLIME_OVERLAY_ASSET_PATH = "slime_overlay.png";
 inline constexpr const char *SLIME_SPLASH_SHEET_ASSET_PATH =
     "slime_splash_sheet.png";
 inline constexpr const char *DYNAMITE_ASSET_PATH = "dynamite.png";
+inline constexpr const char *NUCLEAR_BOMB_ASSET_PATH = "nuclear_bomb.png";
+inline constexpr const char *NUCLEAR_TARGET_MARKER_ASSET_PATH =
+    "nuclear_target_marker.png";
+inline constexpr const char *NUCLEAR_CRATER_ASSET_PATH = "nuclear_crater.png";
 inline constexpr const char *MENU_MUSIC_PATH = "menu_music.mp3";
 inline constexpr const char *WIN_MUSIC_PATH = "win_melody.mp3";
 inline constexpr const char *LOSE_MUSIC_PATH = "lose_melody.mp3";
@@ -128,6 +133,12 @@ inline constexpr const char *ELECTRIFIED_MONSTER_ROAR_SOUND_PATH =
     "electrified_monster_roar.mp3";
 inline constexpr const char *ELECTRIFIED_MONSTER_IMPACT_SOUND_PATH =
     "electrified_monster_impact.mp3";
+inline constexpr const char *NUCLEAR_BOMB_ALARM_SOUND_PATH =
+    "nuclear_bomb_alarm.mp3";
+inline constexpr const char *NUCLEAR_BOMB_DROP_SOUND_PATH =
+    "nuclear_bomb_drop.mp3";
+inline constexpr const char *NUCLEAR_BOMB_EXPLOSION_SOUND_PATH =
+    "nuclear_bomb_explosion.mp3";
 inline constexpr const char *SETTINGS_FILE_NAME = "settings.cfg";
 
 /**
@@ -252,6 +263,15 @@ inline constexpr Uint32 BIOHAZARD_SPAWN_MIN_INTERVAL_MS = 14000;
 inline constexpr Uint32 BIOHAZARD_SPAWN_MAX_INTERVAL_MS = 26000;
 inline constexpr Uint32 BIOHAZARD_VISIBLE_MS = 60000;
 inline constexpr Uint32 BIOHAZARD_FADE_MS = 1000;
+inline constexpr Uint32 NUCLEAR_BOMB_SPAWN_MIN_INTERVAL_MS = 18000;
+inline constexpr Uint32 NUCLEAR_BOMB_SPAWN_MAX_INTERVAL_MS = 32000;
+inline constexpr Uint32 NUCLEAR_BOMB_VISIBLE_MS = 60000;
+inline constexpr Uint32 NUCLEAR_BOMB_FADE_MS = 1000;
+inline constexpr Uint32 NUCLEAR_BOMB_ALARM_MS = 2400;
+inline constexpr Uint32 NUCLEAR_BOMB_FALL_MS = 1400;
+inline constexpr float NUCLEAR_BOMB_INITIAL_RENDER_SCALE_CELLS = 6.0f;
+inline constexpr float NUCLEAR_BOMB_FINAL_RENDER_SCALE_CELLS = 0.72f;
+inline constexpr double NUCLEAR_BOMB_EXPLOSION_GAIN = 3.0;
 inline constexpr Uint32 BIOHAZARD_BEAM_ACTIVE_MS = 3000;
 inline constexpr Uint32 BIOHAZARD_BEAM_MIN_VISIBLE_MS = 1000;
 inline constexpr Uint32 BIOHAZARD_HIT_SEQUENCE_MS = 1000;
@@ -462,6 +482,14 @@ inline constexpr SDL_Color NUCLEAR_FLASH_COLOR{205, 205, 240, 180};
 inline constexpr float NUCLEAR_FIREBALL_START_RADIUS_CELLS =
     static_cast<float>(NUCLEAR_EXPLOSION_RADIUS_CELLS);
 inline constexpr float NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS = 5.8f;
+inline constexpr float NUCLEAR_CRATER_RADIUS_CELLS =
+    NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS * 0.63f;
+inline constexpr float NUCLEAR_CRATER_Y_RADIUS_FACTOR = 0.78f;
+inline constexpr int NUCLEAR_CRATER_EDGE_SAMPLE_STEPS = 5;
+inline constexpr Uint8 NUCLEAR_CRATER_BASE_ALPHA = 153;
+inline constexpr SDL_Color NUCLEAR_CRATER_OUTER_COLOR{54, 43, 36, 255};
+inline constexpr SDL_Color NUCLEAR_CRATER_INNER_COLOR{16, 14, 13, 255};
+inline constexpr SDL_Color NUCLEAR_CRATER_GLOW_COLOR{118, 70, 38, 255};
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_OFFSET_FACTOR = 0.52f;
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_BLOB_MIN_FACTOR = 0.18f;
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_BLOB_MAX_FACTOR = 0.42f;
@@ -623,34 +651,58 @@ inline constexpr float NUCLEAR_B_STEM_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.10f;
 inline constexpr float NUCLEAR_B_STEM_SMOKE_WOBBLE_FREQUENCY_HZ = 0.85f;
 inline constexpr float NUCLEAR_B_STEM_SMOKE_VERTICAL_RISE_CELLS = 1.0f;
 
-// Pilzkappe (rotiert und dreht sich von der Spitze nach unten ein)
-inline constexpr Uint32 NUCLEAR_B_CAP_SPAWN_INTERVAL_MS = 60;
-inline constexpr int NUCLEAR_B_CAP_PUFFS_PER_SPAWN = 11;
-inline constexpr float NUCLEAR_B_CAP_RADIUS_CELLS = 5.6f;
+// Pilzkappe (Rauchpartikel folgen einer Torus-Bahn:
+// vom Säulenkopf nach außen, dann am Außenrand nach unten -> typische Pilzform)
+inline constexpr Uint32 NUCLEAR_B_CAP_SPAWN_INTERVAL_MS = 45;
+inline constexpr int NUCLEAR_B_CAP_PUFFS_PER_SPAWN = 14;
+inline constexpr float NUCLEAR_B_CAP_RADIUS_CELLS = 6.0f;
 inline constexpr float NUCLEAR_B_CAP_HEIGHT_OFFSET_CELLS = 1.2f;
-inline constexpr float NUCLEAR_B_CAP_CURL_SPEED_RAD_PER_SEC = 1.6f;
+inline constexpr float NUCLEAR_B_CAP_CURL_DROP_CELLS = 5.0f;
 
 inline constexpr Uint32 NUCLEAR_B_CAP_SMOKE_LIFETIME_MS = 2700;
-inline constexpr float NUCLEAR_B_CAP_SMOKE_INITIAL_RADIUS_CELLS = 0.38f;
-inline constexpr float NUCLEAR_B_CAP_SMOKE_FINAL_RADIUS_CELLS = 1.55f;
-inline constexpr Uint8 NUCLEAR_B_CAP_SMOKE_INITIAL_ALPHA = 152;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_INITIAL_RADIUS_CELLS = 0.45f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_FINAL_RADIUS_CELLS = 2.05f;
+inline constexpr Uint8 NUCLEAR_B_CAP_SMOKE_INITIAL_ALPHA = 168;
 inline constexpr SDL_Color NUCLEAR_B_CAP_SMOKE_COLOR{74, 70, 68, 255};
 inline constexpr SDL_Color NUCLEAR_B_CAP_SMOKE_HIGHLIGHT_COLOR{138, 130, 126,
                                                                255};
-inline constexpr int NUCLEAR_B_CAP_SMOKE_BLOB_MIN_COUNT = 7;
-inline constexpr int NUCLEAR_B_CAP_SMOKE_BLOB_MAX_COUNT = 14;
-inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_OFFSET_FACTOR = 1.18f;
-inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.45f;
-inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.30f;
-inline constexpr float NUCLEAR_B_CAP_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.10f;
+inline constexpr int NUCLEAR_B_CAP_SMOKE_BLOB_MIN_COUNT = 9;
+inline constexpr int NUCLEAR_B_CAP_SMOKE_BLOB_MAX_COUNT = 18;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_OFFSET_FACTOR = 1.22f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_RADIUS_MIN_FACTOR = 0.46f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_BLOB_RADIUS_MAX_FACTOR = 1.34f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.12f;
 inline constexpr float NUCLEAR_B_CAP_SMOKE_WOBBLE_FREQUENCY_HZ = 0.95f;
-inline constexpr float NUCLEAR_B_CAP_SMOKE_VERTICAL_RISE_CELLS = 2.4f;
+inline constexpr float NUCLEAR_B_CAP_SMOKE_VERTICAL_RISE_CELLS = 0.0f;
 
 // Feuersäule, die hinter dem Säulenrauch durchschimmert
-inline constexpr int NUCLEAR_B_FIRE_GLOW_BLOB_COUNT = 22;
-inline constexpr float NUCLEAR_B_FIRE_GLOW_RADIUS_CELLS = 0.55f;
-inline constexpr SDL_Color NUCLEAR_B_FIRE_GLOW_INNER_COLOR{255, 224, 96, 255};
-inline constexpr SDL_Color NUCLEAR_B_FIRE_GLOW_OUTER_COLOR{220, 76, 18, 255};
+inline constexpr int NUCLEAR_B_FIRE_GLOW_BLOB_COUNT = 42;
+inline constexpr float NUCLEAR_B_FIRE_GLOW_RADIUS_CELLS = 0.85f;
+inline constexpr SDL_Color NUCLEAR_B_FIRE_GLOW_INNER_COLOR{255, 226, 110, 255};
+inline constexpr SDL_Color NUCLEAR_B_FIRE_GLOW_OUTER_COLOR{226, 78, 18, 255};
+
+// Persistenter Feuerball am Sockel der Säule
+inline constexpr float NUCLEAR_B_BASE_FIRE_RADIUS_CELLS = 3.6f;
+inline constexpr int NUCLEAR_B_BASE_FIRE_BLOB_COUNT = 44;
+inline constexpr int NUCLEAR_B_BASE_FIRE_TONGUE_COUNT = 32;
+inline constexpr SDL_Color NUCLEAR_B_BASE_FIRE_HALO_COLOR{180, 50, 16, 255};
+inline constexpr SDL_Color NUCLEAR_B_BASE_FIRE_OUTER_COLOR{220, 80, 22, 255};
+inline constexpr SDL_Color NUCLEAR_B_BASE_FIRE_MID_COLOR{255, 138, 38, 255};
+inline constexpr SDL_Color NUCLEAR_B_BASE_FIRE_INNER_COLOR{255, 232, 132, 255};
+
+// Feuer in der unteren Hälfte der Pilzkappe
+inline constexpr int NUCLEAR_B_CAP_FIRE_BLOB_COUNT = 32;
+inline constexpr float NUCLEAR_B_CAP_FIRE_RADIUS_CELLS = 0.85f;
+
+// Bodenschutt (kleine dunkle Brocken um den Krater)
+inline constexpr int NUCLEAR_B_GROUND_DEBRIS_COUNT = 80;
+inline constexpr float NUCLEAR_B_GROUND_DEBRIS_INNER_RADIUS_CELLS = 1.4f;
+inline constexpr float NUCLEAR_B_GROUND_DEBRIS_OUTER_RADIUS_CELLS = 5.5f;
+inline constexpr float NUCLEAR_B_GROUND_DEBRIS_MIN_HALF_SIZE_CELLS = 0.05f;
+inline constexpr float NUCLEAR_B_GROUND_DEBRIS_MAX_HALF_SIZE_CELLS = 0.13f;
+inline constexpr SDL_Color NUCLEAR_B_GROUND_DEBRIS_DARK_COLOR{72, 54, 46, 255};
+inline constexpr SDL_Color NUCLEAR_B_GROUND_DEBRIS_LIGHT_COLOR{152, 120, 96,
+                                                                255};
 
 inline constexpr int WALL_RUBBLE_CENTER_MIN_COUNT = 16;
 inline constexpr int WALL_RUBBLE_CENTER_MAX_COUNT = 25;

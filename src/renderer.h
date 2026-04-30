@@ -33,6 +33,7 @@
 class Map;
 class Game;
 struct WallRubblePiece;
+struct NuclearCrater;
 
 class Renderer {
 public:
@@ -121,6 +122,9 @@ private:
   void drawwalkietalkiepickup();
   void drawrocketpickup();
   void drawbiohazardpickup();
+  void drawnuclearbombpickup();
+  void drawNuclearBombTargetMarker();
+  void drawActiveNuclearBombDrop();
   void drawpacman();
   void drawmonsters();
   void drawgoodies();
@@ -140,6 +144,9 @@ private:
   void drawslimeballs();
   void draweffects();
   void drawExplosionParticles();
+  void drawNuclearCraters();
+  void drawNuclearCrater(const NuclearCrater &crater);
+  void drawNuclearCraterBarricades(const NuclearCrater &crater);
   void drawWallRubble();
   void drawWallRubblePiece(const WallRubblePiece &piece);
   void buildWallRubblePieceVertices(const WallRubblePiece &piece,
@@ -151,6 +158,16 @@ private:
                            Uint32 seed);
   void drawNuclearBFireball(int center_x, int center_y, Uint32 elapsed,
                             Uint32 seed);
+  void drawNuclearBBaseFire(int center_x, int center_y, Uint32 elapsed,
+                            Uint32 seed);
+  void drawNuclearBStemFire(int center_x, int center_y, Uint32 elapsed,
+                            Uint32 seed, double stem_progress,
+                            double total_progress);
+  void drawNuclearBCapFire(int center_x, int center_y, Uint32 elapsed,
+                           Uint32 seed, double stem_progress,
+                           double total_progress);
+  void drawNuclearBGroundDebris(int center_x, int center_y, Uint32 elapsed,
+                                Uint32 seed);
   void drawNuclearBExplosion(const struct GameEffect &effect, int center_x,
                              int center_y, Uint32 elapsed);
   void drawDefeatEffect();
@@ -172,6 +189,10 @@ private:
   void drawBiohazardIcon(const SDL_Rect &icon_rect, Uint8 alpha,
                          double animation_clock, double rotation_degrees,
                          double scale);
+  void drawNuclearBombIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                           double rotation_degrees);
+  void drawNuclearTargetMarkerIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                                   double scale);
   void drawRocketFlight(const SDL_FPoint &center, Directions direction,
                         int max_dimension, int frame_index, Uint8 alpha);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,
@@ -306,6 +327,12 @@ private:
   SDL_Surface *sdl_logo_brick_surface;
   SDL_Texture *sdl_dynamite_texture;
   SDL_Point sdl_dynamite_size;
+  SDL_Texture *sdl_nuclear_crater_texture;
+  SDL_Point sdl_nuclear_crater_size;
+  SDL_Texture *sdl_nuclear_bomb_texture;
+  SDL_Point sdl_nuclear_bomb_size;
+  SDL_Texture *sdl_nuclear_target_marker_texture;
+  SDL_Point sdl_nuclear_target_marker_size;
   SDL_Texture *sdl_start_menu_monster_texture;
   SDL_Point sdl_start_menu_monster_size;
   SDL_Texture *sdl_start_menu_hero_texture;

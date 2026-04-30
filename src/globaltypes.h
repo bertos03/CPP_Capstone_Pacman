@@ -39,7 +39,8 @@ enum class ExtraSlot {
   PlasticExplosive,
   Airstrike,
   Rocket,
-  Biohazard
+  Biohazard,
+  NuclearBomb
 };
 
 

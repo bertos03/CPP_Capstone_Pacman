@@ -75,6 +75,9 @@ public:
   void StopBiohazardBeam();
   void PlayElectrifiedMonsterRoar();
   void PlayElectrifiedMonsterImpact();
+  void PlayNuclearBombAlarm();
+  void PlayNuclearBombDrop();
+  void PlayNuclearBombExplosion();
   Uint32 GetAirstrikeRadioDurationMs() const;
   void StartInvulnerabilityLoop();
   void StopInvulnerabilityLoop();
@@ -134,6 +137,9 @@ private:
   Mix_Chunk *SFX_biohazard_beam;
   Mix_Chunk *SFX_electrified_monster_roar;
   Mix_Chunk *SFX_electrified_monster_impact;
+  Mix_Chunk *SFX_nuclear_bomb_alarm;
+  Mix_Chunk *SFX_nuclear_bomb_drop;
+  Mix_Chunk *SFX_nuclear_bomb_explosion;
   Mix_Chunk *SFX_invulnerability_loop;
   Mix_Music *menu_music;
   Mix_Music *win_music;

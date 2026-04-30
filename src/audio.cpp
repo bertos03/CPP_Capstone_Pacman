@@ -224,6 +224,9 @@ Audio::Audio() {
   SFX_biohazard_beam = nullptr;
   SFX_electrified_monster_roar = nullptr;
   SFX_electrified_monster_impact = nullptr;
+  SFX_nuclear_bomb_alarm = nullptr;
+  SFX_nuclear_bomb_drop = nullptr;
+  SFX_nuclear_bomb_explosion = nullptr;
   SFX_invulnerability_loop = nullptr;
   menu_music = nullptr;
   win_music = nullptr;
@@ -283,6 +286,12 @@ Audio::Audio() {
       Paths::GetDataFilePath(ELECTRIFIED_MONSTER_ROAR_SOUND_PATH);
   const std::string electrified_monster_impact_sound_path =
       Paths::GetDataFilePath(ELECTRIFIED_MONSTER_IMPACT_SOUND_PATH);
+  const std::string nuclear_bomb_alarm_sound_path =
+      Paths::GetDataFilePath(NUCLEAR_BOMB_ALARM_SOUND_PATH);
+  const std::string nuclear_bomb_drop_sound_path =
+      Paths::GetDataFilePath(NUCLEAR_BOMB_DROP_SOUND_PATH);
+  const std::string nuclear_bomb_explosion_sound_path =
+      Paths::GetDataFilePath(NUCLEAR_BOMB_EXPLOSION_SOUND_PATH);
   const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
   const std::string win_music_path = Paths::GetDataFilePath("win_melody.mp3");
   const std::string lose_music_path = Paths::GetDataFilePath("lose_melody.mp3");
@@ -376,6 +385,22 @@ Audio::Audio() {
     SFX_electrified_monster_impact =
         CreateSynthChunk({148, 222, 296, 444}, 430, 0.64, 2.0, 140.0);
   }
+  SFX_nuclear_bomb_alarm = Mix_LoadWAV(nuclear_bomb_alarm_sound_path.c_str());
+  if (SFX_nuclear_bomb_alarm == nullptr) {
+    SFX_nuclear_bomb_alarm =
+        CreateSynthChunk({880, 660, 880, 660}, 900, 0.52, 4.0, 180.0);
+  }
+  SFX_nuclear_bomb_drop = Mix_LoadWAV(nuclear_bomb_drop_sound_path.c_str());
+  if (SFX_nuclear_bomb_drop == nullptr) {
+    SFX_nuclear_bomb_drop =
+        CreateSynthChunk({220, 174, 132, 98}, 1200, 0.46, 8.0, 240.0);
+  }
+  SFX_nuclear_bomb_explosion =
+      Mix_LoadWAV(nuclear_bomb_explosion_sound_path.c_str());
+  if (SFX_nuclear_bomb_explosion == nullptr) {
+    SFX_nuclear_bomb_explosion = CreateDynamiteExplosionChunk();
+  }
+  AmplifyChunk(SFX_nuclear_bomb_explosion, NUCLEAR_BOMB_EXPLOSION_GAIN);
   SFX_invulnerability_loop = CreateInvulnerabilityLoopChunk();
   menu_music = Mix_LoadMUS(menu_music_path.c_str());
   if (menu_music == nullptr) {
@@ -414,6 +439,9 @@ Audio::Audio() {
       SFX_biohazard_beam == nullptr ||
       SFX_electrified_monster_roar == nullptr ||
       SFX_electrified_monster_impact == nullptr ||
+      SFX_nuclear_bomb_alarm == nullptr ||
+      SFX_nuclear_bomb_drop == nullptr ||
+      SFX_nuclear_bomb_explosion == nullptr ||
       SFX_invulnerability_loop == nullptr) {
     std::cerr << "Failed to load SFX: " << Mix_GetError() << "\n";
     return;
@@ -531,6 +559,15 @@ Audio::~Audio() {
   }
   if (SFX_electrified_monster_impact != nullptr) {
     Mix_FreeChunk(SFX_electrified_monster_impact);
+  }
+  if (SFX_nuclear_bomb_alarm != nullptr) {
+    Mix_FreeChunk(SFX_nuclear_bomb_alarm);
+  }
+  if (SFX_nuclear_bomb_drop != nullptr) {
+    Mix_FreeChunk(SFX_nuclear_bomb_drop);
+  }
+  if (SFX_nuclear_bomb_explosion != nullptr) {
+    Mix_FreeChunk(SFX_nuclear_bomb_explosion);
   }
   if (SFX_invulnerability_loop != nullptr) {
     Mix_FreeChunk(SFX_invulnerability_loop);
@@ -1641,6 +1678,14 @@ void Audio::PlayElectrifiedMonsterRoar() {
 
 void Audio::PlayElectrifiedMonsterImpact() {
   PlayChunk(SFX_electrified_monster_impact);
+};
+
+void Audio::PlayNuclearBombAlarm() { PlayChunk(SFX_nuclear_bomb_alarm); };
+
+void Audio::PlayNuclearBombDrop() { PlayChunk(SFX_nuclear_bomb_drop); };
+
+void Audio::PlayNuclearBombExplosion() {
+  PlayChunk(SFX_nuclear_bomb_explosion);
 };
 
 Uint32 Audio::GetAirstrikeRadioDurationMs() const {

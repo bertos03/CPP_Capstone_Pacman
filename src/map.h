@@ -59,11 +59,16 @@ struct TeleporterPair {
 enum class ElementType {
   TYPE_WALL,
   TYPE_PATH,
+  TYPE_CRATER,
   TYPE_TELEPORTER,
   TYPE_GOODIE,
   TYPE_PACMAN,
   TYPE_MONSTER
 };
+
+inline bool IsBlockingMapElement(ElementType entry) {
+  return entry == ElementType::TYPE_WALL || entry == ElementType::TYPE_CRATER;
+}
 
 class Map {
 public:

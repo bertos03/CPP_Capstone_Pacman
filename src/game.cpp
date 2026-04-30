@@ -15,12 +15,15 @@
  */
 
 #include "game.h"
+#include "paths.h"
 
+#include <SDL_image.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
 #include <random>
+#include <vector>
 
 namespace {
 
@@ -39,6 +42,8 @@ constexpr Uint32 kDynamiteChainDelayMs = 140;
 constexpr double kPlasticExplosiveMonsterHitRadiusCells = 0.72;
 constexpr float kAirstrikePlaneMarginCells = 2.0f;
 constexpr float kAirstrikePathSamplesPerCell = 14.0f;
+constexpr int kNuclearCraterExplosionDelayMs = 80;
+constexpr Uint8 kNuclearCraterAlphaThreshold = 0;
 
 struct AirstrikePathCandidate {
   MapCoord coord{0, 0};
@@ -215,7 +220,7 @@ bool HasLineOfSight(Map *map, MapCoord from, MapCoord to,
     direction_out = (to.v > from.v) ? Directions::Right : Directions::Left;
     const int step = (to.v > from.v) ? 1 : -1;
     for (int col = from.v + step; col != to.v; col += step) {
-      if (map->map_entry(from.u, col) == ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(from.u, col))) {
         return false;
       }
     }
@@ -226,7 +231,7 @@ bool HasLineOfSight(Map *map, MapCoord from, MapCoord to,
     direction_out = (to.u > from.u) ? Directions::Down : Directions::Up;
     const int step = (to.u > from.u) ? 1 : -1;
     for (int row = from.u + step; row != to.u; row += step) {
-      if (map->map_entry(row, from.v) == ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(row, from.v))) {
         return false;
       }
     }
@@ -256,6 +261,134 @@ SDL_FPoint ScalePoint(SDL_FPoint point, float factor) {
 double PointDistance(SDL_FPoint left, SDL_FPoint right) {
   return std::hypot(static_cast<double>(left.x - right.x),
                     static_cast<double>(left.y - right.y));
+}
+
+Uint32 ReadSurfacePixel(SDL_Surface *surface, int x, int y) {
+  const auto *pixels = static_cast<const Uint8 *>(surface->pixels);
+  const Uint8 *pixel =
+      pixels + y * surface->pitch + x * surface->format->BytesPerPixel;
+
+  switch (surface->format->BytesPerPixel) {
+  case 1:
+    return *pixel;
+  case 2:
+    return *reinterpret_cast<const Uint16 *>(pixel);
+  case 3:
+    if (SDL_BYTEORDER == SDL_BIG_ENDIAN) {
+      return pixel[0] << 16 | pixel[1] << 8 | pixel[2];
+    }
+    return pixel[0] | pixel[1] << 8 | pixel[2] << 16;
+  case 4:
+    return *reinterpret_cast<const Uint32 *>(pixel);
+  default:
+    return 0;
+  }
+}
+
+struct CraterAlphaMask {
+  int width = 0;
+  int height = 0;
+  std::vector<Uint8> alpha;
+  bool loaded = false;
+};
+
+const CraterAlphaMask &GetNuclearCraterAlphaMask() {
+  static CraterAlphaMask mask = [] {
+    CraterAlphaMask loaded_mask;
+    SDL_Surface *raw_surface =
+        IMG_Load(Paths::GetDataFilePath(NUCLEAR_CRATER_ASSET_PATH).c_str());
+    if (raw_surface == nullptr) {
+      return loaded_mask;
+    }
+
+    SDL_Surface *rgba_surface =
+        SDL_ConvertSurfaceFormat(raw_surface, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_FreeSurface(raw_surface);
+    if (rgba_surface == nullptr) {
+      return loaded_mask;
+    }
+
+    loaded_mask.width = rgba_surface->w;
+    loaded_mask.height = rgba_surface->h;
+    loaded_mask.alpha.resize(static_cast<size_t>(loaded_mask.width) *
+                             static_cast<size_t>(loaded_mask.height));
+
+    const bool lock_surface = SDL_MUSTLOCK(rgba_surface);
+    if (lock_surface) {
+      SDL_LockSurface(rgba_surface);
+    }
+
+    for (int y = 0; y < loaded_mask.height; ++y) {
+      for (int x = 0; x < loaded_mask.width; ++x) {
+        Uint8 red = 0;
+        Uint8 green = 0;
+        Uint8 blue = 0;
+        Uint8 alpha = 0;
+        SDL_GetRGBA(ReadSurfacePixel(rgba_surface, x, y), rgba_surface->format,
+                    &red, &green, &blue, &alpha);
+        loaded_mask.alpha[static_cast<size_t>(y) *
+                              static_cast<size_t>(loaded_mask.width) +
+                          static_cast<size_t>(x)] = alpha;
+      }
+    }
+
+    if (lock_surface) {
+      SDL_UnlockSurface(rgba_surface);
+    }
+    SDL_FreeSurface(rgba_surface);
+    loaded_mask.loaded = true;
+    return loaded_mask;
+  }();
+  return mask;
+}
+
+float NuclearCraterEdgeRadius(float base_radius, int shape_seed, float angle) {
+  const float phase = static_cast<float>(shape_seed % 997) * 0.013f;
+  const float wobble =
+      0.075f * std::sin(angle * 5.0f + phase) +
+      0.045f * std::sin(angle * 9.0f + phase * 1.7f) +
+      0.030f * std::sin(angle * 14.0f + phase * 0.61f);
+  return base_radius * std::clamp(0.94f + wobble, 0.78f, 1.08f);
+}
+
+bool NuclearCraterContainsPoint(const NuclearCrater &crater,
+                                SDL_FPoint point) {
+  const CraterAlphaMask &mask = GetNuclearCraterAlphaMask();
+  if (mask.loaded && mask.width > 0 && mask.height > 0 &&
+      crater.radius_cells > 0.0f) {
+    const float diameter = crater.radius_cells * 2.0f;
+    const float texture_u =
+        (point.x - (crater.world_center.x - crater.radius_cells)) / diameter;
+    const float texture_v =
+        (point.y - (crater.world_center.y - crater.radius_cells)) / diameter;
+    if (texture_u < 0.0f || texture_u > 1.0f || texture_v < 0.0f ||
+        texture_v > 1.0f) {
+      return false;
+    }
+
+    const int pixel_x = std::clamp(
+        static_cast<int>(std::floor(texture_u * static_cast<float>(mask.width))),
+        0, mask.width - 1);
+    const int pixel_y = std::clamp(
+        static_cast<int>(std::floor(texture_v * static_cast<float>(mask.height))),
+        0, mask.height - 1);
+    return mask.alpha[static_cast<size_t>(pixel_y) *
+                          static_cast<size_t>(mask.width) +
+                      static_cast<size_t>(pixel_x)] >
+           kNuclearCraterAlphaThreshold;
+  }
+
+  const float dx = point.x - crater.world_center.x;
+  const float dy = (point.y - crater.world_center.y) /
+                   std::max(0.1f, NUCLEAR_CRATER_Y_RADIUS_FACTOR);
+  const float distance = std::hypot(dx, dy);
+  if (distance <= crater.radius_cells * 0.42f) {
+    return true;
+  }
+
+  const float angle = std::atan2(dy, dx);
+  return distance <=
+         NuclearCraterEdgeRadius(crater.radius_cells, crater.shape_seed, angle);
 }
 
 SDL_FPoint LerpPoint(SDL_FPoint start, SDL_FPoint end, double progress) {
@@ -368,9 +501,13 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   airstrike_inventory = 0;
   rocket_inventory = 0;
   biohazard_inventory = 0;
+  nuclear_bomb_inventory = 0;
+  nuclear_bomb_collected_once = false;
   plastic_explosive_is_armed = false;
   active_airstrike = {};
   active_biohazard_beam = {};
+  nuclear_bomb_target_marker = {};
+  active_nuclear_bomb_drop = {};
   active_nuclear_explosion = {};
   active_nuclear_explosion_b = {};
   simulation_started = false;
@@ -387,6 +524,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   ScheduleNextWalkieTalkieSpawn(last_update_ticks);
   ScheduleNextRocketSpawn(last_update_ticks);
   ScheduleNextBiohazardSpawn(last_update_ticks);
+  ScheduleNextNuclearBombSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -475,6 +613,7 @@ void Game::Update() {
   if (dead) {
     UpdateNuclearExplosion(now);
     UpdateNuclearExplosionB(now);
+    UpdateNuclearBombDrop(now);
     UpdateAirstrike(now);
     UpdatePlacedDynamites(now);
     UpdateRockets(now);
@@ -489,8 +628,11 @@ void Game::Update() {
   UpdateWalkieTalkiePickup(now);
   UpdateRocketPickup(now);
   UpdateBiohazardPickup(now);
+  UpdateNuclearBombPickup(now);
   TryUseBiohazardBeam(now);
   UpdateBiohazardBeam(now);
+  TryUseNuclearBomb(now);
+  UpdateNuclearBombDrop(now);
   TryTriggerNuclearExplosion(now);
   UpdateNuclearExplosion(now);
   TryTriggerNuclearExplosionB(now);
@@ -634,6 +776,16 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
   ShiftActiveTicks(biohazard_pickup.appeared_ticks, paused_duration_ms);
   ShiftActiveTicks(biohazard_pickup.fade_started_ticks, paused_duration_ms);
   ShiftActiveTicks(biohazard_pickup.next_spawn_ticks, paused_duration_ms);
+
+  ShiftActiveTicks(nuclear_bomb_pickup.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(nuclear_bomb_pickup.fade_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(nuclear_bomb_pickup.next_spawn_ticks, paused_duration_ms);
+  ShiftActiveTicks(nuclear_bomb_target_marker.marked_ticks, paused_duration_ms);
+  ShiftActiveTicks(active_nuclear_bomb_drop.alarm_started_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(active_nuclear_bomb_drop.drop_started_ticks,
+                   paused_duration_ms);
+  ShiftActiveTicks(active_nuclear_bomb_drop.impact_ticks, paused_duration_ms);
 
   for (PlacedDynamite &placed_dynamite : placed_dynamites) {
     ShiftActiveTicks(placed_dynamite.placed_ticks, paused_duration_ms);
@@ -939,6 +1091,19 @@ void Game::ScheduleNextBiohazardSpawn(Uint32 now) {
                                  tuning.extra_spawn_interval_scale);
 }
 
+void Game::ScheduleNextNuclearBombSpawn(Uint32 now) {
+  if (nuclear_bomb_collected_once) {
+    nuclear_bomb_pickup.next_spawn_ticks = 0;
+    return;
+  }
+
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  nuclear_bomb_pickup.next_spawn_ticks =
+      now + RandomScaledInterval(NUCLEAR_BOMB_SPAWN_MIN_INTERVAL_MS,
+                                 NUCLEAR_BOMB_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
+}
+
 bool Game::IsWithinRadius(MapCoord center, MapCoord target,
                           int radius_cells) const {
   const int clamped_radius = std::max(0, radius_cells);
@@ -947,6 +1112,105 @@ bool Game::IsWithinRadius(MapCoord center, MapCoord target,
 
 bool Game::IsWithinDynamiteRadius(MapCoord center, MapCoord target) const {
   return IsWithinRadius(center, target, DYNAMITE_EXPLOSION_RADIUS_CELLS);
+}
+
+bool Game::IsCraterCell(MapCoord coord) const {
+  if (!IsInsideMapBounds(map, coord)) {
+    return true;
+  }
+
+  return map->map_entry(static_cast<size_t>(coord.u),
+                        static_cast<size_t>(coord.v)) ==
+         ElementType::TYPE_CRATER;
+}
+
+bool Game::NuclearCraterTouchesCell(const NuclearCrater &crater,
+                                    MapCoord coord) const {
+  const int sample_steps = std::max(2, NUCLEAR_CRATER_EDGE_SAMPLE_STEPS);
+  for (int sample_y = 0; sample_y <= sample_steps; ++sample_y) {
+    for (int sample_x = 0; sample_x <= sample_steps; ++sample_x) {
+      const SDL_FPoint point{
+          static_cast<float>(coord.v) +
+              static_cast<float>(sample_x) / static_cast<float>(sample_steps),
+          static_cast<float>(coord.u) +
+              static_cast<float>(sample_y) / static_cast<float>(sample_steps)};
+      if (NuclearCraterContainsPoint(crater, point)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+void Game::RemoveUnreachableGoodiesAfterCrater() {
+  if (map == nullptr || pacman == nullptr ||
+      !IsInsideMapBounds(map, pacman->map_coord)) {
+    return;
+  }
+
+  const size_t row_count = map->get_map_rows();
+  const size_t col_count = map->get_map_cols();
+  std::vector<std::vector<bool>> reachable(
+      row_count, std::vector<bool>(col_count, false));
+  std::vector<MapCoord> frontier;
+  frontier.push_back(pacman->map_coord);
+  reachable[static_cast<size_t>(pacman->map_coord.u)]
+           [static_cast<size_t>(pacman->map_coord.v)] = true;
+
+  for (size_t index = 0; index < frontier.size(); ++index) {
+    const MapCoord current = frontier[index];
+    for (Directions direction :
+         {Directions::Up, Directions::Down, Directions::Left,
+          Directions::Right}) {
+      const MapCoord next = StepCoord(current, direction);
+      if (!IsInsideMapBounds(map, next) ||
+          IsBlockingMapElement(map->map_entry(static_cast<size_t>(next.u),
+                                             static_cast<size_t>(next.v))) ||
+          reachable[static_cast<size_t>(next.u)]
+                   [static_cast<size_t>(next.v)]) {
+        continue;
+      }
+
+      reachable[static_cast<size_t>(next.u)]
+               [static_cast<size_t>(next.v)] = true;
+      frontier.push_back(next);
+    }
+
+    MapCoord teleporter_destination;
+    char teleporter_digit = '\0';
+    if (map->TryGetTeleporterDestination(current, teleporter_destination,
+                                         teleporter_digit) &&
+        IsInsideMapBounds(map, teleporter_destination) &&
+        !IsBlockingMapElement(map->map_entry(
+            static_cast<size_t>(teleporter_destination.u),
+            static_cast<size_t>(teleporter_destination.v))) &&
+        !reachable[static_cast<size_t>(teleporter_destination.u)]
+                  [static_cast<size_t>(teleporter_destination.v)]) {
+      reachable[static_cast<size_t>(teleporter_destination.u)]
+               [static_cast<size_t>(teleporter_destination.v)] = true;
+      frontier.push_back(teleporter_destination);
+    }
+  }
+
+  for (auto *goodie : goodies) {
+    if (goodie == nullptr || !goodie->is_active ||
+        !IsInsideMapBounds(map, goodie->map_coord)) {
+      continue;
+    }
+
+    if (reachable[static_cast<size_t>(goodie->map_coord.u)]
+                 [static_cast<size_t>(goodie->map_coord.v)]) {
+      continue;
+    }
+
+    goodie->Deactivate();
+    if (map->map_entry(static_cast<size_t>(goodie->map_coord.u),
+                       static_cast<size_t>(goodie->map_coord.v)) ==
+        ElementType::TYPE_GOODIE) {
+      map->SetEntry(goodie->map_coord, ElementType::TYPE_PATH);
+    }
+  }
 }
 
 bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
@@ -980,6 +1244,11 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
   }
 
   if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
+    return false;
+  }
+
+  if (nuclear_bomb_pickup.is_visible &&
+      SameCoord(coord, nuclear_bomb_pickup.coord)) {
     return false;
   }
 
@@ -1086,6 +1355,11 @@ bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
     return false;
   }
 
+  if (nuclear_bomb_pickup.is_visible &&
+      SameCoord(coord, nuclear_bomb_pickup.coord)) {
+    return false;
+  }
+
   for (const auto &dynamite : placed_dynamites) {
     if (SameCoord(coord, dynamite.coord)) {
       return false;
@@ -1136,6 +1410,11 @@ bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
   }
 
   if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
+    return false;
+  }
+
+  if (nuclear_bomb_pickup.is_visible &&
+      SameCoord(coord, nuclear_bomb_pickup.coord)) {
     return false;
   }
 
@@ -1215,6 +1494,11 @@ bool Game::IsCellFreeForWalkieTalkiePickup(MapCoord coord) const {
   }
 
   if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
+    return false;
+  }
+
+  if (nuclear_bomb_pickup.is_visible &&
+      SameCoord(coord, nuclear_bomb_pickup.coord)) {
     return false;
   }
 
@@ -1298,6 +1582,11 @@ bool Game::IsCellFreeForRocketPickup(MapCoord coord) const {
     return false;
   }
 
+  if (nuclear_bomb_pickup.is_visible &&
+      SameCoord(coord, nuclear_bomb_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -1378,6 +1667,11 @@ bool Game::IsCellFreeForBiohazardPickup(MapCoord coord) const {
     return false;
   }
 
+  if (nuclear_bomb_pickup.is_visible &&
+      SameCoord(coord, nuclear_bomb_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -1424,6 +1718,10 @@ bool Game::IsCellFreeForBiohazardPickup(MapCoord coord) const {
   return true;
 }
 
+bool Game::IsCellFreeForNuclearBombPickup(MapCoord coord) const {
+  return !nuclear_bomb_collected_once && IsCellFreeForBiohazardPickup(coord);
+}
+
 bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
   if (!IsInsideMapBounds(map, coord)) {
     return false;
@@ -1431,7 +1729,8 @@ bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
 
   const ElementType entry =
       map->map_entry(static_cast<size_t>(coord.u), static_cast<size_t>(coord.v));
-  if (entry == ElementType::TYPE_TELEPORTER) {
+  if (entry == ElementType::TYPE_TELEPORTER ||
+      entry == ElementType::TYPE_CRATER) {
     return false;
   }
 
@@ -1454,6 +1753,10 @@ bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
     return false;
   }
   if (biohazard_pickup.is_visible && SameCoord(coord, biohazard_pickup.coord)) {
+    return false;
+  }
+  if (nuclear_bomb_pickup.is_visible &&
+      SameCoord(coord, nuclear_bomb_pickup.coord)) {
     return false;
   }
   for (const auto &dynamite : placed_dynamites) {
@@ -1885,6 +2188,76 @@ void Game::UpdateBiohazardPickup(Uint32 now) {
   }
 }
 
+void Game::TrySpawnNuclearBomb(Uint32 now) {
+  if (nuclear_bomb_collected_once || nuclear_bomb_pickup.is_visible ||
+      now < nuclear_bomb_pickup.next_spawn_ticks) {
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForNuclearBombPickup(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    nuclear_bomb_pickup.next_spawn_ticks = now + 1000;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  nuclear_bomb_pickup.coord = candidates[distribution(RandomGenerator())];
+  nuclear_bomb_pickup.appeared_ticks = now;
+  nuclear_bomb_pickup.fade_started_ticks = 0;
+  nuclear_bomb_pickup.animation_seed =
+      static_cast<int>((now % 997) + nuclear_bomb_pickup.coord.u * 97 +
+                       nuclear_bomb_pickup.coord.v * 71);
+  nuclear_bomb_pickup.is_visible = true;
+  nuclear_bomb_pickup.is_fading = false;
+#ifdef AUDIO
+  audio->PlayDynamiteSpawn();
+#endif
+}
+
+void Game::UpdateNuclearBombPickup(Uint32 now) {
+  TrySpawnNuclearBomb(now);
+  if (!nuclear_bomb_pickup.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, nuclear_bomb_pickup.coord)) {
+    nuclear_bomb_inventory = 1;
+    nuclear_bomb_collected_once = true;
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
+    nuclear_bomb_pickup.is_visible = false;
+    nuclear_bomb_pickup.is_fading = false;
+    nuclear_bomb_pickup.fade_started_ticks = 0;
+    nuclear_bomb_pickup.next_spawn_ticks = 0;
+    return;
+  }
+
+  if (!nuclear_bomb_pickup.is_fading &&
+      now - nuclear_bomb_pickup.appeared_ticks >= NUCLEAR_BOMB_VISIBLE_MS) {
+    nuclear_bomb_pickup.is_fading = true;
+    nuclear_bomb_pickup.fade_started_ticks = now;
+  }
+
+  if (nuclear_bomb_pickup.is_fading &&
+      now - nuclear_bomb_pickup.fade_started_ticks >= NUCLEAR_BOMB_FADE_MS) {
+    nuclear_bomb_pickup.is_visible = false;
+    nuclear_bomb_pickup.is_fading = false;
+    nuclear_bomb_pickup.fade_started_ticks = 0;
+    ScheduleNextNuclearBombSpawn(now);
+  }
+}
+
 void Game::TryUseBiohazardBeam(Uint32 now) {
   if (events == nullptr || pacman == nullptr) {
     return;
@@ -1961,7 +2334,7 @@ void Game::UpdateBiohazardBeam(Uint32 now) {
   case Directions::Up: {
     float stop_y = 0.0f;
     for (int u = origin_u - 1; u >= 0; --u) {
-      if (map->map_entry(u, origin_v) == ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(u, origin_v))) {
         stop_y = static_cast<float>(u) + 1.0f;
         break;
       }
@@ -1972,7 +2345,7 @@ void Game::UpdateBiohazardBeam(Uint32 now) {
   case Directions::Down: {
     float stop_y = static_cast<float>(rows);
     for (int u = origin_u + 1; u < rows; ++u) {
-      if (map->map_entry(u, origin_v) == ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(u, origin_v))) {
         stop_y = static_cast<float>(u);
         break;
       }
@@ -1983,7 +2356,7 @@ void Game::UpdateBiohazardBeam(Uint32 now) {
   case Directions::Left: {
     float stop_x = 0.0f;
     for (int v = origin_v - 1; v >= 0; --v) {
-      if (map->map_entry(origin_u, v) == ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(origin_u, v))) {
         stop_x = static_cast<float>(v) + 1.0f;
         break;
       }
@@ -1994,7 +2367,7 @@ void Game::UpdateBiohazardBeam(Uint32 now) {
   case Directions::Right: {
     float stop_x = static_cast<float>(cols);
     for (int v = origin_v + 1; v < cols; ++v) {
-      if (map->map_entry(origin_u, v) == ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(origin_u, v))) {
         stop_x = static_cast<float>(v);
         break;
       }
@@ -2087,6 +2460,10 @@ void Game::TryPlaceDynamite(Uint32 now) {
   }
 
   const MapCoord placement_coord = pacman->map_coord;
+  if (IsCraterCell(placement_coord)) {
+    return;
+  }
+
   for (const auto &placed_dynamite : placed_dynamites) {
     if (SameCoord(placed_dynamite.coord, placement_coord)) {
       return;
@@ -2183,6 +2560,127 @@ void Game::TryFireRocket(Uint32 now) {
 #endif
 }
 
+void Game::TryUseNuclearBomb(Uint32 now) {
+  if (events == nullptr || pacman == nullptr || map == nullptr) {
+    return;
+  }
+
+  const bool use_requested =
+      events->ConsumeExtraUseRequest(ExtraSlot::NuclearBomb);
+  if (!use_requested || active_nuclear_bomb_drop.is_active ||
+      active_nuclear_explosion.is_active) {
+    return;
+  }
+
+  if (!nuclear_bomb_target_marker.is_marked) {
+    if (nuclear_bomb_inventory <= 0 || IsCraterCell(pacman->map_coord)) {
+      return;
+    }
+
+    nuclear_bomb_target_marker = {};
+    nuclear_bomb_target_marker.is_marked = true;
+    nuclear_bomb_target_marker.coord = pacman->map_coord;
+    nuclear_bomb_target_marker.marked_ticks = now;
+    nuclear_bomb_target_marker.animation_seed =
+        static_cast<int>((now % 997) + pacman->map_coord.u * 101 +
+                         pacman->map_coord.v * 73);
+    return;
+  }
+
+  if (nuclear_bomb_inventory <= 0) {
+    return;
+  }
+
+  active_nuclear_bomb_drop = {};
+  active_nuclear_bomb_drop.is_active = true;
+  active_nuclear_bomb_drop.target_coord = nuclear_bomb_target_marker.coord;
+  active_nuclear_bomb_drop.target_world_center =
+      MakeCellCenter(nuclear_bomb_target_marker.coord);
+  active_nuclear_bomb_drop.alarm_started_ticks = now;
+  active_nuclear_bomb_drop.drop_started_ticks = now + NUCLEAR_BOMB_ALARM_MS;
+  active_nuclear_bomb_drop.impact_ticks =
+      active_nuclear_bomb_drop.drop_started_ticks + NUCLEAR_BOMB_FALL_MS;
+  active_nuclear_bomb_drop.animation_seed =
+      static_cast<int>((now % 997) + active_nuclear_bomb_drop.target_coord.u * 107 +
+                       active_nuclear_bomb_drop.target_coord.v * 79);
+  active_nuclear_bomb_drop.drop_sound_started = false;
+  nuclear_bomb_inventory = 0;
+#ifdef AUDIO
+  audio->PlayNuclearBombAlarm();
+#endif
+}
+
+void Game::UpdateNuclearBombDrop(Uint32 now) {
+  if (!active_nuclear_bomb_drop.is_active) {
+    return;
+  }
+
+  if (!active_nuclear_bomb_drop.drop_sound_started &&
+      now >= active_nuclear_bomb_drop.drop_started_ticks) {
+    active_nuclear_bomb_drop.drop_sound_started = true;
+#ifdef AUDIO
+    audio->PlayNuclearBombDrop();
+#endif
+  }
+
+  if (now < active_nuclear_bomb_drop.impact_ticks) {
+    return;
+  }
+
+#ifdef AUDIO
+  audio->PlayNuclearBombExplosion();
+#endif
+  TriggerNuclearExplosionAt(active_nuclear_bomb_drop.target_world_center,
+                            active_nuclear_bomb_drop.target_coord, now);
+  active_nuclear_bomb_drop = {};
+  nuclear_bomb_target_marker = {};
+}
+
+void Game::TriggerNuclearExplosionAt(SDL_FPoint world_center,
+                                     MapCoord center_coord, Uint32 now) {
+  if (map == nullptr || active_nuclear_explosion.is_active) {
+    return;
+  }
+
+  active_nuclear_explosion = {};
+  active_nuclear_explosion.is_active = true;
+  active_nuclear_explosion.started_ticks = now;
+  active_nuclear_explosion.last_ring_spawn_ticks =
+      (now > NUCLEAR_SMOKE_RING_SPAWN_INTERVAL_MS)
+          ? (now - NUCLEAR_SMOKE_RING_SPAWN_INTERVAL_MS)
+          : 0;
+  active_nuclear_explosion.last_center_smoke_spawn_ticks =
+      (now > NUCLEAR_CENTER_SMOKE_SPAWN_INTERVAL_MS)
+          ? (now - NUCLEAR_CENTER_SMOKE_SPAWN_INTERVAL_MS)
+          : 0;
+  active_nuclear_explosion.last_mushroom_smoke_spawn_ticks =
+      (now > NUCLEAR_MUSHROOM_SPAWN_INTERVAL_MS)
+          ? (now - NUCLEAR_MUSHROOM_SPAWN_INTERVAL_MS)
+          : 0;
+  active_nuclear_explosion.animation_seed =
+      static_cast<int>((now % 997) + center_coord.u * 43 + center_coord.v * 61);
+  active_nuclear_explosion.center_coord = center_coord;
+  active_nuclear_explosion.world_center = world_center;
+
+  GameEffect effect{center_coord, now, EffectType::NuclearExplosion,
+                    NUCLEAR_EXPLOSION_RADIUS_CELLS};
+  effect.has_precise_world_center = true;
+  effect.precise_world_center = world_center;
+  effects.push_back(effect);
+
+  if (pacman != nullptr &&
+      PointDistance(MakeCellCenter(pacman->map_coord), world_center) <=
+          static_cast<double>(NUCLEAR_EXPLOSION_RADIUS_CELLS) +
+              static_cast<double>(PACMAN_HITBOX_RADIUS_CELLS)) {
+    remaining_lives = 1;
+    TriggerLoss(pacman->map_coord, now);
+  }
+
+  active_nuclear_explosion.crater_created = true;
+  CreateNuclearCrater(active_nuclear_explosion, now,
+                      now + NUCLEAR_EXPLOSION_FIREBALL_BURN_MS);
+}
+
 void Game::TryTriggerNuclearExplosion(Uint32 now) {
   if (events == nullptr || map == nullptr) {
     return;
@@ -2204,32 +2702,166 @@ void Game::TryTriggerNuclearExplosion(Uint32 now) {
   const MapCoord center_coord{
       std::clamp(static_cast<int>(std::floor(world_center.y)), 0, rows - 1),
       std::clamp(static_cast<int>(std::floor(world_center.x)), 0, cols - 1)};
+  TriggerNuclearExplosionAt(world_center, center_coord, now);
+}
 
-  active_nuclear_explosion = {};
-  active_nuclear_explosion.is_active = true;
-  active_nuclear_explosion.started_ticks = now;
-  active_nuclear_explosion.last_ring_spawn_ticks =
-      (now > NUCLEAR_SMOKE_RING_SPAWN_INTERVAL_MS)
-          ? (now - NUCLEAR_SMOKE_RING_SPAWN_INTERVAL_MS)
-          : 0;
-  active_nuclear_explosion.last_center_smoke_spawn_ticks =
-      (now > NUCLEAR_CENTER_SMOKE_SPAWN_INTERVAL_MS)
-          ? (now - NUCLEAR_CENTER_SMOKE_SPAWN_INTERVAL_MS)
-          : 0;
-  active_nuclear_explosion.last_mushroom_smoke_spawn_ticks =
-      (now > NUCLEAR_MUSHROOM_SPAWN_INTERVAL_MS)
-          ? (now - NUCLEAR_MUSHROOM_SPAWN_INTERVAL_MS)
-          : 0;
-  active_nuclear_explosion.animation_seed =
-      static_cast<int>((now % 997) + rows * 43 + cols * 61);
-  active_nuclear_explosion.center_coord = center_coord;
-  active_nuclear_explosion.world_center = world_center;
+void Game::CreateNuclearCrater(const ActiveNuclearExplosion &explosion,
+                               Uint32 now, Uint32 visible_ticks) {
+  if (map == nullptr) {
+    return;
+  }
 
-  GameEffect effect{center_coord, now, EffectType::NuclearExplosion,
-                    NUCLEAR_EXPLOSION_RADIUS_CELLS};
-  effect.has_precise_world_center = true;
-  effect.precise_world_center = world_center;
-  effects.push_back(effect);
+  NuclearCrater crater;
+  crater.world_center = explosion.world_center;
+  crater.radius_cells = NUCLEAR_CRATER_RADIUS_CELLS;
+  crater.shape_seed = explosion.animation_seed;
+  crater.visible_ticks = visible_ticks;
+
+  const int min_row = std::max(
+      0, static_cast<int>(std::floor(crater.world_center.y -
+                                     crater.radius_cells - 1.0f)));
+  const int max_row = std::min(
+      static_cast<int>(map->get_map_rows()) - 1,
+      static_cast<int>(std::ceil(crater.world_center.y +
+                                 crater.radius_cells + 1.0f)));
+  const int min_col = std::max(
+      0, static_cast<int>(std::floor(crater.world_center.x -
+                                     crater.radius_cells - 1.0f)));
+  const int max_col = std::min(
+      static_cast<int>(map->get_map_cols()) - 1,
+      static_cast<int>(std::ceil(crater.world_center.x +
+                                 crater.radius_cells + 1.0f)));
+
+  for (int row = min_row; row <= max_row; ++row) {
+    for (int col = min_col; col <= max_col; ++col) {
+      const MapCoord coord{row, col};
+      if (!NuclearCraterTouchesCell(crater, coord)) {
+        continue;
+      }
+
+      crater.cells.push_back(coord);
+      const ElementType entry =
+          map->map_entry(static_cast<size_t>(row), static_cast<size_t>(col));
+      const SDL_FPoint cell_center = MakeCellCenter(coord);
+
+      if (entry == ElementType::TYPE_WALL ||
+          entry == ElementType::TYPE_TELEPORTER) {
+        SpawnWallDestructionParticles(cell_center, now);
+        map->SetEntry(coord, ElementType::TYPE_PATH);
+        SpawnWallRubble(coord);
+      }
+
+      if (entry == ElementType::TYPE_GOODIE) {
+        for (auto *goodie : goodies) {
+          if (goodie != nullptr && goodie->is_active &&
+              SameCoord(goodie->map_coord, coord)) {
+            goodie->Deactivate();
+          }
+        }
+      }
+
+      for (auto *monster : monsters) {
+        if (monster == nullptr || !monster->is_alive ||
+            !SameCoord(monster->map_coord, coord)) {
+          continue;
+        }
+
+        monster->scheduled_dynamite_blast_ticks =
+            now + kNuclearCraterExplosionDelayMs;
+        monster->scheduled_dynamite_blast_coord = coord;
+        ScheduleMonsterBlast(monster,
+                             now + kNuclearCraterExplosionDelayMs);
+      }
+
+      if (dynamite_pickup.is_visible && SameCoord(dynamite_pickup.coord, coord)) {
+        dynamite_pickup.is_visible = false;
+        dynamite_pickup.is_fading = false;
+        ScheduleNextDynamiteSpawn(now);
+      }
+      if (invulnerability_potion.is_visible &&
+          SameCoord(invulnerability_potion.coord, coord)) {
+        invulnerability_potion.is_visible = false;
+        invulnerability_potion.is_fading = false;
+        ScheduleNextInvulnerabilityPotionSpawn(now);
+      }
+      if (plastic_explosive_pickup.is_visible &&
+          SameCoord(plastic_explosive_pickup.coord, coord)) {
+        plastic_explosive_pickup.is_visible = false;
+        plastic_explosive_pickup.is_fading = false;
+        ScheduleNextPlasticExplosiveSpawn(now);
+      }
+      if (walkie_talkie_pickup.is_visible &&
+          SameCoord(walkie_talkie_pickup.coord, coord)) {
+        walkie_talkie_pickup.is_visible = false;
+        walkie_talkie_pickup.is_fading = false;
+        ScheduleNextWalkieTalkieSpawn(now);
+      }
+      if (rocket_pickup.is_visible && SameCoord(rocket_pickup.coord, coord)) {
+        rocket_pickup.is_visible = false;
+        rocket_pickup.is_fading = false;
+        ScheduleNextRocketSpawn(now);
+      }
+      if (biohazard_pickup.is_visible &&
+          SameCoord(biohazard_pickup.coord, coord)) {
+        biohazard_pickup.is_visible = false;
+        biohazard_pickup.is_fading = false;
+        ScheduleNextBiohazardSpawn(now);
+      }
+      if (nuclear_bomb_pickup.is_visible &&
+          SameCoord(nuclear_bomb_pickup.coord, coord)) {
+        nuclear_bomb_pickup.is_visible = false;
+        nuclear_bomb_pickup.is_fading = false;
+        ScheduleNextNuclearBombSpawn(now);
+      }
+      if (nuclear_bomb_target_marker.is_marked &&
+          SameCoord(nuclear_bomb_target_marker.coord, coord)) {
+        nuclear_bomb_target_marker = {};
+      }
+
+      placed_dynamites.erase(
+          std::remove_if(placed_dynamites.begin(), placed_dynamites.end(),
+                         [coord](const PlacedDynamite &dynamite) {
+                           return SameCoord(dynamite.coord, coord);
+                         }),
+          placed_dynamites.end());
+      if (plastic_explosive_is_armed &&
+          SameCoord(placed_plastic_explosive.coord, coord)) {
+        plastic_explosive_is_armed = false;
+        placed_plastic_explosive = {};
+      }
+
+      fireballs.erase(
+          std::remove_if(fireballs.begin(), fireballs.end(),
+                         [coord](const Fireball &fireball) {
+                           return SameCoord(fireball.current_coord, coord);
+                         }),
+          fireballs.end());
+      slimeballs.erase(
+          std::remove_if(slimeballs.begin(), slimeballs.end(),
+                         [coord](const Slimeball &slimeball) {
+                           return SameCoord(slimeball.current_coord, coord);
+                         }),
+          slimeballs.end());
+      active_rockets.erase(
+          std::remove_if(active_rockets.begin(), active_rockets.end(),
+                         [coord](const RocketProjectile &rocket) {
+                           return SameCoord(rocket.current_coord, coord);
+                         }),
+          active_rockets.end());
+
+      map->SetEntry(coord, ElementType::TYPE_CRATER);
+    }
+  }
+
+  if (!crater.cells.empty()) {
+    nuclear_craters.push_back(crater);
+  }
+
+  RemoveUnreachableGoodiesAfterCrater();
+
+  if (pacman != nullptr && IsCraterCell(pacman->map_coord)) {
+    TriggerLoss(pacman->map_coord, now);
+  }
 }
 
 void Game::UpdateNuclearExplosion(Uint32 now) {
@@ -2238,6 +2870,12 @@ void Game::UpdateNuclearExplosion(Uint32 now) {
   }
 
   const Uint32 age = now - active_nuclear_explosion.started_ticks;
+  if (!active_nuclear_explosion.crater_created &&
+      age >= NUCLEAR_EXPLOSION_FIREBALL_BURN_MS) {
+    active_nuclear_explosion.crater_created = true;
+    CreateNuclearCrater(active_nuclear_explosion, now, now);
+  }
+
   if (age >= NUCLEAR_EXPLOSION_TOTAL_DURATION_MS) {
     active_nuclear_explosion = {};
     return;
@@ -2591,9 +3229,9 @@ void Game::UpdateRockets(Uint32 now) {
     while (!detonate_rocket &&
            now - rocket.segment_started_ticks >= step_duration_ms) {
       const MapCoord next_coord = StepCoord(rocket.current_coord, rocket.direction);
-      if (map->map_entry(static_cast<size_t>(next_coord.u),
-                         static_cast<size_t>(next_coord.v)) ==
-          ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(
+              map->map_entry(static_cast<size_t>(next_coord.u),
+                             static_cast<size_t>(next_coord.v)))) {
         impact_coord = rocket.current_coord;
         hit_wall = true;
         detonate_rocket = true;
@@ -3163,7 +3801,7 @@ void Game::UpdateFireballs(Uint32 now) {
            now - fireball.segment_started_ticks >= step_duration_ms) {
       MapCoord next_coord = StepCoord(fireball.current_coord, fireball.direction);
 
-      if (map->map_entry(next_coord.u, next_coord.v) == ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(next_coord.u, next_coord.v))) {
         effects.push_back({next_coord, now, EffectType::WallImpact, 0});
 #ifdef AUDIO
         audio->PlayFireballWallHit();
@@ -3228,7 +3866,7 @@ void Game::UpdateSlimeballs(Uint32 now) {
            now - slimeball.segment_started_ticks >= step_duration_ms) {
       MapCoord next_coord = StepCoord(slimeball.current_coord, slimeball.direction);
 
-      if (map->map_entry(next_coord.u, next_coord.v) == ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(next_coord.u, next_coord.v))) {
         GameEffect slime_impact_effect{
             slimeball.current_coord, now, EffectType::SlimeSplash, 1};
         slime_impact_effect.has_precise_world_center = true;
@@ -3536,7 +4174,9 @@ void Game::SpawnWallRubble(MapCoord destroyed_coord) {
 
     const ElementType entry =
         map->map_entry(static_cast<size_t>(tile.u), static_cast<size_t>(tile.v));
-    if (entry == ElementType::TYPE_WALL || entry == ElementType::TYPE_TELEPORTER) {
+    if (entry == ElementType::TYPE_WALL ||
+        entry == ElementType::TYPE_CRATER ||
+        entry == ElementType::TYPE_TELEPORTER) {
       return;
     }
 
@@ -3997,38 +4637,35 @@ void Game::SpawnNuclearBCapSmoke(float cap_progress, Uint32 now) {
   static thread_local std::mt19937 rng{std::random_device{}()};
   std::uniform_real_distribution<float> angle_dist(
       0.0f, static_cast<float>(2.0 * M_PI));
-  std::uniform_real_distribution<float> radius_unit_dist(0.0f, 1.0f);
-  std::uniform_real_distribution<float> height_jitter_dist(-0.85f, 0.85f);
-  std::uniform_real_distribution<float> spin_jitter_dist(0.65f, 1.45f);
+  std::uniform_real_distribution<float> jitter_dist(-0.18f, 0.18f);
+  std::uniform_real_distribution<float> height_jitter_dist(-0.30f, 0.30f);
+  std::uniform_real_distribution<float> curl_speed_jitter_dist(0.85f, 1.18f);
   std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
 
   const float progress = std::clamp(cap_progress, 0.0f, 1.0f);
-  const float cap_radius = 0.6f + progress * NUCLEAR_B_CAP_RADIUS_CELLS;
-  const float cap_height =
+  const float cap_top_height =
       0.8f + progress * NUCLEAR_B_STEM_HEIGHT_CELLS +
       NUCLEAR_B_CAP_HEIGHT_OFFSET_CELLS;
+  const float lifetime_s =
+      static_cast<float>(NUCLEAR_B_CAP_SMOKE_LIFETIME_MS) / 1000.0f;
+  // curl_speed * lifetime = pi -> Puff durchläuft eine Halb-Torusbahn.
+  const float curl_speed_base =
+      static_cast<float>(M_PI) / std::max(0.1f, lifetime_s);
   for (int index = 0; index < NUCLEAR_B_CAP_PUFFS_PER_SPAWN; ++index) {
     const float angle = angle_dist(rng);
-    const float radius =
-        cap_radius * (0.25f + 0.75f * std::sqrt(radius_unit_dist(rng)));
     ExplosionSmokePuff puff;
     puff.world_position = {active_nuclear_explosion_b.world_center.x +
-                               std::cos(angle) * radius,
+                               jitter_dist(rng),
                            active_nuclear_explosion_b.world_center.y +
-                               std::sin(angle) * radius * 0.55f};
-    const float tangential_speed =
-        NUCLEAR_B_CAP_CURL_SPEED_RAD_PER_SEC * radius * 0.9f;
-    puff.velocity_cells_per_sec = {-std::sin(angle) * tangential_speed,
-                                   std::cos(angle) * tangential_speed * 0.55f};
-    puff.vertical_offset_cells = cap_height + height_jitter_dist(rng);
-    puff.vertical_velocity_cells_per_sec =
-        -0.45f * (0.5f + radius / std::max(0.1f, cap_radius));
+                               jitter_dist(rng)};
+    puff.velocity_cells_per_sec = {0.0f, 0.0f};
+    puff.vertical_offset_cells = cap_top_height + height_jitter_dist(rng);
+    puff.vertical_velocity_cells_per_sec = 0.0f;
     puff.spawned_ticks = now;
     puff.shape_seed = seed_dist(rng);
     puff.rotation_radians = angle;
     puff.rotation_speed_rad_per_sec =
-        NUCLEAR_B_CAP_CURL_SPEED_RAD_PER_SEC * spin_jitter_dist(rng) *
-        (radius < cap_radius * 0.4f ? -0.6f : 1.0f);
+        curl_speed_base * curl_speed_jitter_dist(rng);
     puff.kind = ExplosionSmokePuffKind::NuclearBCapSmoke;
     explosion_smoke_puffs.push_back(puff);
   }

@@ -35,6 +35,9 @@ ExtraSlot KeycodeToExtraSlot(SDL_Keycode keycode) {
   case SDLK_5:
   case SDLK_KP_5:
     return ExtraSlot::Biohazard;
+  case SDLK_6:
+  case SDLK_KP_6:
+    return ExtraSlot::NuclearBomb;
   default:
     return ExtraSlot::None;
   }
@@ -165,10 +168,6 @@ void Events::update() {
       const ExtraSlot requested_slot = KeycodeToExtraSlot(keycode);
       if (requested_slot != ExtraSlot::None) {
         requested_extra = requested_slot;
-        continue;
-      }
-      if (keycode == SDLK_a) {
-        nuclear_test_requested = true;
         continue;
       }
       if (keycode == SDLK_b) {

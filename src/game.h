@@ -129,6 +129,34 @@ struct BiohazardPickup {
   bool is_fading = false;
 };
 
+struct NuclearBombPickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
+struct NuclearBombTargetMarker {
+  bool is_marked = false;
+  MapCoord coord{0, 0};
+  Uint32 marked_ticks = 0;
+  int animation_seed = 0;
+};
+
+struct ActiveNuclearBombDrop {
+  bool is_active = false;
+  MapCoord target_coord{0, 0};
+  SDL_FPoint target_world_center{0.0f, 0.0f};
+  Uint32 alarm_started_ticks = 0;
+  Uint32 drop_started_ticks = 0;
+  Uint32 impact_ticks = 0;
+  int animation_seed = 0;
+  bool drop_sound_started = false;
+};
+
 struct PlacedDynamite {
   MapCoord coord{0, 0};
   Uint32 placed_ticks = 0;
@@ -202,6 +230,7 @@ struct ActiveBiohazardBeam {
 
 struct ActiveNuclearExplosion {
   bool is_active = false;
+  bool crater_created = false;
   Uint32 started_ticks = 0;
   Uint32 last_ring_spawn_ticks = 0;
   Uint32 last_center_smoke_spawn_ticks = 0;
@@ -209,6 +238,14 @@ struct ActiveNuclearExplosion {
   int animation_seed = 0;
   MapCoord center_coord{0, 0};
   SDL_FPoint world_center{0.0f, 0.0f};
+};
+
+struct NuclearCrater {
+  SDL_FPoint world_center{0.0f, 0.0f};
+  float radius_cells = 0.0f;
+  int shape_seed = 0;
+  Uint32 visible_ticks = 0;
+  std::vector<MapCoord> cells;
 };
 
 struct ActiveNuclearExplosionB {
@@ -335,6 +372,9 @@ private:
   WalkieTalkiePickup walkie_talkie_pickup;
   RocketPickup rocket_pickup;
   BiohazardPickup biohazard_pickup;
+  NuclearBombPickup nuclear_bomb_pickup;
+  NuclearBombTargetMarker nuclear_bomb_target_marker;
+  ActiveNuclearBombDrop active_nuclear_bomb_drop;
   std::vector<PlacedDynamite> placed_dynamites;
   PlacedPlasticExplosive placed_plastic_explosive;
   bool plastic_explosive_is_armed;
@@ -343,6 +383,7 @@ private:
   ActiveBiohazardBeam active_biohazard_beam;
   ActiveNuclearExplosion active_nuclear_explosion;
   ActiveNuclearExplosionB active_nuclear_explosion_b;
+  std::vector<NuclearCrater> nuclear_craters;
   std::vector<ScheduledMonsterBlast> scheduled_monster_blasts;
   std::vector<GameEffect> effects;
   std::vector<ExplosionParticle> explosion_particles;
@@ -355,6 +396,8 @@ private:
   int airstrike_inventory;
   int rocket_inventory;
   int biohazard_inventory;
+  int nuclear_bomb_inventory;
+  bool nuclear_bomb_collected_once;
   friend class Renderer;
   bool dead;
   bool win;
@@ -389,9 +432,14 @@ private:
   void ScheduleNextBiohazardSpawn(Uint32 now);
   void TrySpawnBiohazard(Uint32 now);
   void UpdateBiohazardPickup(Uint32 now);
+  void ScheduleNextNuclearBombSpawn(Uint32 now);
+  void TrySpawnNuclearBomb(Uint32 now);
+  void UpdateNuclearBombPickup(Uint32 now);
   void TryUseAirstrike(Uint32 now);
   void TryFireRocket(Uint32 now);
   void TryUseBiohazardBeam(Uint32 now);
+  void TryUseNuclearBomb(Uint32 now);
+  void UpdateNuclearBombDrop(Uint32 now);
   void TryTriggerNuclearExplosion(Uint32 now);
   void TryTriggerNuclearExplosionB(Uint32 now);
   void UpdateBiohazardBeam(Uint32 now);
@@ -415,7 +463,9 @@ private:
   bool IsCellFreeForWalkieTalkiePickup(MapCoord coord) const;
   bool IsCellFreeForRocketPickup(MapCoord coord) const;
   bool IsCellFreeForBiohazardPickup(MapCoord coord) const;
+  bool IsCellFreeForNuclearBombPickup(MapCoord coord) const;
   bool CanPlacePlasticExplosiveAt(MapCoord coord) const;
+  bool IsCraterCell(MapCoord coord) const;
   bool IsWithinRadius(MapCoord center, MapCoord target, int radius_cells) const;
   bool IsWithinDynamiteRadius(MapCoord center, MapCoord target) const;
   bool IsCellFreeForInvulnerabilityPotion(MapCoord coord) const;
@@ -441,6 +491,13 @@ private:
   void SpawnNuclearRingSmoke(float ring_progress, Uint32 now);
   void SpawnNuclearCenterSmoke(float center_smoke_progress, Uint32 now);
   void SpawnNuclearMushroomSmoke(float mushroom_progress, Uint32 now);
+  void TriggerNuclearExplosionAt(SDL_FPoint world_center, MapCoord center_coord,
+                                 Uint32 now);
+  void CreateNuclearCrater(const ActiveNuclearExplosion &explosion, Uint32 now,
+                           Uint32 visible_ticks);
+  bool NuclearCraterTouchesCell(const NuclearCrater &crater,
+                                MapCoord coord) const;
+  void RemoveUnreachableGoodiesAfterCrater();
   void SpawnNuclearBRingSmoke(float ring_progress, Uint32 now);
   void SpawnNuclearBTrailSmoke(float ring_progress, Uint32 now);
   void SpawnNuclearBStemSmoke(float stem_progress, Uint32 now);

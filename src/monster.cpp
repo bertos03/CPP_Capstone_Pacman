@@ -32,8 +32,8 @@ bool HasLineOfSight(Map *map, MapCoord from, MapCoord to,
     direction_out = (to.v > from.v) ? Directions::Right : Directions::Left;
     const int step = (to.v > from.v) ? 1 : -1;
     for (int col = from.v + step; col != to.v; col += step) {
-      if (map->map_entry(static_cast<size_t>(from.u), static_cast<size_t>(col)) ==
-          ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(static_cast<size_t>(from.u),
+                                              static_cast<size_t>(col)))) {
         return false;
       }
     }
@@ -44,8 +44,8 @@ bool HasLineOfSight(Map *map, MapCoord from, MapCoord to,
     direction_out = (to.u > from.u) ? Directions::Down : Directions::Up;
     const int step = (to.u > from.u) ? 1 : -1;
     for (int row = from.u + step; row != to.u; row += step) {
-      if (map->map_entry(static_cast<size_t>(row), static_cast<size_t>(from.v)) ==
-          ElementType::TYPE_WALL) {
+      if (IsBlockingMapElement(map->map_entry(static_cast<size_t>(row),
+                                              static_cast<size_t>(from.v)))) {
         return false;
       }
     }

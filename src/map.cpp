@@ -223,6 +223,7 @@ char Map::Type2Char(ElementType inp) {
   case ElementType::TYPE_WALL:
     return BRICK;
   case ElementType::TYPE_PATH:
+  case ElementType::TYPE_CRATER:
     return PATH;
   case ElementType::TYPE_TELEPORTER:
     return '1';
@@ -449,23 +450,23 @@ void Map::get_options(MapCoord in_coord, std::vector<Directions> &options) {
   }
 
   if (in_coord.u > 0 &&
-      map_entry(static_cast<size_t>(in_coord.u - 1),
-                static_cast<size_t>(in_coord.v)) != ElementType::TYPE_WALL) {
+      !IsBlockingMapElement(map_entry(static_cast<size_t>(in_coord.u - 1),
+                                      static_cast<size_t>(in_coord.v)))) {
     options.emplace_back(Directions::Up);
   }
   if (in_coord.u + 1 < static_cast<int>(get_map_rows()) &&
-      map_entry(static_cast<size_t>(in_coord.u + 1),
-                static_cast<size_t>(in_coord.v)) != ElementType::TYPE_WALL) {
+      !IsBlockingMapElement(map_entry(static_cast<size_t>(in_coord.u + 1),
+                                      static_cast<size_t>(in_coord.v)))) {
     options.emplace_back(Directions::Down);
   }
   if (in_coord.v > 0 &&
-      map_entry(static_cast<size_t>(in_coord.u),
-                static_cast<size_t>(in_coord.v - 1)) != ElementType::TYPE_WALL) {
+      !IsBlockingMapElement(map_entry(static_cast<size_t>(in_coord.u),
+                                      static_cast<size_t>(in_coord.v - 1)))) {
     options.emplace_back(Directions::Left);
   }
   if (in_coord.v + 1 < static_cast<int>(get_map_cols()) &&
-      map_entry(static_cast<size_t>(in_coord.u),
-                static_cast<size_t>(in_coord.v + 1)) != ElementType::TYPE_WALL) {
+      !IsBlockingMapElement(map_entry(static_cast<size_t>(in_coord.u),
+                                      static_cast<size_t>(in_coord.v + 1)))) {
     options.emplace_back(Directions::Right);
   }
 }

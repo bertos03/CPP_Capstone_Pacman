@@ -120,6 +120,16 @@ double HashUnit(int seed) {
   return value - std::floor(value);
 }
 
+float NuclearCraterRenderEdgeRadius(float base_radius, int shape_seed,
+                                    float angle) {
+  const float phase = static_cast<float>(shape_seed % 997) * 0.013f;
+  const float wobble =
+      0.075f * std::sin(angle * 5.0f + phase) +
+      0.045f * std::sin(angle * 9.0f + phase * 1.7f) +
+      0.030f * std::sin(angle * 14.0f + phase * 0.61f);
+  return base_radius * std::clamp(0.94f + wobble, 0.78f, 1.08f);
+}
+
 double HashSigned(int seed) {
   return HashUnit(seed) * 2.0 - 1.0;
 }
@@ -422,6 +432,10 @@ Renderer::Renderer(Map *_map, Game *_game)
       sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
       sdl_dynamite_texture(nullptr), sdl_dynamite_size{0, 0},
+      sdl_nuclear_crater_texture(nullptr), sdl_nuclear_crater_size{0, 0},
+      sdl_nuclear_bomb_texture(nullptr), sdl_nuclear_bomb_size{0, 0},
+      sdl_nuclear_target_marker_texture(nullptr),
+      sdl_nuclear_target_marker_size{0, 0},
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
@@ -452,6 +466,10 @@ Renderer::Renderer(size_t row_count, size_t col_count)
       sdl_goodie_surface(nullptr),
       sdl_goodie_texture(nullptr), sdl_logo_brick_surface(nullptr),
       sdl_dynamite_texture(nullptr), sdl_dynamite_size{0, 0},
+      sdl_nuclear_crater_texture(nullptr), sdl_nuclear_crater_size{0, 0},
+      sdl_nuclear_bomb_texture(nullptr), sdl_nuclear_bomb_size{0, 0},
+      sdl_nuclear_target_marker_texture(nullptr),
+      sdl_nuclear_target_marker_size{0, 0},
       sdl_start_menu_monster_texture(nullptr), sdl_start_menu_monster_size{0, 0},
       sdl_start_menu_hero_texture(nullptr), sdl_start_menu_hero_size{0, 0},
       sdl_win_screen_texture(nullptr), sdl_win_screen_size{0, 0},
@@ -732,6 +750,17 @@ void Renderer::initializeRenderer(size_t row_count_value,
       Paths::GetDataFilePath("slime_splash_sheet.png"), sdl_slime_splash_size);
   sdl_dynamite_texture = loadTrimmedTexture(Paths::GetDataFilePath("dynamite.png"),
                                             sdl_dynamite_size);
+  sdl_nuclear_bomb_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath(NUCLEAR_BOMB_ASSET_PATH), sdl_nuclear_bomb_size);
+  configureSmoothTextureSampling(sdl_nuclear_bomb_texture);
+  sdl_nuclear_target_marker_texture = loadTrimmedTexture(
+      Paths::GetDataFilePath(NUCLEAR_TARGET_MARKER_ASSET_PATH),
+      sdl_nuclear_target_marker_size);
+  configureSmoothTextureSampling(sdl_nuclear_target_marker_texture);
+  sdl_nuclear_crater_texture = loadTexturePreserveCanvas(
+      Paths::GetDataFilePath(NUCLEAR_CRATER_ASSET_PATH),
+      sdl_nuclear_crater_size);
+  configureSmoothTextureSampling(sdl_nuclear_crater_texture);
   for (size_t index = 0; index < sdl_hud_keycap_textures.size(); ++index) {
     sdl_hud_keycap_sizes[index] = SDL_Point{0, 0};
     sdl_hud_keycap_textures[index] = loadTexturePreserveCanvas(
@@ -813,6 +842,15 @@ Renderer::~Renderer() {
   }
   if (sdl_dynamite_texture != nullptr) {
     SDL_DestroyTexture(sdl_dynamite_texture);
+  }
+  if (sdl_nuclear_crater_texture != nullptr) {
+    SDL_DestroyTexture(sdl_nuclear_crater_texture);
+  }
+  if (sdl_nuclear_bomb_texture != nullptr) {
+    SDL_DestroyTexture(sdl_nuclear_bomb_texture);
+  }
+  if (sdl_nuclear_target_marker_texture != nullptr) {
+    SDL_DestroyTexture(sdl_nuclear_target_marker_texture);
   }
   for (SDL_Texture *keycap_texture : sdl_hud_keycap_textures) {
     if (keycap_texture != nullptr) {
@@ -988,6 +1026,7 @@ void Renderer::renderFrame(bool show_hud) {
   SDL_RenderClear(sdl_renderer);
   if (ENABLE_3D_VIEW) {
     drawmap3DBase();
+    drawNuclearCraters();
     drawWallRubble();
 
     if (map != nullptr) {
@@ -1062,6 +1101,11 @@ void Renderer::renderFrame(bool show_hud) {
         for (size_t position_index = 0; position_index < positions.size();
              position_index++) {
           const MapCoord position = positions[position_index];
+          if (map->map_entry(static_cast<size_t>(position.u),
+                             static_cast<size_t>(position.v)) !=
+              ElementType::TYPE_TELEPORTER) {
+            continue;
+          }
           const SDL_Rect teleporter_rect = makeFloorAlignedRect(
               position.v, position.u, 0.08, 0.08, 0.84, 0.84);
           const double depth =
@@ -1549,6 +1593,96 @@ void Renderer::renderFrame(bool show_hud) {
                   });
             });
           }
+        }
+
+        const auto &nuclear_bomb = game->nuclear_bomb_pickup;
+        if (nuclear_bomb.is_visible) {
+          double alpha_factor = 1.0;
+          if (nuclear_bomb.is_fading) {
+            alpha_factor =
+                1.0 - std::clamp(static_cast<double>(
+                                      now - nuclear_bomb.fade_started_ticks) /
+                                     static_cast<double>(NUCLEAR_BOMB_FADE_MS),
+                                 0.0, 1.0);
+          }
+          if (alpha_factor > 0.0) {
+            const MapCoord coord = nuclear_bomb.coord;
+            const double depth =
+                projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
+            push_depth_command(depth, [&, coord, nuclear_bomb, alpha_factor, now]() {
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
+                    const double animation_clock =
+                        static_cast<double>(
+                            now + nuclear_bomb.animation_seed * 47) /
+                        180.0;
+                    const double pulse =
+                        0.84 + 0.16 * std::sin(animation_clock * 1.2);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(132.0 * alpha_factor, 0.0, 178.0));
+                    const Uint8 body_alpha = static_cast<Uint8>(
+                        std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+                    SDL_SetRenderDrawColor(sdl_renderer, 244, 210, 36,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(8, static_cast<int>(element_size * 0.33 *
+                                                     pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 238, 118,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(10, static_cast<int>(element_size * 0.45 *
+                                                      pulse)));
+
+                    const int icon_size =
+                        std::max(14, static_cast<int>(element_size * 0.92));
+                    const SDL_Rect icon_rect{center_x - icon_size / 2,
+                                             center_y - icon_size / 2,
+                                             icon_size, icon_size};
+                    drawNuclearBombIcon(
+                        icon_rect, body_alpha,
+                        4.0 * std::sin(animation_clock * 0.7));
+                  });
+            });
+          }
+        }
+
+        const auto &nuclear_marker = game->nuclear_bomb_target_marker;
+        if (nuclear_marker.is_marked) {
+          const MapCoord coord = nuclear_marker.coord;
+          const double depth =
+              projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
+          push_depth_command(depth, [&, coord, nuclear_marker, now]() {
+            draw_with_wall_occlusion(
+                static_cast<double>(coord.v) + 0.5,
+                static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                [&]() {
+                  const double animation_clock =
+                      static_cast<double>(
+                          now + nuclear_marker.animation_seed * 31) /
+                      180.0;
+                  const double pulse = 0.94 + 0.12 * std::sin(animation_clock);
+                  const Uint8 alpha = static_cast<Uint8>(std::clamp(
+                      168.0 + 64.0 *
+                                  (0.5 + 0.5 *
+                                             std::sin(animation_clock * 1.25)),
+                      0.0, 255.0));
+                  const SDL_Rect marker_rect = makeFloorAlignedRect(
+                      coord.v, coord.u, 0.10, 0.10, 0.80, 0.80);
+                  drawNuclearTargetMarkerIcon(marker_rect, alpha, pulse);
+                });
+          });
         }
 
         if (game->pacman != nullptr) {
@@ -2052,6 +2186,7 @@ void Renderer::renderFrame(bool show_hud) {
       drawslimeballs();
       drawrockets();
       drawactiveairstrike();
+      drawActiveNuclearBombDrop();
       drawbiohazardbeam();
       draweffects();
       drawExplosionParticles();
@@ -2073,6 +2208,8 @@ void Renderer::renderFrame(bool show_hud) {
     drawwalkietalkiepickup();
     drawrocketpickup();
     drawbiohazardpickup();
+    drawnuclearbombpickup();
+    drawNuclearBombTargetMarker();
     drawpacman();
     drawplaceddynamites();
     drawplacedplasticexplosive();
@@ -2083,6 +2220,7 @@ void Renderer::renderFrame(bool show_hud) {
     drawslimeballs();
     drawrockets();
     drawactiveairstrike();
+    drawActiveNuclearBombDrop();
     draweffects();
     drawExplosionParticles();
   } else {
@@ -2196,6 +2334,8 @@ void Renderer::drawhud() {
       std::to_string(game->rocket_inventory) + "x";
   const std::string biohazard_text =
       std::to_string(game->biohazard_inventory) + "x";
+  const std::string nuclear_bomb_text =
+      std::to_string(game->nuclear_bomb_inventory) + "x";
   const bool plastic_explosive_armed = game->plastic_explosive_is_armed;
   const bool airstrike_available =
       game->airstrike_inventory > 0 && !game->active_airstrike.is_active;
@@ -2203,6 +2343,11 @@ void Renderer::drawhud() {
       game->rocket_inventory > 0 && game->active_rockets.empty();
   const bool biohazard_available =
       game->biohazard_inventory > 0 && !game->active_biohazard_beam.is_active;
+  const bool nuclear_bomb_available =
+      (game->nuclear_bomb_inventory > 0 ||
+       game->nuclear_bomb_target_marker.is_marked) &&
+      !game->active_nuclear_bomb_drop.is_active &&
+      !game->active_nuclear_explosion.is_active;
   struct ExtraHudSlot {
     ExtraSlot slot;
     char key_label;
@@ -2212,7 +2357,7 @@ void Renderer::drawhud() {
     bool armed;
     bool active;
   };
-  const std::array<ExtraHudSlot, 5> extra_slots{{
+  const std::array<ExtraHudSlot, 6> extra_slots{{
       {ExtraSlot::Dynamite, '1', dynamite_text, game->dynamite_inventory > 0,
        game->dynamite_inventory > 0, false, false},
       {ExtraSlot::PlasticExplosive, '2', plastic_explosive_text,
@@ -2226,12 +2371,18 @@ void Renderer::drawhud() {
       {ExtraSlot::Biohazard, '5', biohazard_text, biohazard_available,
        biohazard_available || game->active_biohazard_beam.is_active, false,
        game->active_biohazard_beam.is_active},
+      {ExtraSlot::NuclearBomb, '6', nuclear_bomb_text, nuclear_bomb_available,
+       game->nuclear_bomb_inventory > 0 ||
+           game->nuclear_bomb_target_marker.is_marked ||
+           game->active_nuclear_bomb_drop.is_active,
+       game->nuclear_bomb_target_marker.is_marked,
+       game->active_nuclear_bomb_drop.is_active},
   }};
   int title_width = 0;
   int lives_text_width = 0;
   int score_width = 0;
-  std::array<int, 5> extra_text_widths{};
-  std::array<int, 5> extra_slot_widths{};
+  std::array<int, 6> extra_text_widths{};
+  std::array<int, 6> extra_slot_widths{};
   TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, lives_text.c_str(), &lives_text_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
@@ -2387,6 +2538,11 @@ void Renderer::drawhud() {
                         slot.active ? animation_clock * 0.75
                                     : animation_clock * 0.20,
                         slot.active ? 1.08 : 1.0);
+      break;
+    case ExtraSlot::NuclearBomb:
+      drawNuclearBombIcon(icon_rect, icon_alpha,
+                          slot.active ? std::sin(animation_clock / 120.0) * 7.0
+                                      : 0.0);
       break;
     case ExtraSlot::None:
     default:
@@ -4720,6 +4876,85 @@ void Renderer::drawBiohazardIcon(const SDL_Rect &icon_rect, Uint8 alpha,
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
+void Renderer::drawNuclearBombIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                                   double rotation_degrees) {
+  if (icon_rect.w <= 0 || icon_rect.h <= 0 || alpha == 0) {
+    return;
+  }
+
+  if (sdl_nuclear_bomb_texture != nullptr && sdl_nuclear_bomb_size.x > 0 &&
+      sdl_nuclear_bomb_size.y > 0) {
+    const int dominant_dimension =
+        std::max(sdl_nuclear_bomb_size.x, sdl_nuclear_bomb_size.y);
+    const double scale =
+        static_cast<double>(std::max(icon_rect.w, icon_rect.h)) /
+        static_cast<double>(dominant_dimension);
+    const int draw_width = std::max(
+        1, static_cast<int>(std::lround(sdl_nuclear_bomb_size.x * scale)));
+    const int draw_height = std::max(
+        1, static_cast<int>(std::lround(sdl_nuclear_bomb_size.y * scale)));
+    const SDL_Rect draw_rect{
+        icon_rect.x + (icon_rect.w - draw_width) / 2,
+        icon_rect.y + (icon_rect.h - draw_height) / 2,
+        draw_width,
+        draw_height};
+    SDL_SetTextureBlendMode(sdl_nuclear_bomb_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(sdl_nuclear_bomb_texture, alpha);
+    SDL_RenderCopyEx(sdl_renderer, sdl_nuclear_bomb_texture, nullptr,
+                     &draw_rect, rotation_degrees, nullptr, SDL_FLIP_NONE);
+    SDL_SetTextureAlphaMod(sdl_nuclear_bomb_texture, 255);
+    return;
+  }
+
+  const int center_x = icon_rect.x + icon_rect.w / 2;
+  const int center_y = icon_rect.y + icon_rect.h / 2;
+  const int radius_x = std::max(8, icon_rect.w / 2);
+  const int radius_y = std::max(6, icon_rect.h / 3);
+  SDL_SetRenderDrawColor(sdl_renderer, 46, 84, 64, alpha);
+  SDL_RenderFillEllipse(sdl_renderer, center_x, center_y, radius_x, radius_y);
+  SDL_SetRenderDrawColor(sdl_renderer, 218, 170, 40, alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(4, std::min(icon_rect.w, icon_rect.h) / 5));
+  drawBiohazardIcon(
+      SDL_Rect{center_x - icon_rect.w / 7, center_y - icon_rect.h / 7,
+               std::max(4, icon_rect.w / 3), std::max(4, icon_rect.h / 3)},
+      alpha, 0.0, 0.0, 0.8);
+}
+
+void Renderer::drawNuclearTargetMarkerIcon(const SDL_Rect &icon_rect,
+                                           Uint8 alpha, double scale) {
+  if (icon_rect.w <= 0 || icon_rect.h <= 0 || alpha == 0 || scale <= 0.0) {
+    return;
+  }
+
+  SDL_Rect draw_rect = icon_rect;
+  draw_rect.w =
+      std::max(1, static_cast<int>(std::lround(icon_rect.w * scale)));
+  draw_rect.h =
+      std::max(1, static_cast<int>(std::lround(icon_rect.h * scale)));
+  draw_rect.x = icon_rect.x + (icon_rect.w - draw_rect.w) / 2;
+  draw_rect.y = icon_rect.y + (icon_rect.h - draw_rect.h) / 2;
+
+  if (sdl_nuclear_target_marker_texture != nullptr &&
+      sdl_nuclear_target_marker_size.x > 0 &&
+      sdl_nuclear_target_marker_size.y > 0) {
+    SDL_SetTextureBlendMode(sdl_nuclear_target_marker_texture,
+                            SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(sdl_nuclear_target_marker_texture, alpha);
+    SDL_RenderCopy(sdl_renderer, sdl_nuclear_target_marker_texture, nullptr,
+                   &draw_rect);
+    SDL_SetTextureAlphaMod(sdl_nuclear_target_marker_texture, 255);
+    return;
+  }
+
+  const int center_x = draw_rect.x + draw_rect.w / 2;
+  const int center_y = draw_rect.y + draw_rect.h / 2;
+  drawBiohazardIcon(draw_rect, alpha, 0.0, 0.0, 1.0);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 248, 120, alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(4, draw_rect.w / 2 - 2));
+}
+
 void Renderer::drawRocketFlight(const SDL_FPoint &center, Directions direction,
                                 int max_dimension, int frame_index,
                                 Uint8 alpha) {
@@ -5406,6 +5641,157 @@ void Renderer::drawbiohazardpickup() {
   drawBiohazardIcon(icon_rect, body_alpha, animation_clock,
                     static_cast<double>(now + biohazard.animation_seed * 19) * 0.11,
                     0.96 + 0.08 * std::sin(animation_clock * 1.2));
+}
+
+void Renderer::drawnuclearbombpickup() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const auto &bomb = game->nuclear_bomb_pickup;
+  if (!bomb.is_visible) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  double alpha_factor = 1.0;
+  if (bomb.is_fading) {
+    alpha_factor =
+        1.0 - std::clamp(static_cast<double>(now - bomb.fade_started_ticks) /
+                             static_cast<double>(NUCLEAR_BOMB_FADE_MS),
+                         0.0, 1.0);
+  }
+  if (alpha_factor <= 0.0) {
+    return;
+  }
+
+  const PixelCoord pickup_px = getPixelCoord(bomb.coord, 0, 0);
+  const int center_x = pickup_px.x + element_size / 2;
+  const int center_y = pickup_px.y + element_size / 2;
+  const double animation_clock =
+      static_cast<double>(now + bomb.animation_seed * 47) / 180.0;
+  const double pulse = 0.84 + 0.16 * std::sin(animation_clock * 1.2);
+  const Uint8 glow_alpha = static_cast<Uint8>(
+      std::clamp(132.0 * alpha_factor, 0.0, 178.0));
+  const Uint8 body_alpha = static_cast<Uint8>(
+      std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 244, 210, 36, glow_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(8, static_cast<int>(element_size * 0.33 * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 238, 118, glow_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(10, static_cast<int>(element_size * 0.45 * pulse)));
+
+  const int icon_size = std::max(14, static_cast<int>(element_size * 0.92));
+  const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
+                           icon_size, icon_size};
+  drawNuclearBombIcon(icon_rect, body_alpha,
+                      4.0 * std::sin(animation_clock * 0.7));
+}
+
+void Renderer::drawNuclearBombTargetMarker() {
+  if (game == nullptr || game->dead ||
+      !game->nuclear_bomb_target_marker.is_marked) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  const auto &marker = game->nuclear_bomb_target_marker;
+  const double animation_clock =
+      static_cast<double>(now + marker.animation_seed * 31) / 180.0;
+  const double pulse = 0.94 + 0.12 * std::sin(animation_clock);
+  const Uint8 alpha = static_cast<Uint8>(
+      std::clamp(168.0 + 64.0 * (0.5 + 0.5 * std::sin(animation_clock * 1.25)),
+                 0.0, 255.0));
+
+  if (ENABLE_3D_VIEW) {
+    const SDL_Rect marker_rect =
+        makeFloorAlignedRect(marker.coord.v, marker.coord.u, 0.10, 0.10,
+                             0.80, 0.80);
+    drawNuclearTargetMarkerIcon(marker_rect, alpha, pulse);
+    return;
+  }
+
+  const PixelCoord marker_px = getPixelCoord(marker.coord, 0, 0);
+  const int marker_size = std::max(12, static_cast<int>(element_size * 0.82));
+  const SDL_Rect marker_rect{
+      marker_px.x + (element_size - marker_size) / 2,
+      marker_px.y + (element_size - marker_size) / 2,
+      marker_size,
+      marker_size};
+  drawNuclearTargetMarkerIcon(marker_rect, alpha, pulse);
+}
+
+void Renderer::drawActiveNuclearBombDrop() {
+  if (game == nullptr || !game->active_nuclear_bomb_drop.is_active) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  const auto &drop = game->active_nuclear_bomb_drop;
+  if (now < drop.drop_started_ticks) {
+    return;
+  }
+
+  const double progress =
+      std::clamp(static_cast<double>(now - drop.drop_started_ticks) /
+                     static_cast<double>(std::max<Uint32>(1, NUCLEAR_BOMB_FALL_MS)),
+                 0.0, 1.0);
+  const double eased_progress = 1.0 - std::pow(1.0 - progress, 2.0);
+  const double size_cells =
+      static_cast<double>(NUCLEAR_BOMB_INITIAL_RENDER_SCALE_CELLS) *
+          (1.0 - eased_progress) +
+      static_cast<double>(NUCLEAR_BOMB_FINAL_RENDER_SCALE_CELLS) *
+          eased_progress;
+  const int bomb_size =
+      std::max(12, static_cast<int>(std::lround(size_cells * element_size)));
+
+  SDL_FPoint screen_center{0.0f, 0.0f};
+  if (ENABLE_3D_VIEW) {
+    const double z_cells = 4.2 * (1.0 - progress) + 0.18;
+    screen_center = projectScene(drop.target_world_center.x,
+                                 drop.target_world_center.y, z_cells);
+  } else {
+    const double tile_span = static_cast<double>(element_size) + 1.0;
+    screen_center = SDL_FPoint{
+        static_cast<float>(offset_x + 1 +
+                           drop.target_world_center.x * tile_span),
+        static_cast<float>(offset_y + 1 +
+                           drop.target_world_center.y * tile_span -
+                           element_size * (2.7 * (1.0 - progress) + 0.15))};
+  }
+
+  const int shadow_radius =
+      std::max(6, static_cast<int>(element_size * (0.20 + progress * 0.36)));
+  const SDL_FPoint target_screen = ENABLE_3D_VIEW
+                                      ? projectScene(drop.target_world_center.x,
+                                                     drop.target_world_center.y,
+                                                     0.02)
+                                      : SDL_FPoint{
+                                            static_cast<float>(
+                                                offset_x + 1 +
+                                                drop.target_world_center.x *
+                                                    (element_size + 1.0)),
+                                            static_cast<float>(
+                                                offset_y + 1 +
+                                                drop.target_world_center.y *
+                                                    (element_size + 1.0))};
+  SDL_SetRenderDrawColor(sdl_renderer, 0, 0, 0,
+                         static_cast<Uint8>(std::clamp(44.0 + progress * 72.0,
+                                                       0.0, 132.0)));
+  SDL_RenderFillEllipse(sdl_renderer, static_cast<int>(std::lround(target_screen.x)),
+                        static_cast<int>(std::lround(target_screen.y)),
+                        shadow_radius * 2, shadow_radius);
+
+  const SDL_Rect bomb_rect{
+      static_cast<int>(std::lround(screen_center.x - bomb_size / 2.0)),
+      static_cast<int>(std::lround(screen_center.y - bomb_size / 2.0)),
+      bomb_size,
+      bomb_size};
+  const double sway =
+      std::sin((static_cast<double>(now) + drop.animation_seed * 23.0) / 140.0);
+  drawNuclearBombIcon(bomb_rect, 255, sway * 4.0);
 }
 
 void Renderer::drawplaceddynamites() {
@@ -6965,13 +7351,31 @@ void Renderer::drawExplosionParticles() {
     const Uint8 base_alpha = static_cast<Uint8>(std::clamp(
         tuning.initial_alpha * (1.0 - progress), 0.0, 255.0));
     const float age_seconds = static_cast<float>(age) / 1000.0f;
-    const float vertical_cells =
+    float vertical_cells =
         puff.vertical_offset_cells +
         tuning.vertical_rise_cells * static_cast<float>(progress) +
         puff.vertical_velocity_cells_per_sec * age_seconds;
-    const SDL_FPoint displaced_position{
+    SDL_FPoint displaced_position{
         puff.world_position.x + puff.velocity_cells_per_sec.x * age_seconds,
         puff.world_position.y + puff.velocity_cells_per_sec.y * age_seconds};
+    // Pilzkappe: Puff-Mittelpunkt folgt einer Halb-Torus-Bahn
+    // (oben am Säulenkopf raus, am Außenrand nach unten umschlagen).
+    if (puff.kind == ExplosionSmokePuffKind::NuclearBCapSmoke) {
+      const float curl_progress = std::clamp(
+          age_seconds * puff.rotation_speed_rad_per_sec,
+          0.0f, static_cast<float>(M_PI));
+      const float dir_x_world = std::cos(puff.rotation_radians);
+      const float dir_y_world = std::sin(puff.rotation_radians);
+      const float radial_curl =
+          NUCLEAR_B_CAP_RADIUS_CELLS * std::sin(curl_progress);
+      const float vertical_drop =
+          NUCLEAR_B_CAP_CURL_DROP_CELLS * 0.5f *
+          (1.0f - std::cos(curl_progress));
+      displaced_position = {
+          puff.world_position.x + dir_x_world * radial_curl,
+          puff.world_position.y + dir_y_world * radial_curl * 0.55f};
+      vertical_cells = puff.vertical_offset_cells - vertical_drop;
+    }
     SDL_FPoint screen = world_to_screen(displaced_position, vertical_cells);
     if (puff.kind == ExplosionSmokePuffKind::RocketTrailSmoke) {
       screen.y -= rocket_trail_screen_lift_px;
@@ -6995,25 +7399,32 @@ void Renderer::drawExplosionParticles() {
     const float wobble_px =
         tuning.wobble_amplitude_cells * cell_to_px;
 
-    const float rotation_angle =
-        puff.rotation_radians +
-        puff.rotation_speed_rad_per_sec * age_seconds;
-    const float cos_rot = std::cos(rotation_angle);
-    const float sin_rot = std::sin(rotation_angle);
-    const bool needs_rotation =
-        puff.rotation_radians != 0.0f ||
-        puff.rotation_speed_rad_per_sec != 0.0f;
+    // Rauchring rollt um die tangentiale Achse der Ringrichtung
+    // (radiale & vertikale Komponente jedes Blobs werden im Querschnitt rotiert).
+    const bool is_rolling_ring =
+        puff.kind == ExplosionSmokePuffKind::NuclearBRingSmoke;
+    const float ring_dir_x = is_rolling_ring ? std::cos(puff.rotation_radians) : 0.0f;
+    const float ring_dir_y = is_rolling_ring ? std::sin(puff.rotation_radians) : 0.0f;
+    const float ring_roll_phase =
+        is_rolling_ring ? puff.rotation_speed_rad_per_sec * age_seconds : 0.0f;
+    const float ring_cos = std::cos(ring_roll_phase);
+    const float ring_sin = std::sin(ring_roll_phase);
 
     for (int blob = 0; blob < blob_count; ++blob) {
       float base_offset_x =
           offset_dist(shape_rng) * tuning.blob_offset_factor * base_radius_px;
       float base_offset_y =
           offset_dist(shape_rng) * tuning.blob_offset_factor * base_radius_px;
-      if (needs_rotation) {
-        const float rotated_x = base_offset_x * cos_rot - base_offset_y * sin_rot;
-        const float rotated_y = base_offset_x * sin_rot + base_offset_y * cos_rot;
-        base_offset_x = rotated_x;
-        base_offset_y = rotated_y;
+      if (is_rolling_ring) {
+        // Lokale Querschnittskoordinaten (radial, vertikal). Rotation um
+        // die tangentiale Achse: nach -roll_phase, damit der Vorderrand
+        // beim Auswärtsrollen nach unten kippt.
+        const float cs_radial = base_offset_x * ring_cos + base_offset_y * ring_sin;
+        const float cs_vertical = -base_offset_x * ring_sin + base_offset_y * ring_cos;
+        // Auf Bildschirm projizieren: radial entlang der Ringrichtung,
+        // vertikal als Bildschirm-Hoch (negatives y).
+        base_offset_x = cs_radial * ring_dir_x;
+        base_offset_y = cs_radial * ring_dir_y - cs_vertical;
       }
       const float blob_radius =
           base_radius_px * radius_factor_dist(shape_rng);
@@ -7191,6 +7602,302 @@ SDL_Rect Renderer::getWallRubblePieceBounds(const WallRubblePiece &piece) const 
   SDL_FPoint vertices[4];
   buildWallRubblePieceVertices(piece, vertices);
   return makeProjectedFaceRect(vertices[0], vertices[1], vertices[3], vertices[2]);
+}
+
+void Renderer::drawNuclearCrater(const NuclearCrater &crater) {
+  if (crater.radius_cells <= 0.0f) {
+    return;
+  }
+
+  constexpr int kSegments = 96;
+  const double tile_span = static_cast<double>(element_size) + 1.0;
+  const auto world_to_screen = [&](double col, double row) {
+    if (ENABLE_3D_VIEW) {
+      return projectScene(col, row, 0.012);
+    }
+    return SDL_FPoint{
+        static_cast<float>(offset_x + 1) + static_cast<float>(col * tile_span),
+        static_cast<float>(offset_y + 1) + static_cast<float>(row * tile_span)};
+  };
+
+  if (sdl_nuclear_crater_texture != nullptr &&
+      sdl_nuclear_crater_size.x > 0 && sdl_nuclear_crater_size.y > 0) {
+    const double radius = static_cast<double>(crater.radius_cells);
+    const double left = static_cast<double>(crater.world_center.x) - radius;
+    const double right = static_cast<double>(crater.world_center.x) + radius;
+    const double top = static_cast<double>(crater.world_center.y) - radius;
+    const double bottom = static_cast<double>(crater.world_center.y) + radius;
+    const SDL_Color white{255, 255, 255, 255};
+    SDL_Vertex vertices[4]{
+        {world_to_screen(left, top), white, SDL_FPoint{0.0f, 0.0f}},
+        {world_to_screen(right, top), white, SDL_FPoint{1.0f, 0.0f}},
+        {world_to_screen(right, bottom), white, SDL_FPoint{1.0f, 1.0f}},
+        {world_to_screen(left, bottom), white, SDL_FPoint{0.0f, 1.0f}},
+    };
+    const int indices[6]{0, 1, 2, 0, 2, 3};
+    SDL_SetTextureBlendMode(sdl_nuclear_crater_texture, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureAlphaMod(sdl_nuclear_crater_texture,
+                           NUCLEAR_CRATER_BASE_ALPHA);
+    SDL_RenderGeometry(sdl_renderer, sdl_nuclear_crater_texture, vertices, 4,
+                       indices, 6);
+    SDL_SetTextureAlphaMod(sdl_nuclear_crater_texture, 255);
+    return;
+  }
+
+  std::vector<SDL_Vertex> vertices;
+  vertices.reserve(kSegments + 2);
+  SDL_Vertex center_vertex;
+  center_vertex.position =
+      world_to_screen(crater.world_center.x, crater.world_center.y);
+  center_vertex.color = NUCLEAR_CRATER_INNER_COLOR;
+  center_vertex.color.a = NUCLEAR_CRATER_BASE_ALPHA;
+  center_vertex.tex_coord = SDL_FPoint{0.0f, 0.0f};
+  vertices.push_back(center_vertex);
+
+  for (int segment = 0; segment <= kSegments; ++segment) {
+    const float angle =
+        static_cast<float>(segment) *
+        static_cast<float>((2.0 * kLogoPi) / static_cast<double>(kSegments));
+    const float radius = NuclearCraterRenderEdgeRadius(
+        crater.radius_cells, crater.shape_seed, angle);
+    const double col = crater.world_center.x + std::cos(angle) * radius;
+    const double row = crater.world_center.y + std::sin(angle) * radius;
+    const double noise =
+        HashUnit(crater.shape_seed + segment * 92821 + 37) * 0.34;
+    SDL_Vertex vertex;
+    vertex.position = world_to_screen(col, row);
+    vertex.color = SDL_Color{
+        static_cast<Uint8>(std::clamp(
+            NUCLEAR_CRATER_OUTER_COLOR.r + 28.0 * noise, 0.0, 255.0)),
+        static_cast<Uint8>(std::clamp(
+            NUCLEAR_CRATER_OUTER_COLOR.g + 20.0 * noise, 0.0, 255.0)),
+        static_cast<Uint8>(std::clamp(
+            NUCLEAR_CRATER_OUTER_COLOR.b + 14.0 * noise, 0.0, 255.0)),
+        static_cast<Uint8>(std::clamp(
+            static_cast<double>(NUCLEAR_CRATER_BASE_ALPHA) *
+                (0.74 + 0.18 * noise),
+            0.0, 255.0))};
+    vertex.tex_coord = SDL_FPoint{0.0f, 0.0f};
+    vertices.push_back(vertex);
+  }
+
+  std::vector<int> indices;
+  indices.reserve(kSegments * 3);
+  for (int segment = 1; segment <= kSegments; ++segment) {
+    indices.push_back(0);
+    indices.push_back(segment);
+    indices.push_back(segment + 1);
+  }
+
+  SDL_RenderGeometry(sdl_renderer, nullptr, vertices.data(),
+                     static_cast<int>(vertices.size()), indices.data(),
+                     static_cast<int>(indices.size()));
+
+  const float glow_radius = crater.radius_cells * 0.58f;
+  std::vector<SDL_Vertex> glow_vertices;
+  glow_vertices.reserve(kSegments + 2);
+  SDL_Vertex glow_center = center_vertex;
+  glow_center.color = NUCLEAR_CRATER_GLOW_COLOR;
+  glow_center.color.a = 86;
+  glow_vertices.push_back(glow_center);
+  for (int segment = 0; segment <= kSegments; ++segment) {
+    const float angle =
+        static_cast<float>(segment) *
+        static_cast<float>((2.0 * kLogoPi) / static_cast<double>(kSegments));
+    SDL_Vertex vertex;
+    vertex.position = world_to_screen(
+        crater.world_center.x + std::cos(angle) * glow_radius,
+        crater.world_center.y + std::sin(angle) * glow_radius);
+    vertex.color = NUCLEAR_CRATER_GLOW_COLOR;
+    vertex.color.a = 0;
+    vertex.tex_coord = SDL_FPoint{0.0f, 0.0f};
+    glow_vertices.push_back(vertex);
+  }
+  SDL_RenderGeometry(sdl_renderer, nullptr, glow_vertices.data(),
+                     static_cast<int>(glow_vertices.size()), indices.data(),
+                     static_cast<int>(indices.size()));
+}
+
+void Renderer::drawNuclearCraterBarricades(const NuclearCrater &crater) {
+  if (crater.cells.empty()) {
+    return;
+  }
+
+  const double tile_span = static_cast<double>(element_size) + 1.0;
+  const auto world_to_screen = [&](double col, double row, double z_cells) {
+    if (ENABLE_3D_VIEW) {
+      return projectScene(col, row, z_cells);
+    }
+    return SDL_FPoint{
+        static_cast<float>(offset_x + 1) + static_cast<float>(col * tile_span),
+        static_cast<float>(offset_y + 1) +
+            static_cast<float>(row * tile_span - z_cells * element_size)};
+  };
+
+  const auto has_crater_cell = [&](int row, int col) {
+    for (const MapCoord &cell : crater.cells) {
+      if (cell.u == row && cell.v == col) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const auto draw_thick_line = [&](SDL_FPoint from, SDL_FPoint to,
+                                   int thickness, SDL_Color color) {
+    const double dx = static_cast<double>(to.x - from.x);
+    const double dy = static_cast<double>(to.y - from.y);
+    const double length = std::hypot(dx, dy);
+    if (length < 1.0) {
+      return;
+    }
+
+    const double normal_x = -dy / length;
+    const double normal_y = dx / length;
+    SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, color.a);
+    const int half = std::max(0, thickness / 2);
+    for (int offset = -half; offset <= half; ++offset) {
+      const int x1 =
+          static_cast<int>(std::round(from.x + normal_x * offset));
+      const int y1 =
+          static_cast<int>(std::round(from.y + normal_y * offset));
+      const int x2 =
+          static_cast<int>(std::round(to.x + normal_x * offset));
+      const int y2 =
+          static_cast<int>(std::round(to.y + normal_y * offset));
+      SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
+    }
+  };
+
+  const auto draw_post = [&](double col, double row) {
+    const SDL_FPoint base = world_to_screen(col, row, 0.0);
+    const SDL_FPoint lower_mount = world_to_screen(col, row, 0.30);
+    const SDL_FPoint upper_mount = world_to_screen(col, row, 0.55);
+    const SDL_FPoint top = world_to_screen(col, row, 0.72);
+    const int post_outer = std::max(5, element_size / 8);
+    const int post_inner = std::max(3, post_outer - 2);
+    const SDL_Color black{18, 17, 15, 245};
+    const SDL_Color yellow{242, 194, 32, 255};
+    const SDL_Color yellow_light{255, 219, 66, 255};
+
+    SDL_SetRenderDrawColor(sdl_renderer, 16, 15, 14, 180);
+    SDL_RenderFillCircle(sdl_renderer, static_cast<int>(std::lround(base.x)),
+                         static_cast<int>(std::lround(base.y)),
+                         std::max(4, element_size / 9));
+    draw_thick_line(base, top, post_outer, black);
+    draw_thick_line(base, top, post_inner, yellow);
+    draw_thick_line(upper_mount, top, std::max(1, post_inner / 3),
+                    yellow_light);
+
+    const int bracket_size = std::max(3, element_size / 14);
+    for (SDL_FPoint mount : {lower_mount, upper_mount}) {
+      SDL_Rect bracket{
+          static_cast<int>(std::lround(mount.x)) - bracket_size / 2,
+          static_cast<int>(std::lround(mount.y)) - bracket_size,
+          std::max(2, bracket_size), std::max(3, bracket_size * 2)};
+      SDL_SetRenderDrawColor(sdl_renderer, black.r, black.g, black.b, black.a);
+      SDL_RenderFillRect(sdl_renderer, &bracket);
+      SDL_SetRenderDrawColor(sdl_renderer, 118, 116, 104, 240);
+      SDL_RenderDrawLine(sdl_renderer, bracket.x + bracket.w / 2, bracket.y + 1,
+                         bracket.x + bracket.w / 2,
+                         bracket.y + bracket.h - 2);
+    }
+  };
+
+  const auto draw_striped_tape = [&](SDL_FPoint from, SDL_FPoint to,
+                                     int tape_width) {
+    const double dx = static_cast<double>(to.x - from.x);
+    const double dy = static_cast<double>(to.y - from.y);
+    const double length = std::hypot(dx, dy);
+    if (length < 2.0) {
+      return;
+    }
+
+    const SDL_Color black{20, 18, 14, 235};
+    const SDL_Color quarantine_yellow{236, 201, 54, 245};
+    draw_thick_line(from, to, tape_width + 2, black);
+    draw_thick_line(from, to, tape_width, quarantine_yellow);
+
+    const double dir_x = dx / length;
+    const double dir_y = dy / length;
+    const double normal_x = -dir_y;
+    const double normal_y = dir_x;
+    const double spacing =
+        std::max(8.0, static_cast<double>(element_size) * 0.26);
+    const double stripe_length =
+        std::max(8.0, static_cast<double>(element_size) * 0.34);
+    const int stripe_count = std::max(1, static_cast<int>(length / spacing));
+    for (int index = 0; index <= stripe_count; ++index) {
+      const double t = (static_cast<double>(index) + 0.35) /
+                       (static_cast<double>(stripe_count) + 1.0);
+      const double cx = static_cast<double>(from.x) + dx * t;
+      const double cy = static_cast<double>(from.y) + dy * t;
+      const SDL_FPoint stripe_from{
+          static_cast<float>(cx - dir_x * stripe_length * 0.35 -
+                             normal_x * stripe_length * 0.45),
+          static_cast<float>(cy - dir_y * stripe_length * 0.35 -
+                             normal_y * stripe_length * 0.45)};
+      const SDL_FPoint stripe_to{
+          static_cast<float>(cx + dir_x * stripe_length * 0.35 +
+                             normal_x * stripe_length * 0.45),
+          static_cast<float>(cy + dir_y * stripe_length * 0.35 +
+                             normal_y * stripe_length * 0.45)};
+      draw_thick_line(stripe_from, stripe_to, std::max(2, tape_width / 2),
+                      black);
+    }
+  };
+
+  const auto draw_barricade_edge = [&](double col_a, double row_a,
+                                       double col_b, double row_b) {
+    const SDL_FPoint lower_from = world_to_screen(col_a, row_a, 0.30);
+    const SDL_FPoint lower_to = world_to_screen(col_b, row_b, 0.30);
+    const SDL_FPoint upper_from = world_to_screen(col_a, row_a, 0.55);
+    const SDL_FPoint upper_to = world_to_screen(col_b, row_b, 0.55);
+    const int tape_width = std::max(4, element_size / 9);
+    draw_striped_tape(upper_from, upper_to, tape_width);
+    draw_striped_tape(lower_from, lower_to, tape_width);
+    draw_post(col_a, row_a);
+    draw_post(col_b, row_b);
+  };
+
+  for (const MapCoord &cell : crater.cells) {
+    const double left = static_cast<double>(cell.v);
+    const double right = static_cast<double>(cell.v + 1);
+    const double top = static_cast<double>(cell.u);
+    const double bottom = static_cast<double>(cell.u + 1);
+
+    if (!has_crater_cell(cell.u - 1, cell.v)) {
+      draw_barricade_edge(left, top, right, top);
+    }
+    if (!has_crater_cell(cell.u + 1, cell.v)) {
+      draw_barricade_edge(left, bottom, right, bottom);
+    }
+    if (!has_crater_cell(cell.u, cell.v - 1)) {
+      draw_barricade_edge(left, top, left, bottom);
+    }
+    if (!has_crater_cell(cell.u, cell.v + 1)) {
+      draw_barricade_edge(right, top, right, bottom);
+    }
+  }
+}
+
+void Renderer::drawNuclearCraters() {
+  if (game == nullptr || game->nuclear_craters.empty()) {
+    return;
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+  const Uint32 now = SDL_GetTicks();
+  for (const NuclearCrater &crater : game->nuclear_craters) {
+    if (now < crater.visible_ticks) {
+      continue;
+    }
+    drawNuclearCrater(crater);
+    drawNuclearCraterBarricades(crater);
+  }
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
 void Renderer::drawWallRubblePiece(const WallRubblePiece &piece) {
@@ -7899,6 +8606,344 @@ void Renderer::drawNuclearBFireball(int center_x, int center_y, Uint32 elapsed,
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
+void Renderer::drawNuclearBBaseFire(int center_x, int center_y, Uint32 elapsed,
+                                    Uint32 seed) {
+  const double total_progress =
+      static_cast<double>(elapsed) /
+      static_cast<double>(NUCLEAR_B_EXPLOSION_TOTAL_DURATION_MS);
+  if (total_progress >= 1.0) {
+    return;
+  }
+
+  // Schnelle Aufhellung am Anfang, langsamer Abfall am Ende.
+  double intensity = 1.0;
+  if (elapsed < 180) {
+    intensity = static_cast<double>(elapsed) / 180.0;
+  }
+  if (total_progress > 0.65) {
+    intensity *= std::pow(std::max(0.0, 1.0 - (total_progress - 0.65) / 0.35),
+                          1.6);
+  }
+  if (intensity <= 0.0) {
+    return;
+  }
+
+  SDL_BlendMode prev_blend;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &prev_blend);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const double cell_to_px = static_cast<double>(element_size + 1);
+  const double base_radius_px =
+      cell_to_px * NUCLEAR_B_BASE_FIRE_RADIUS_CELLS;
+  const double clock = static_cast<double>(elapsed) / 1000.0;
+
+  // Großes weiches Halo unter dem Sockel.
+  SDL_RenderFillEllipseAA(
+      sdl_renderer, center_x, center_y - base_radius_px * 0.18,
+      base_radius_px * 1.95, base_radius_px * 0.95,
+      SDL_Color{NUCLEAR_B_BASE_FIRE_HALO_COLOR.r,
+                NUCLEAR_B_BASE_FIRE_HALO_COLOR.g,
+                NUCLEAR_B_BASE_FIRE_HALO_COLOR.b,
+                static_cast<Uint8>(std::clamp(140.0 * intensity, 0.0, 200.0))});
+
+  std::mt19937 rng(seed ^ 0xBA5EF14Eu);
+  std::uniform_real_distribution<double> angle_dist(0.0, 2.0 * kLogoPi);
+  std::uniform_real_distribution<double> radius_unit_dist(0.0, 1.0);
+  std::uniform_real_distribution<double> phase_dist(0.0, 2.0 * kLogoPi);
+  std::uniform_real_distribution<double> blob_radius_dist(0.45, 1.05);
+
+  for (int blob = 0; blob < NUCLEAR_B_BASE_FIRE_BLOB_COUNT; ++blob) {
+    const double angle = angle_dist(rng);
+    const double rad_unit = std::sqrt(radius_unit_dist(rng));
+    const double rad_px = base_radius_px * rad_unit;
+    const double phase = phase_dist(rng);
+    const double flicker =
+        0.62 + 0.38 * std::sin(clock * 5.1 + phase + blob * 0.17);
+    const double x = center_x + std::cos(angle) * rad_px;
+    // Kuppel-Form: blobs nahe dem Zentrum sind höher.
+    const double dome_lift = (1.0 - rad_unit) * cell_to_px * 0.85;
+    const double y =
+        center_y + std::sin(angle) * rad_px * 0.42 - dome_lift;
+    const double r = cell_to_px * blob_radius_dist(rng) *
+                     (1.05 - rad_unit * 0.45) * intensity;
+
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y, r * 1.7,
+        SDL_Color{NUCLEAR_B_BASE_FIRE_OUTER_COLOR.r,
+                  NUCLEAR_B_BASE_FIRE_OUTER_COLOR.g,
+                  NUCLEAR_B_BASE_FIRE_OUTER_COLOR.b,
+                  static_cast<Uint8>(
+                      std::clamp(150.0 * intensity * flicker, 0.0, 210.0))});
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y, r * 1.0,
+        SDL_Color{NUCLEAR_B_BASE_FIRE_MID_COLOR.r,
+                  NUCLEAR_B_BASE_FIRE_MID_COLOR.g,
+                  NUCLEAR_B_BASE_FIRE_MID_COLOR.b,
+                  static_cast<Uint8>(
+                      std::clamp(210.0 * intensity * flicker, 0.0, 240.0))});
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y, r * 0.45,
+        SDL_Color{NUCLEAR_B_BASE_FIRE_INNER_COLOR.r,
+                  NUCLEAR_B_BASE_FIRE_INNER_COLOR.g,
+                  NUCLEAR_B_BASE_FIRE_INNER_COLOR.b,
+                  static_cast<Uint8>(
+                      std::clamp(230.0 * intensity * flicker, 0.0, 250.0))});
+  }
+
+  // Flammen, die nach oben züngeln.
+  for (int tongue = 0; tongue < NUCLEAR_B_BASE_FIRE_TONGUE_COUNT; ++tongue) {
+    const double angle =
+        -kLogoPi * 0.5 + (radius_unit_dist(rng) - 0.5) * kLogoPi * 0.9;
+    const double base_rad =
+        base_radius_px * (0.05 + 0.65 * radius_unit_dist(rng));
+    const double phase = phase_dist(rng);
+    const double lick = 0.55 + 0.45 * std::sin(clock * 6.0 + phase);
+    const double base_x = center_x + std::cos(angle) * base_rad * 0.5;
+    const double base_y = center_y + std::sin(angle) * base_rad * 0.18;
+    const double tip_x = base_x + std::cos(angle) * base_radius_px * 0.30;
+    const double tip_y = base_y - cell_to_px * (1.4 + 1.6 * lick) * intensity;
+    SDL_RenderDrawAALine(
+        sdl_renderer, base_x, base_y, tip_x, tip_y,
+        SDL_Color{NUCLEAR_B_BASE_FIRE_INNER_COLOR.r,
+                  NUCLEAR_B_BASE_FIRE_INNER_COLOR.g,
+                  NUCLEAR_B_BASE_FIRE_INNER_COLOR.b,
+                  static_cast<Uint8>(
+                      std::clamp(190.0 * intensity * lick, 0.0, 230.0))});
+    const double tip2_x = base_x + std::cos(angle) * base_radius_px * 0.18;
+    const double tip2_y = base_y - cell_to_px * (0.8 + 1.0 * lick) * intensity;
+    SDL_RenderDrawAALine(
+        sdl_renderer, base_x, base_y, tip2_x, tip2_y,
+        SDL_Color{NUCLEAR_B_BASE_FIRE_MID_COLOR.r,
+                  NUCLEAR_B_BASE_FIRE_MID_COLOR.g,
+                  NUCLEAR_B_BASE_FIRE_MID_COLOR.b,
+                  static_cast<Uint8>(
+                      std::clamp(170.0 * intensity * lick, 0.0, 220.0))});
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, prev_blend);
+}
+
+void Renderer::drawNuclearBStemFire(int center_x, int center_y, Uint32 elapsed,
+                                    Uint32 seed, double stem_progress,
+                                    double total_progress) {
+  if (stem_progress <= 0.0) {
+    return;
+  }
+
+  SDL_BlendMode prev_blend;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &prev_blend);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const double cell_to_px = static_cast<double>(element_size + 1);
+  const int stem_top_y = static_cast<int>(std::lround(
+      center_y - cell_to_px * NUCLEAR_B_STEM_HEIGHT_CELLS * 0.78 *
+                     stem_progress));
+  const double base_glow_alpha =
+      225.0 * std::clamp(1.0 - total_progress * 1.05, 0.0, 1.0);
+  const double clock = static_cast<double>(elapsed) / 1000.0;
+  std::mt19937 rng(seed ^ 0xA1B2C3D4u);
+  std::uniform_real_distribution<double> phase_dist(0.0, 2.0 * kLogoPi);
+  std::uniform_real_distribution<double> radius_jitter_dist(0.55, 1.20);
+  std::uniform_real_distribution<double> lateral_jitter_dist(-1.0, 1.0);
+
+  const int span = std::max(1, center_y - stem_top_y);
+  for (int blob = 0; blob < NUCLEAR_B_FIRE_GLOW_BLOB_COUNT; ++blob) {
+    const double height_unit =
+        static_cast<double>(blob) /
+        static_cast<double>(NUCLEAR_B_FIRE_GLOW_BLOB_COUNT - 1);
+    const double phase = phase_dist(rng);
+    const double flicker = 0.55 + 0.45 * std::sin(clock * 4.4 + phase);
+    const Uint8 inner_alpha = static_cast<Uint8>(
+        std::clamp(base_glow_alpha * flicker, 0.0, 245.0));
+    if (inner_alpha == 0) {
+      continue;
+    }
+    const double y_offset =
+        stem_top_y + height_unit * static_cast<double>(span);
+    // Säule weitet sich zum Sockel hin auf (height_unit=1 ≙ unten).
+    const double width_factor = 0.55 + 0.95 * height_unit;
+    const double sway = lateral_jitter_dist(rng) * cell_to_px *
+                        NUCLEAR_B_STEM_RADIUS_CELLS * width_factor;
+    const double horizontal_oscillation =
+        std::sin(clock * 1.8 + phase + height_unit * 6.2) * cell_to_px *
+        0.20;
+    const double glow_radius =
+        cell_to_px * NUCLEAR_B_FIRE_GLOW_RADIUS_CELLS *
+        radius_jitter_dist(rng) * (0.80 + 0.55 * height_unit) *
+        (0.55 + 0.55 * stem_progress);
+    const double x = center_x + sway + horizontal_oscillation;
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y_offset, glow_radius * 1.65,
+        SDL_Color{NUCLEAR_B_FIRE_GLOW_OUTER_COLOR.r,
+                  NUCLEAR_B_FIRE_GLOW_OUTER_COLOR.g,
+                  NUCLEAR_B_FIRE_GLOW_OUTER_COLOR.b,
+                  static_cast<Uint8>(
+                      std::clamp(inner_alpha * 0.62, 0.0, 220.0))});
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y_offset, glow_radius,
+        SDL_Color{NUCLEAR_B_FIRE_GLOW_INNER_COLOR.r,
+                  NUCLEAR_B_FIRE_GLOW_INNER_COLOR.g,
+                  NUCLEAR_B_FIRE_GLOW_INNER_COLOR.b, inner_alpha});
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y_offset, glow_radius * 0.45,
+        SDL_Color{255, 250, 220,
+                  static_cast<Uint8>(
+                      std::clamp(inner_alpha * 0.85, 0.0, 235.0))});
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, prev_blend);
+}
+
+void Renderer::drawNuclearBCapFire(int center_x, int center_y, Uint32 elapsed,
+                                   Uint32 seed, double stem_progress,
+                                   double total_progress) {
+  if (stem_progress < 0.05) {
+    return;
+  }
+
+  SDL_BlendMode prev_blend;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &prev_blend);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const double cell_to_px = static_cast<double>(element_size + 1);
+  const double cap_top_cells =
+      0.8 + stem_progress * NUCLEAR_B_STEM_HEIGHT_CELLS +
+      NUCLEAR_B_CAP_HEIGHT_OFFSET_CELLS;
+  const double cap_top_y = center_y - cap_top_cells * cell_to_px * 0.78;
+  const double clock = static_cast<double>(elapsed) / 1000.0;
+  const double base_alpha =
+      210.0 * std::clamp(1.0 - total_progress * 1.05, 0.0, 1.0) *
+      std::min(1.0, stem_progress * 1.6);
+
+  std::mt19937 rng(seed ^ 0xCAFE2024u);
+  std::uniform_real_distribution<double> angle_dist(0.0, 2.0 * kLogoPi);
+  std::uniform_real_distribution<double> radius_unit_dist(0.0, 1.0);
+  std::uniform_real_distribution<double> phase_dist(0.0, 2.0 * kLogoPi);
+  std::uniform_real_distribution<double> blob_size_dist(0.65, 1.30);
+
+  for (int blob = 0; blob < NUCLEAR_B_CAP_FIRE_BLOB_COUNT; ++blob) {
+    const double angle = angle_dist(rng);
+    const double rad_unit = std::sqrt(radius_unit_dist(rng));
+    const double rad_cells = rad_unit * NUCLEAR_B_CAP_RADIUS_CELLS * 0.95;
+    // Vertical position: 0 = direkt am Säulenkopf,
+    // 1 = unterer Rand der Pilzkappe.
+    const double v_unit = 0.30 + 0.70 * radius_unit_dist(rng);
+    const double v_drop_cells = NUCLEAR_B_CAP_CURL_DROP_CELLS * v_unit;
+    const double phase = phase_dist(rng);
+    const double flicker = 0.55 + 0.45 * std::sin(clock * 5.2 + phase);
+    const Uint8 inner_alpha = static_cast<Uint8>(
+        std::clamp(base_alpha * flicker, 0.0, 240.0));
+    if (inner_alpha == 0) {
+      continue;
+    }
+
+    const double dx = std::cos(angle) * rad_cells * cell_to_px;
+    const double dy = std::sin(angle) * rad_cells * cell_to_px * 0.42;
+    const double x = center_x + dx;
+    const double y = cap_top_y + v_drop_cells * cell_to_px * 0.78 + dy;
+
+    const double glow_radius =
+        cell_to_px * NUCLEAR_B_CAP_FIRE_RADIUS_CELLS *
+        blob_size_dist(rng) * (0.95 - 0.30 * v_unit);
+
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y, glow_radius * 1.7,
+        SDL_Color{NUCLEAR_B_BASE_FIRE_OUTER_COLOR.r,
+                  NUCLEAR_B_BASE_FIRE_OUTER_COLOR.g,
+                  NUCLEAR_B_BASE_FIRE_OUTER_COLOR.b,
+                  static_cast<Uint8>(
+                      std::clamp(inner_alpha * 0.55, 0.0, 210.0))});
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y, glow_radius,
+        SDL_Color{NUCLEAR_B_BASE_FIRE_MID_COLOR.r,
+                  NUCLEAR_B_BASE_FIRE_MID_COLOR.g,
+                  NUCLEAR_B_BASE_FIRE_MID_COLOR.b,
+                  static_cast<Uint8>(
+                      std::clamp(inner_alpha * 0.92, 0.0, 240.0))});
+    SDL_RenderFillCircleAA(
+        sdl_renderer, x, y, glow_radius * 0.45,
+        SDL_Color{NUCLEAR_B_BASE_FIRE_INNER_COLOR.r,
+                  NUCLEAR_B_BASE_FIRE_INNER_COLOR.g,
+                  NUCLEAR_B_BASE_FIRE_INNER_COLOR.b, inner_alpha});
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, prev_blend);
+}
+
+void Renderer::drawNuclearBGroundDebris(int center_x, int center_y,
+                                        Uint32 elapsed, Uint32 seed) {
+  // Schutt erscheint kurz nach Einschlag, bleibt dann liegen und fadet
+  // gegen Ende leicht aus.
+  if (elapsed < 80) {
+    return;
+  }
+  const double total_progress =
+      static_cast<double>(elapsed) /
+      static_cast<double>(NUCLEAR_B_EXPLOSION_TOTAL_DURATION_MS);
+  double alpha_scale = 1.0;
+  if (elapsed < 320) {
+    alpha_scale = (elapsed - 80) / 240.0;
+  }
+  if (total_progress > 0.85) {
+    alpha_scale *= std::pow(std::max(0.0, 1.0 - (total_progress - 0.85) / 0.15),
+                            1.4);
+  }
+  if (alpha_scale <= 0.0) {
+    return;
+  }
+
+  SDL_BlendMode prev_blend;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &prev_blend);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const double cell_to_px = static_cast<double>(element_size + 1);
+  std::mt19937 rng(seed ^ 0x7E575E1Du);
+  std::uniform_real_distribution<double> angle_dist(0.0, 2.0 * kLogoPi);
+  std::uniform_real_distribution<double> radius_dist(
+      NUCLEAR_B_GROUND_DEBRIS_INNER_RADIUS_CELLS,
+      NUCLEAR_B_GROUND_DEBRIS_OUTER_RADIUS_CELLS);
+  std::uniform_real_distribution<double> half_size_dist(
+      NUCLEAR_B_GROUND_DEBRIS_MIN_HALF_SIZE_CELLS,
+      NUCLEAR_B_GROUND_DEBRIS_MAX_HALF_SIZE_CELLS);
+  std::uniform_real_distribution<double> shade_dist(0.0, 1.0);
+  std::uniform_real_distribution<double> aspect_dist(0.6, 1.5);
+
+  for (int chunk = 0; chunk < NUCLEAR_B_GROUND_DEBRIS_COUNT; ++chunk) {
+    const double angle = angle_dist(rng);
+    const double radius_cells = radius_dist(rng);
+    const double half_size_cells = half_size_dist(rng);
+    const double aspect = aspect_dist(rng);
+    const double shade = shade_dist(rng);
+
+    const double cx = center_x + std::cos(angle) * radius_cells * cell_to_px;
+    const double cy =
+        center_y + std::sin(angle) * radius_cells * cell_to_px * 0.42;
+    const double w = half_size_cells * cell_to_px * aspect;
+    const double h = half_size_cells * cell_to_px / std::max(0.4, aspect);
+
+    const Uint8 r = static_cast<Uint8>(
+        NUCLEAR_B_GROUND_DEBRIS_DARK_COLOR.r * (1.0 - shade) +
+        NUCLEAR_B_GROUND_DEBRIS_LIGHT_COLOR.r * shade);
+    const Uint8 g = static_cast<Uint8>(
+        NUCLEAR_B_GROUND_DEBRIS_DARK_COLOR.g * (1.0 - shade) +
+        NUCLEAR_B_GROUND_DEBRIS_LIGHT_COLOR.g * shade);
+    const Uint8 b = static_cast<Uint8>(
+        NUCLEAR_B_GROUND_DEBRIS_DARK_COLOR.b * (1.0 - shade) +
+        NUCLEAR_B_GROUND_DEBRIS_LIGHT_COLOR.b * shade);
+
+    SDL_RenderFillEllipseAA(
+        sdl_renderer, cx + 1.0, cy + 1.5, w + 1.0, h + 1.0,
+        SDL_Color{30, 24, 20,
+                  static_cast<Uint8>(std::clamp(120.0 * alpha_scale, 0.0, 180.0))});
+    SDL_RenderFillEllipseAA(
+        sdl_renderer, cx, cy, w, h,
+        SDL_Color{r, g, b,
+                  static_cast<Uint8>(std::clamp(220.0 * alpha_scale, 0.0, 240.0))});
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, prev_blend);
+}
+
 void Renderer::drawNuclearBExplosion(const GameEffect &effect, int center_x,
                                      int center_y, Uint32 elapsed) {
   if (elapsed < NUCLEAR_B_FLASH_DURATION_MS) {
@@ -7935,74 +8980,33 @@ void Renderer::drawNuclearBExplosion(const GameEffect &effect, int center_x,
       static_cast<Uint32>(effect.started_ticks) ^
       (static_cast<Uint32>(effect.coord.u) * 73856093u) ^
       (static_cast<Uint32>(effect.coord.v) * 19349663u) ^ 0x5BD1E995u;
+
+  // 1. Bodenschutt (am weitesten hinten, damit alle Flammen darüber liegen).
+  drawNuclearBGroundDebris(center_x, center_y, elapsed, fireball_seed);
+
+  // 2. Initialer aufgehender und kollabierender Feuerball.
   drawNuclearBFireball(center_x, center_y, elapsed, fireball_seed);
 
-  // Feuersäule, die hinter den Säulenrauchschwaden durchschimmert.
+  // 3. Persistenter Sockel-Feuerball, der die ganze Animation über brennt.
+  drawNuclearBBaseFire(center_x, center_y, elapsed, fireball_seed);
+
+  // Stem- und Cap-Fortschritt für Feuer-Helfer.
   const double stem_progress = std::clamp(
       static_cast<double>(elapsed) /
           static_cast<double>(std::max<Uint32>(1, NUCLEAR_B_STEM_BUILD_MS)),
       0.0, 1.0);
-  const double stem_total_progress = std::clamp(
+  const double total_progress = std::clamp(
       static_cast<double>(elapsed) /
           static_cast<double>(NUCLEAR_B_EXPLOSION_TOTAL_DURATION_MS),
       0.0, 1.0);
-  if (stem_progress > 0.0) {
-    SDL_BlendMode prev_blend;
-    SDL_GetRenderDrawBlendMode(sdl_renderer, &prev_blend);
-    SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
 
-    const double cell_to_px = static_cast<double>(element_size + 1);
-    const int stem_top_y = static_cast<int>(std::lround(
-        center_y - cell_to_px * NUCLEAR_B_STEM_HEIGHT_CELLS *
-                       0.78 * stem_progress));
-    const double base_glow_alpha =
-        160.0 * std::clamp(1.0 - stem_total_progress * 1.15, 0.0, 1.0);
-    const double clock = static_cast<double>(elapsed) / 1000.0;
-    std::mt19937 rng(fireball_seed ^ 0xA1B2C3D4u);
-    std::uniform_real_distribution<double> phase_dist(0.0, 2.0 * kLogoPi);
-    std::uniform_real_distribution<double> radius_jitter_dist(0.55, 1.20);
-    std::uniform_real_distribution<double> lateral_jitter_dist(-1.0, 1.0);
+  // 4. Feuer in der Säule (durchscheint hinter Säulenrauch).
+  drawNuclearBStemFire(center_x, center_y, elapsed, fireball_seed,
+                       stem_progress, total_progress);
 
-    const int span = std::max(1, center_y - stem_top_y);
-    for (int blob = 0; blob < NUCLEAR_B_FIRE_GLOW_BLOB_COUNT; ++blob) {
-      const double height_unit =
-          static_cast<double>(blob) /
-          static_cast<double>(NUCLEAR_B_FIRE_GLOW_BLOB_COUNT - 1);
-      const double phase = phase_dist(rng);
-      const double flicker = 0.55 + 0.45 * std::sin(clock * 4.4 + phase);
-      const Uint8 inner_alpha = static_cast<Uint8>(std::clamp(
-          base_glow_alpha * flicker, 0.0, 240.0));
-      if (inner_alpha == 0) {
-        continue;
-      }
-      const double y_offset =
-          stem_top_y + height_unit * static_cast<double>(span);
-      const double sway =
-          lateral_jitter_dist(rng) * cell_to_px *
-          NUCLEAR_B_STEM_RADIUS_CELLS * 0.55;
-      const double horizontal_oscillation =
-          std::sin(clock * 1.8 + phase + height_unit * 6.2) *
-          cell_to_px * 0.18;
-      const double glow_radius =
-          cell_to_px * NUCLEAR_B_FIRE_GLOW_RADIUS_CELLS *
-          radius_jitter_dist(rng) *
-          (0.85 + 0.30 * (1.0 - height_unit)) * (0.5 + 0.6 * stem_progress);
-      const double x = center_x + sway + horizontal_oscillation;
-      SDL_RenderFillCircleAA(
-          sdl_renderer, x, y_offset, glow_radius * 1.55,
-          SDL_Color{NUCLEAR_B_FIRE_GLOW_OUTER_COLOR.r,
-                    NUCLEAR_B_FIRE_GLOW_OUTER_COLOR.g,
-                    NUCLEAR_B_FIRE_GLOW_OUTER_COLOR.b,
-                    static_cast<Uint8>(std::clamp(inner_alpha * 0.55, 0.0, 200.0))});
-      SDL_RenderFillCircleAA(
-          sdl_renderer, x, y_offset, glow_radius,
-          SDL_Color{NUCLEAR_B_FIRE_GLOW_INNER_COLOR.r,
-                    NUCLEAR_B_FIRE_GLOW_INNER_COLOR.g,
-                    NUCLEAR_B_FIRE_GLOW_INNER_COLOR.b, inner_alpha});
-    }
-
-    SDL_SetRenderDrawBlendMode(sdl_renderer, prev_blend);
-  }
+  // 5. Feuer in der unteren Pilzkappenhälfte.
+  drawNuclearBCapFire(center_x, center_y, elapsed, fireball_seed,
+                      stem_progress, total_progress);
 }
 
 void Renderer::drawDefeatEffect() {
@@ -9138,6 +10142,7 @@ void Renderer::drawmap() {
 
   if (ENABLE_3D_VIEW) {
     drawmap3D();
+    drawNuclearCraters();
     return;
   }
 
@@ -9156,15 +10161,6 @@ void Renderer::drawmap() {
 
       switch (entry) {
       case ElementType::TYPE_WALL:
-        sdl_wall_rect = SDL_Rect{x, y, element_size + 1, element_size + 1};
-        drawWallTile(
-            sdl_wall_rect, j > 0 && map->map_entry(j - 1, i) == ElementType::TYPE_WALL,
-            i + 1 < cols &&
-                map->map_entry(j, i + 1) == ElementType::TYPE_WALL,
-            j + 1 < rows &&
-                map->map_entry(j + 1, i) == ElementType::TYPE_WALL,
-            i > 0 && map->map_entry(j, i - 1) == ElementType::TYPE_WALL, 255,
-            static_cast<int>(j * 92821 + i * 68917 + 11), false);
         break;
       case ElementType::TYPE_PATH:
       case ElementType::TYPE_TELEPORTER:
@@ -9184,6 +10180,27 @@ void Renderer::drawmap() {
         }
         break;
       }
+    }
+  }
+
+  drawNuclearCraters();
+
+  for (size_t i = 0; i < cols; i++) {
+    for (size_t j = 0; j < rows; j++) {
+      if (map->map_entry(j, i) != ElementType::TYPE_WALL) {
+        continue;
+      }
+
+      const int x = offset_x + 1 + static_cast<int>(i) * (element_size + 1);
+      const int y = offset_y + 1 + static_cast<int>(j) * (element_size + 1);
+      sdl_wall_rect = SDL_Rect{x, y, element_size + 1, element_size + 1};
+      drawWallTile(
+          sdl_wall_rect,
+          j > 0 && map->map_entry(j - 1, i) == ElementType::TYPE_WALL,
+          i + 1 < cols && map->map_entry(j, i + 1) == ElementType::TYPE_WALL,
+          j + 1 < rows && map->map_entry(j + 1, i) == ElementType::TYPE_WALL,
+          i > 0 && map->map_entry(j, i - 1) == ElementType::TYPE_WALL, 255,
+          static_cast<int>(j * 92821 + i * 68917 + 11), false);
     }
   }
 }
@@ -10073,6 +11090,11 @@ void Renderer::drawteleporters() {
                                           teleporter_pair.second};
     for (size_t position_index = 0; position_index < positions.size();
          position_index++) {
+      if (map->map_entry(static_cast<size_t>(positions[position_index].u),
+                         static_cast<size_t>(positions[position_index].v)) !=
+          ElementType::TYPE_TELEPORTER) {
+        continue;
+      }
       const PixelCoord teleporter_px = getPixelCoord(positions[position_index], 0, 0);
       SDL_Rect teleporter_rect{teleporter_px.x + int(element_size * 0.08),
                                teleporter_px.y + int(element_size * 0.08),
