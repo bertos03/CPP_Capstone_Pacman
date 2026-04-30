@@ -78,7 +78,7 @@ inline constexpr const char *WALKIE_TALKIE_ASSET_PATH = "walkie_talkie.png";
 inline constexpr const char *ROCKET_ASSET_PATH = "rocket.png";
 inline constexpr const char *AIRSTRIKE_PLANE_ASSET_PATH =
     "airstrike_plane.png";
-inline constexpr int HUD_KEYCAP_ASSET_COUNT = 5;
+inline constexpr int HUD_KEYCAP_ASSET_COUNT = 6;
 inline constexpr std::array<const char *, HUD_KEYCAP_ASSET_COUNT>
     HUD_KEYCAP_ASSET_PATHS{
         "hud_keycaps/key_1.png",
@@ -86,6 +86,7 @@ inline constexpr std::array<const char *, HUD_KEYCAP_ASSET_COUNT>
         "hud_keycaps/key_3.png",
         "hud_keycaps/key_4.png",
         "hud_keycaps/key_5.png",
+        "hud_keycaps/key_6.png",
     };
 inline constexpr const char *AIRSTRIKE_EXPLOSION_SHEET_ASSET_PATH =
     "airstrike_explosion_sheet.png";
@@ -98,6 +99,9 @@ inline constexpr const char *SLIME_OVERLAY_ASSET_PATH = "slime_overlay.png";
 inline constexpr const char *SLIME_SPLASH_SHEET_ASSET_PATH =
     "slime_splash_sheet.png";
 inline constexpr const char *DYNAMITE_ASSET_PATH = "dynamite.png";
+inline constexpr const char *NUCLEAR_BOMB_ASSET_PATH = "nuclear_bomb.png";
+inline constexpr const char *NUCLEAR_TARGET_MARKER_ASSET_PATH =
+    "nuclear_target_marker.png";
 inline constexpr const char *NUCLEAR_CRATER_ASSET_PATH = "nuclear_crater.png";
 inline constexpr const char *MENU_MUSIC_PATH = "menu_music.mp3";
 inline constexpr const char *WIN_MUSIC_PATH = "win_melody.mp3";
@@ -129,6 +133,12 @@ inline constexpr const char *ELECTRIFIED_MONSTER_ROAR_SOUND_PATH =
     "electrified_monster_roar.mp3";
 inline constexpr const char *ELECTRIFIED_MONSTER_IMPACT_SOUND_PATH =
     "electrified_monster_impact.mp3";
+inline constexpr const char *NUCLEAR_BOMB_ALARM_SOUND_PATH =
+    "nuclear_bomb_alarm.mp3";
+inline constexpr const char *NUCLEAR_BOMB_DROP_SOUND_PATH =
+    "nuclear_bomb_drop.mp3";
+inline constexpr const char *NUCLEAR_BOMB_EXPLOSION_SOUND_PATH =
+    "nuclear_bomb_explosion.mp3";
 inline constexpr const char *SETTINGS_FILE_NAME = "settings.cfg";
 
 /**
@@ -253,6 +263,15 @@ inline constexpr Uint32 BIOHAZARD_SPAWN_MIN_INTERVAL_MS = 14000;
 inline constexpr Uint32 BIOHAZARD_SPAWN_MAX_INTERVAL_MS = 26000;
 inline constexpr Uint32 BIOHAZARD_VISIBLE_MS = 60000;
 inline constexpr Uint32 BIOHAZARD_FADE_MS = 1000;
+inline constexpr Uint32 NUCLEAR_BOMB_SPAWN_MIN_INTERVAL_MS = 18000;
+inline constexpr Uint32 NUCLEAR_BOMB_SPAWN_MAX_INTERVAL_MS = 32000;
+inline constexpr Uint32 NUCLEAR_BOMB_VISIBLE_MS = 60000;
+inline constexpr Uint32 NUCLEAR_BOMB_FADE_MS = 1000;
+inline constexpr Uint32 NUCLEAR_BOMB_ALARM_MS = 2400;
+inline constexpr Uint32 NUCLEAR_BOMB_FALL_MS = 1400;
+inline constexpr float NUCLEAR_BOMB_INITIAL_RENDER_SCALE_CELLS = 6.0f;
+inline constexpr float NUCLEAR_BOMB_FINAL_RENDER_SCALE_CELLS = 0.72f;
+inline constexpr double NUCLEAR_BOMB_EXPLOSION_GAIN = 3.0;
 inline constexpr Uint32 BIOHAZARD_BEAM_ACTIVE_MS = 3000;
 inline constexpr Uint32 BIOHAZARD_BEAM_MIN_VISIBLE_MS = 1000;
 inline constexpr Uint32 BIOHAZARD_HIT_SEQUENCE_MS = 1000;
@@ -891,9 +910,9 @@ inline constexpr double MONSTER_EXPLOSION_RENDER_SCALE = 1.10;
 inline constexpr double MONSTER_EXPLOSION_INITIAL_OPACITY = 0.50;
 inline constexpr double MONSTER_EXPLOSION_FINAL_OPACITY = 0.10;
 inline constexpr double FART_CLOUD_RENDER_SCALE = 0.70;
-inline constexpr double SLIME_BALL_RENDER_SCALE = 0.70;
-inline constexpr double SLIME_OVERLAY_RENDER_SCALE = 0.92;
-inline constexpr double SLIME_SPLASH_RENDER_SCALE = 0.86;
+inline constexpr double SLIME_BALL_RENDER_SCALE = 0.90;
+inline constexpr double SLIME_OVERLAY_RENDER_SCALE = 1.22;
+inline constexpr double SLIME_SPLASH_RENDER_SCALE = 1.26;
 inline constexpr double FART_CLOUD_DRIFT_X_FACTOR = 0.06;
 inline constexpr double FART_CLOUD_DRIFT_Y_FACTOR = 0.15;
 inline constexpr double FART_CLOUD_SCALE_PULSE_AMPLITUDE = 0.14;
