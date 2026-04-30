@@ -750,8 +750,9 @@ void Renderer::initializeRenderer(size_t row_count_value,
       Paths::GetDataFilePath("slime_splash_sheet.png"), sdl_slime_splash_size);
   sdl_dynamite_texture = loadTrimmedTexture(Paths::GetDataFilePath("dynamite.png"),
                                             sdl_dynamite_size);
-  sdl_nuclear_bomb_texture = loadTrimmedTexture(
-      Paths::GetDataFilePath(NUCLEAR_BOMB_ASSET_PATH), sdl_nuclear_bomb_size);
+  sdl_nuclear_bomb_texture = loadTrimmedChromaKeyTexture(
+      Paths::GetDataFilePath(NUCLEAR_BOMB_ASSET_PATH), sdl_nuclear_bomb_size,
+      42);
   configureSmoothTextureSampling(sdl_nuclear_bomb_texture);
   sdl_nuclear_target_marker_texture = loadTrimmedTexture(
       Paths::GetDataFilePath(NUCLEAR_TARGET_MARKER_ASSET_PATH),
