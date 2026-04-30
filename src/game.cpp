@@ -2643,7 +2643,7 @@ void Game::UpdateNuclearBombDrop(Uint32 now) {
   }
 
   if (!active_nuclear_bomb_drop.drop_sound_started &&
-      now >= active_nuclear_bomb_drop.drop_started_ticks) {
+      now + 2000 >= active_nuclear_bomb_drop.drop_started_ticks) {
     active_nuclear_bomb_drop.drop_sound_started = true;
 #ifdef AUDIO
     audio->PlayNuclearBombDrop();
