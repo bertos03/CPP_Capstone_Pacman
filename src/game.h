@@ -439,6 +439,7 @@ private:
   void TryFireRocket(Uint32 now);
   void TryUseBiohazardBeam(Uint32 now);
   void TryUseNuclearBomb(Uint32 now);
+  void ApplyCheats();
   void UpdateNuclearBombDrop(Uint32 now);
   void TryTriggerNuclearExplosion(Uint32 now);
   void TryTriggerNuclearExplosionB(Uint32 now);

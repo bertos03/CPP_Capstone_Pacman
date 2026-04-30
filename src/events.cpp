@@ -84,6 +84,7 @@ void Events::SetGameplayFrozen(bool frozen) {
     requested_extra = ExtraSlot::None;
     nuclear_test_requested = false;
     nuclear_test_b_requested = false;
+    cheat_pending.fill(false);
   }
 }
 
@@ -98,6 +99,16 @@ bool Events::ConsumeExtraUseRequest(ExtraSlot slot) {
 
   requested_extra = ExtraSlot::None;
   return true;
+}
+
+bool Events::ConsumeCheatRequest(ExtraSlot slot) {
+  const size_t index = static_cast<size_t>(slot);
+  if (index >= cheat_pending.size()) {
+    return false;
+  }
+  const bool requested = cheat_pending[index];
+  cheat_pending[index] = false;
+  return requested;
 }
 
 bool Events::ConsumeNuclearTestRequest() {
@@ -164,14 +175,38 @@ void Events::update() {
       break;
     }
 
+    const bool is_repeat = sdl_events->key.repeat != 0;
+    const Uint16 key_mod = sdl_events->key.keysym.mod;
+    const bool shift_held = (key_mod & KMOD_SHIFT) != 0;
+
     if (!IsGameplayFrozen()) {
       const ExtraSlot requested_slot = KeycodeToExtraSlot(keycode);
       if (requested_slot != ExtraSlot::None) {
-        requested_extra = requested_slot;
+        if (shift_held) {
+          // Cheat: Shift + Ziffer inkrementiert das Inventar.
+          // Auto-Repeat ignorieren und pro Slot 1 s entprellen.
+          if (!is_repeat) {
+            const size_t slot_index = static_cast<size_t>(requested_slot);
+            const Uint32 now_ms = SDL_GetTicks();
+            const Uint32 last = cheat_last_inc_ms[slot_index];
+            if (last == 0 || now_ms - last >= 1000) {
+              cheat_pending[slot_index] = true;
+              cheat_last_inc_ms[slot_index] = now_ms;
+            }
+          }
+          continue;
+        }
+        // Normaler Einsatz: jeder Tastendruck zählt einmal,
+        // Auto-Repeat (gehaltene Taste) wird ignoriert.
+        if (!is_repeat) {
+          requested_extra = requested_slot;
+        }
         continue;
       }
       if (keycode == SDLK_b) {
-        nuclear_test_b_requested = true;
+        if (!is_repeat) {
+          nuclear_test_b_requested = true;
+        }
         continue;
       }
     }

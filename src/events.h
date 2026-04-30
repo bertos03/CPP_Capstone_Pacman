@@ -18,6 +18,7 @@
 #define EVENTS_H
 
 #include <SDL.h>
+#include <array>
 #include <atomic>
 #include <iostream>
 
@@ -35,6 +36,7 @@ public:
   bool is_quit() { return quit; }
   Directions get_next_move() { return current_direction; }
   bool ConsumeExtraUseRequest(ExtraSlot slot);
+  bool ConsumeCheatRequest(ExtraSlot slot);
   bool ConsumeNuclearTestRequest();
   bool ConsumeNuclearTestBRequest();
   bool ConsumePauseToggleRequest();
@@ -52,6 +54,10 @@ private:
   bool pause_toggle_requested;
   bool exit_dialog_requested;
   bool confirm_requested;
+  // Cheat: Shift + Ziffer erhöht das jeweilige Inventar.
+  // Index entspricht dem ExtraSlot-Enum (0..6).
+  std::array<bool, 7> cheat_pending{};
+  std::array<Uint32, 7> cheat_last_inc_ms{};
   std::atomic<bool> gameplay_frozen;
 };
 

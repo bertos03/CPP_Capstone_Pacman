@@ -622,6 +622,7 @@ void Game::Update() {
   }
 
   ApplyTeleporters();
+  ApplyCheats();
   UpdateInvulnerabilityPotion(now);
   UpdateDynamitePickup(now);
   UpdatePlasticExplosivePickup(now);
@@ -2528,6 +2529,30 @@ void Game::TryUsePlasticExplosive(Uint32 now) {
 #endif
 }
 
+void Game::ApplyCheats() {
+  if (events == nullptr) {
+    return;
+  }
+  if (events->ConsumeCheatRequest(ExtraSlot::Dynamite)) {
+    dynamite_inventory++;
+  }
+  if (events->ConsumeCheatRequest(ExtraSlot::PlasticExplosive)) {
+    plastic_explosive_inventory++;
+  }
+  if (events->ConsumeCheatRequest(ExtraSlot::Airstrike)) {
+    airstrike_inventory++;
+  }
+  if (events->ConsumeCheatRequest(ExtraSlot::Rocket)) {
+    rocket_inventory++;
+  }
+  if (events->ConsumeCheatRequest(ExtraSlot::Biohazard)) {
+    biohazard_inventory++;
+  }
+  if (events->ConsumeCheatRequest(ExtraSlot::NuclearBomb)) {
+    nuclear_bomb_inventory++;
+  }
+}
+
 void Game::TryFireRocket(Uint32 now) {
   if (events == nullptr || pacman == nullptr) {
     return;
@@ -2535,7 +2560,9 @@ void Game::TryFireRocket(Uint32 now) {
 
   const bool fire_requested =
       events->ConsumeExtraUseRequest(ExtraSlot::Rocket);
-  if (!fire_requested || rocket_inventory <= 0 || !active_rockets.empty()) {
+  // Mehrere Raketen dürfen gleichzeitig in der Luft sein. Auto-Fire durch
+  // Gedrückthalten der Taste verhindert events->update() (key.repeat-Filter).
+  if (!fire_requested || rocket_inventory <= 0) {
     return;
   }
 
