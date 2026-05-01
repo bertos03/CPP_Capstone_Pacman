@@ -85,6 +85,8 @@ private:
   void drawmap();
   void drawmap3D();
   void drawmap3DBase();
+  void drawmap3DFloors();
+  void drawmap3DWallTops();
   void drawFloorTile3D(int row, int col);
   void drawWallTile3D(int row, int col, bool has_wall_down);
   void drawWallTop3D(int row, int col);

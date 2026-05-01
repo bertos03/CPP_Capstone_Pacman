@@ -264,9 +264,9 @@ inline constexpr Uint32 GAS_CLOUD_ACTIVE_MS =
     GAS_CLOUD_TOTAL_LIFETIME_MS - GAS_CLOUD_FADE_MS;
 inline constexpr int GAS_CLOUD_MIN_PARTICLE_COUNT = 6;
 inline constexpr int GAS_CLOUD_MAX_PARTICLE_COUNT = 10;
-// Visual tuning: lower opacity and tighter spread of the green cloud.
-inline constexpr double GAS_CLOUD_OPACITY_SCALE = 0.55;
-inline constexpr double GAS_CLOUD_SPREAD_SCALE = 0.65;
+// Visual tuning of the blue monsters' green fart cloud.
+inline constexpr double GAS_CLOUD_OPACITY_SCALE = 1.05;
+inline constexpr double GAS_CLOUD_SPREAD_SCALE = 1.30;
 inline constexpr Uint32 BLUE_POTION_SPAWN_MIN_INTERVAL_MS = 20000;
 inline constexpr Uint32 BLUE_POTION_SPAWN_MAX_INTERVAL_MS = 60000;
 inline constexpr Uint32 BLUE_POTION_VISIBLE_MS = 15000;
@@ -514,14 +514,14 @@ inline constexpr float NUCLEAR_CRATER_RADIUS_CELLS =
     NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS * 0.63f;
 inline constexpr float NUCLEAR_CRATER_Y_RADIUS_FACTOR = 0.78f;
 inline constexpr int NUCLEAR_CRATER_EDGE_SAMPLE_STEPS = 5;
-inline constexpr Uint8 NUCLEAR_CRATER_BASE_ALPHA = 83;
+inline constexpr Uint8 NUCLEAR_CRATER_BASE_ALPHA = 30;
 inline constexpr SDL_Color NUCLEAR_CRATER_OUTER_COLOR{54, 43, 36, 255};
 inline constexpr SDL_Color NUCLEAR_CRATER_INNER_COLOR{16, 14, 13, 255};
 inline constexpr SDL_Color NUCLEAR_CRATER_GLOW_COLOR{118, 70, 38, 255};
 inline constexpr Uint32 NUCLEAR_CRATER_REVEAL_DELAY_MS = 120;
 inline constexpr SDL_Color NUCLEAR_CRATER_GREEN_CLOUD_COLOR{86, 220, 92, 255};
 inline constexpr Uint8 NUCLEAR_CRATER_GREEN_CLOUD_PEAK_ALPHA = 24;
-inline constexpr float NUCLEAR_CRATER_GREEN_CLOUD_RADIUS_FACTOR = 1.55f;
+inline constexpr float NUCLEAR_CRATER_GREEN_CLOUD_RADIUS_FACTOR = 1.35f;
 inline constexpr Uint32 NUCLEAR_CRATER_GREEN_CLOUD_FADE_IN_MS = 350;
 // Total lifetime of the green crater cloud (visible + fade-out). Adjust
 // here to change how long the radioactive cloud persists.

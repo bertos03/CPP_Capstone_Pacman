@@ -1112,8 +1112,9 @@ void Renderer::renderFrame(bool show_hud) {
   SDL_SetRenderDrawColor(sdl_renderer, COLOR_BACK, 255);
   SDL_RenderClear(sdl_renderer);
   if (ENABLE_3D_VIEW) {
-    drawmap3DBase();
+    drawmap3DFloors();
     drawNuclearCraters();
+    drawmap3DWallTops();
     drawWallRubble();
 
     if (map != nullptr) {
@@ -10385,8 +10386,17 @@ void Renderer::drawmap() {
   }
 
   if (ENABLE_3D_VIEW) {
-    drawmap3D();
+    drawmap3DFloors();
     drawNuclearCraters();
+    drawmap3DWallTops();
+    for (size_t u = 0; u < rows; ++u) {
+      for (size_t v = 0; v < cols; ++v) {
+        if (map->map_entry(u, v) != ElementType::TYPE_WALL) {
+          continue;
+        }
+        drawWallFrontFace3D(static_cast<int>(u), static_cast<int>(v));
+      }
+    }
     return;
   }
 
@@ -10731,6 +10741,26 @@ void Renderer::drawWallTile3D(int row, int col, bool has_wall_down) {
 }
 
 void Renderer::drawmap3DBase() {
+  drawmap3DFloors();
+  drawmap3DWallTops();
+}
+
+void Renderer::drawmap3DFloors() {
+  if (map == nullptr) {
+    return;
+  }
+
+  for (size_t u = 0; u < rows; ++u) {
+    for (size_t v = 0; v < cols; ++v) {
+      if (map->map_entry(u, v) == ElementType::TYPE_WALL) {
+        continue;
+      }
+      drawFloorTile3D(static_cast<int>(u), static_cast<int>(v));
+    }
+  }
+}
+
+void Renderer::drawmap3DWallTops() {
   if (map == nullptr) {
     return;
   }
@@ -10738,7 +10768,6 @@ void Renderer::drawmap3DBase() {
   for (size_t u = 0; u < rows; ++u) {
     for (size_t v = 0; v < cols; ++v) {
       if (map->map_entry(u, v) != ElementType::TYPE_WALL) {
-        drawFloorTile3D(static_cast<int>(u), static_cast<int>(v));
         continue;
       }
       drawWallTop3D(static_cast<int>(u), static_cast<int>(v));
