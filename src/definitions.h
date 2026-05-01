@@ -514,7 +514,7 @@ inline constexpr float NUCLEAR_CRATER_RADIUS_CELLS =
     NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS * 0.63f;
 inline constexpr float NUCLEAR_CRATER_Y_RADIUS_FACTOR = 0.78f;
 inline constexpr int NUCLEAR_CRATER_EDGE_SAMPLE_STEPS = 5;
-inline constexpr Uint8 NUCLEAR_CRATER_BASE_ALPHA = 30;
+inline constexpr Uint8 NUCLEAR_CRATER_BASE_ALPHA = 160;
 inline constexpr SDL_Color NUCLEAR_CRATER_OUTER_COLOR{54, 43, 36, 255};
 inline constexpr SDL_Color NUCLEAR_CRATER_INNER_COLOR{16, 14, 13, 255};
 inline constexpr SDL_Color NUCLEAR_CRATER_GLOW_COLOR{118, 70, 38, 255};

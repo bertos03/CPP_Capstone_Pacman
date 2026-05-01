@@ -7890,20 +7890,17 @@ void Renderer::drawNuclearCrater(const NuclearCrater &crater) {
     const double right = static_cast<double>(crater.world_center.x) + radius;
     const double top = static_cast<double>(crater.world_center.y) - radius;
     const double bottom = static_cast<double>(crater.world_center.y) + radius;
-    const SDL_Color white{255, 255, 255, 255};
+    const SDL_Color tint{255, 255, 255, NUCLEAR_CRATER_BASE_ALPHA};
     SDL_Vertex vertices[4]{
-        {world_to_screen(left, top), white, SDL_FPoint{0.0f, 0.0f}},
-        {world_to_screen(right, top), white, SDL_FPoint{1.0f, 0.0f}},
-        {world_to_screen(right, bottom), white, SDL_FPoint{1.0f, 1.0f}},
-        {world_to_screen(left, bottom), white, SDL_FPoint{0.0f, 1.0f}},
+        {world_to_screen(left, top), tint, SDL_FPoint{0.0f, 0.0f}},
+        {world_to_screen(right, top), tint, SDL_FPoint{1.0f, 0.0f}},
+        {world_to_screen(right, bottom), tint, SDL_FPoint{1.0f, 1.0f}},
+        {world_to_screen(left, bottom), tint, SDL_FPoint{0.0f, 1.0f}},
     };
     const int indices[6]{0, 1, 2, 0, 2, 3};
     SDL_SetTextureBlendMode(sdl_nuclear_crater_texture, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureAlphaMod(sdl_nuclear_crater_texture,
-                           NUCLEAR_CRATER_BASE_ALPHA);
     SDL_RenderGeometry(sdl_renderer, sdl_nuclear_crater_texture, vertices, 4,
                        indices, 6);
-    SDL_SetTextureAlphaMod(sdl_nuclear_crater_texture, 255);
     return;
   }
 
@@ -9122,6 +9119,13 @@ void Renderer::drawNuclearBGroundDebris(int center_x, int center_y,
   std::uniform_real_distribution<double> shade_dist(0.0, 1.0);
   std::uniform_real_distribution<double> aspect_dist(0.6, 1.5);
 
+  // Brocken dürfen den Krater nicht überlagern: Position gegen die
+  // Krater-Ellipse prüfen und Treffer verwerfen.
+  const double crater_x_rad_px =
+      NUCLEAR_CRATER_RADIUS_CELLS * cell_to_px;
+  const double crater_y_rad_px =
+      NUCLEAR_CRATER_RADIUS_CELLS * NUCLEAR_CRATER_Y_RADIUS_FACTOR * cell_to_px;
+
   for (int chunk = 0; chunk < NUCLEAR_B_GROUND_DEBRIS_COUNT; ++chunk) {
     const double angle = angle_dist(rng);
     const double radius_cells = radius_dist(rng);
@@ -9134,6 +9138,15 @@ void Renderer::drawNuclearBGroundDebris(int center_x, int center_y,
         center_y + std::sin(angle) * radius_cells * cell_to_px * 0.42;
     const double w = half_size_cells * cell_to_px * aspect;
     const double h = half_size_cells * cell_to_px / std::max(0.4, aspect);
+
+    const double dx = cx - center_x;
+    const double dy = cy - center_y;
+    const double ex = crater_x_rad_px + w;
+    const double ey = crater_y_rad_px + h;
+    if (ex > 0.0 && ey > 0.0 &&
+        (dx * dx) / (ex * ex) + (dy * dy) / (ey * ey) < 1.0) {
+      continue;
+    }
 
     const Uint8 r = static_cast<Uint8>(
         NUCLEAR_B_GROUND_DEBRIS_DARK_COLOR.r * (1.0 - shade) +
