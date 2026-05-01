@@ -103,6 +103,17 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char,
   next_grazing_ticks = 0;
   grazing_until_ticks = 0;
   goat_is_jumping = false;
+  goat_state = GoatState::Grazing;
+  goat_slide_direction = Directions::None;
+  goat_slide_remaining_steps = 0;
+  goat_stun_until_ticks = 0;
+  goat_recovery_until_ticks = 0;
+  goat_ignore_player_until_ticks = 0;
+  goat_request_punch_sound = false;
+  goat_request_bleat_sound = false;
+  goat_request_crash_sound = false;
+  goat_request_wall_break = false;
+  goat_wall_break_coord = _coord;
 }
 
 /**
@@ -188,37 +199,155 @@ void Monster::simulate(Events *events, Map *map, Pacman *pacman,
       continue;
     }
 
-    const Directions goat_jump_direction = try_find_goat_jump_direction();
+    Directions goat_jump_direction = Directions::None;
     if (monster_char == GOAT) {
-      if (goat_jump_direction != Directions::None) {
-        grazing_until_ticks = 0;
-        goat_is_jumping = true;
-      } else {
-        goat_is_jumping = false;
-        if (next_grazing_ticks != 0 && now >= next_grazing_ticks) {
-          const Uint32 grazing_duration =
-              RandomTicksBetween(GOAT_GRAZING_MIN_DURATION_MS,
-                                 GOAT_GRAZING_MAX_DURATION_MS);
-          grazing_until_ticks = now + grazing_duration;
+      // Stunned goat: stand still until stun expires.
+      if (goat_state == GoatState::Stunned) {
+        if (now >= goat_stun_until_ticks) {
+          goat_state = GoatState::Grazing;
+          goat_is_jumping = false;
+          grazing_until_ticks = 0;
           next_grazing_ticks =
-              grazing_until_ticks +
-              RandomTicksBetween(GOAT_GRAZING_MIN_INTERVAL_MS,
-                                 GOAT_GRAZING_MAX_INTERVAL_MS);
-        }
-        if (grazing_until_ticks != 0 && now < grazing_until_ticks) {
+              now + RandomTicksBetween(GOAT_GRAZING_MIN_INTERVAL_MS,
+                                       GOAT_GRAZING_MAX_INTERVAL_MS);
+        } else {
           px_delta.x = 0;
           px_delta.y = 0;
+          goat_is_jumping = false;
           sleep(15);
           continue;
         }
-        if (grazing_until_ticks != 0 && now >= grazing_until_ticks) {
+      }
+      // Recovering: brief pause after a successful slide-stop, then bleat
+      // and resume grazing.
+      if (goat_state == GoatState::Recovering) {
+        if (now >= goat_recovery_until_ticks) {
+          goat_request_bleat_sound = true;
+          goat_state = GoatState::Grazing;
+          goat_is_jumping = false;
           grazing_until_ticks = 0;
+          next_grazing_ticks =
+              now + RandomTicksBetween(GOAT_GRAZING_MIN_INTERVAL_MS,
+                                       GOAT_GRAZING_MAX_INTERVAL_MS);
+        } else {
+          px_delta.x = 0;
+          px_delta.y = 0;
+          goat_is_jumping = false;
+          sleep(15);
+          continue;
+        }
+      }
+
+      const bool ignoring_player =
+          (goat_state == GoatState::PostHitGrace) ||
+          (now < goat_ignore_player_until_ticks);
+      if (goat_state == GoatState::PostHitGrace &&
+          now >= goat_ignore_player_until_ticks) {
+        goat_state = GoatState::Grazing;
+      }
+
+      const Directions sighted_direction =
+          ignoring_player ? Directions::None : try_find_goat_jump_direction();
+
+      if (goat_state == GoatState::Sliding) {
+        // Continue sliding in stored direction; LOS is irrelevant now.
+        goat_jump_direction = goat_slide_direction;
+        goat_is_jumping = true;
+      } else if (sighted_direction != Directions::None) {
+        // Saw player -> charging. If just transitioned, bleat once.
+        if (goat_state != GoatState::Charging) {
+          goat_request_bleat_sound = true;
+        }
+        goat_state = GoatState::Charging;
+        goat_slide_direction = sighted_direction;
+        goat_slide_remaining_steps = GOAT_SLIDE_TILES;
+        grazing_until_ticks = 0;
+        goat_is_jumping = true;
+        goat_jump_direction = sighted_direction;
+      } else {
+        // Lost sight. If we were charging, switch to sliding for a few tiles.
+        if (goat_state == GoatState::Charging) {
+          goat_state = GoatState::Sliding;
+          goat_jump_direction = goat_slide_direction;
+          goat_is_jumping = true;
+        } else {
+          goat_is_jumping = false;
+          if (next_grazing_ticks != 0 && now >= next_grazing_ticks) {
+            const Uint32 grazing_duration =
+                RandomTicksBetween(GOAT_GRAZING_MIN_DURATION_MS,
+                                   GOAT_GRAZING_MAX_DURATION_MS);
+            grazing_until_ticks = now + grazing_duration;
+            next_grazing_ticks =
+                grazing_until_ticks +
+                RandomTicksBetween(GOAT_GRAZING_MIN_INTERVAL_MS,
+                                   GOAT_GRAZING_MAX_INTERVAL_MS);
+          }
+          if (grazing_until_ticks != 0 && now < grazing_until_ticks) {
+            px_delta.x = 0;
+            px_delta.y = 0;
+            sleep(15);
+            continue;
+          }
+          if (grazing_until_ticks != 0 && now >= grazing_until_ticks) {
+            grazing_until_ticks = 0;
+          }
         }
       }
     }
 
     int step_delay_ms = movement_step_delay_ms;
     if (goat_jump_direction != Directions::None) {
+      // For sliding, check if next tile is a wall: if breakable -> request
+      // wall break + stun and stop; if outer (unbreakable) -> stop into
+      // recovery.
+      if (monster_char == GOAT && goat_state == GoatState::Sliding) {
+        MapCoord next_coord = map_coord;
+        switch (goat_jump_direction) {
+        case Directions::Up:    next_coord.u--; break;
+        case Directions::Down:  next_coord.u++; break;
+        case Directions::Left:  next_coord.v--; break;
+        case Directions::Right: next_coord.v++; break;
+        default: break;
+        }
+        const bool in_bounds =
+            map != nullptr && next_coord.u >= 0 && next_coord.v >= 0 &&
+            next_coord.u < static_cast<int>(map->get_map_rows()) &&
+            next_coord.v < static_cast<int>(map->get_map_cols());
+        const ElementType next_entry =
+            in_bounds ? map->map_entry(static_cast<size_t>(next_coord.u),
+                                       static_cast<size_t>(next_coord.v))
+                      : ElementType::TYPE_WALL;
+        if (next_entry == ElementType::TYPE_WALL) {
+          // Crash. Game::Update will perform the actual wall break; we
+          // request it here and immediately stun.
+          goat_wall_break_coord = next_coord;
+          goat_request_wall_break = true;
+          goat_request_punch_sound = true;
+          goat_request_crash_sound = true;
+          goat_state = GoatState::Stunned;
+          goat_stun_until_ticks = SDL_GetTicks() + GOAT_STUN_DURATION_MS;
+          goat_is_jumping = false;
+          px_delta.x = 0;
+          px_delta.y = 0;
+          sleep(15);
+          continue;
+        }
+        // Path ahead: take a slide step and decrement counter.
+        if (goat_slide_remaining_steps > 0) {
+          goat_slide_remaining_steps--;
+        }
+        if (goat_slide_remaining_steps <= 0) {
+          // We've slid the full distance and stopped on a free tile.
+          goat_state = GoatState::Recovering;
+          goat_recovery_until_ticks =
+              SDL_GetTicks() + GOAT_RECOVERY_PAUSE_MS;
+          goat_is_jumping = false;
+          px_delta.x = 0;
+          px_delta.y = 0;
+          sleep(15);
+          continue;
+        }
+      }
       next_move = goat_jump_direction;
       step_delay_ms = std::max(1, GOAT_JUMP_STEP_DELAY_MS);
     } else if (const Directions charge_direction = try_find_charge_direction();

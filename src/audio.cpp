@@ -228,6 +228,9 @@ Audio::Audio() {
   SFX_nuclear_bomb_drop = nullptr;
   SFX_nuclear_bomb_explosion = nullptr;
   SFX_invulnerability_loop = nullptr;
+  SFX_punch = nullptr;
+  SFX_goat_bleat = nullptr;
+  SFX_rubble_crash = nullptr;
   menu_music = nullptr;
   win_music = nullptr;
   lose_music = nullptr;
@@ -402,6 +405,23 @@ Audio::Audio() {
   }
   AmplifyChunk(SFX_nuclear_bomb_explosion, NUCLEAR_BOMB_EXPLOSION_GAIN);
   SFX_invulnerability_loop = CreateInvulnerabilityLoopChunk();
+  const std::string punch_sound_path = Paths::GetDataFilePath("punch.mp3");
+  SFX_punch = Mix_LoadWAV(punch_sound_path.c_str());
+  if (SFX_punch == nullptr) {
+    SFX_punch = CreateSynthChunk({180, 110, 70}, 130, 0.55, 1.0, 70.0);
+  }
+  const std::string goat_bleat_sound_path =
+      Paths::GetDataFilePath("goat_maaa.mp3");
+  SFX_goat_bleat = Mix_LoadWAV(goat_bleat_sound_path.c_str());
+  if (SFX_goat_bleat == nullptr) {
+    SFX_goat_bleat = CreateSynthChunk({440, 392, 349}, 320, 0.36, 4.0, 120.0);
+  }
+  const std::string rubble_crash_sound_path =
+      Paths::GetDataFilePath("rubble_crash.mp3");
+  SFX_rubble_crash = Mix_LoadWAV(rubble_crash_sound_path.c_str());
+  if (SFX_rubble_crash == nullptr) {
+    SFX_rubble_crash = CreateSynthChunk({140, 92, 64}, 420, 0.46, 2.0, 200.0);
+  }
   menu_music = Mix_LoadMUS(menu_music_path.c_str());
   if (menu_music == nullptr) {
     std::cerr << "Failed to load menu music " << menu_music_path << ": "
@@ -442,7 +462,9 @@ Audio::Audio() {
       SFX_nuclear_bomb_alarm == nullptr ||
       SFX_nuclear_bomb_drop == nullptr ||
       SFX_nuclear_bomb_explosion == nullptr ||
-      SFX_invulnerability_loop == nullptr) {
+      SFX_invulnerability_loop == nullptr ||
+      SFX_punch == nullptr || SFX_goat_bleat == nullptr ||
+      SFX_rubble_crash == nullptr) {
     std::cerr << "Failed to load SFX: " << Mix_GetError() << "\n";
     return;
   }
@@ -571,6 +593,15 @@ Audio::~Audio() {
   }
   if (SFX_invulnerability_loop != nullptr) {
     Mix_FreeChunk(SFX_invulnerability_loop);
+  }
+  if (SFX_punch != nullptr) {
+    Mix_FreeChunk(SFX_punch);
+  }
+  if (SFX_goat_bleat != nullptr) {
+    Mix_FreeChunk(SFX_goat_bleat);
+  }
+  if (SFX_rubble_crash != nullptr) {
+    Mix_FreeChunk(SFX_rubble_crash);
   }
   if (menu_music != nullptr) {
     Mix_FreeMusic(menu_music);
@@ -1602,6 +1633,12 @@ void Audio::PlayPlasticExplosivePlace() {
 void Audio::PlayPlasticExplosiveWallBreak() {
   PlayChunk(SFX_plastic_explosive_wall_break);
 };
+
+void Audio::PlayPunch() { PlayChunk(SFX_punch); };
+
+void Audio::PlayGoatBleat() { PlayChunk(SFX_goat_bleat); };
+
+void Audio::PlayRubbleCrash() { PlayChunk(SFX_rubble_crash); };
 
 void Audio::PlayAirstrikeRadio() { PlayChunk(SFX_airstrike_radio); };
 

@@ -1969,6 +1969,17 @@ void Renderer::renderFrame(bool show_hud) {
                             SDL_SetTextureAlphaMod(pacman_texture, 255);
                           }
                           draw_slime_overlay(pacman_rect, 0.0);
+                          if (game->pacman->paralyzed_until_ticks > now) {
+                            drawStunStars(
+                                pacman_rect.x + pacman_rect.w / 2,
+                                pacman_rect.y -
+                                    static_cast<int>(element_size * 0.25),
+                                static_cast<int>(element_size *
+                                                 STUN_STARS_ORBIT_RADIUS_CELLS),
+                                static_cast<int>(element_size *
+                                                 STUN_STARS_RADIUS_CELLS),
+                                now);
+                          }
                         });
                   });
             }
@@ -2165,6 +2176,20 @@ void Renderer::renderFrame(bool show_hud) {
                             monster->electrified_charge_target_id != -1);
                       }
                       SDL_SetTextureAlphaMod(monster_texture, 255);
+                      if (monster->monster_char == GOAT &&
+                          monster->goat_state ==
+                              Monster::GoatState::Stunned &&
+                          now < monster->goat_stun_until_ticks) {
+                        drawStunStars(
+                            monster_rect.x + monster_rect.w / 2,
+                            monster_rect.y -
+                                static_cast<int>(element_size * 0.25),
+                            static_cast<int>(element_size *
+                                             STUN_STARS_ORBIT_RADIUS_CELLS),
+                            static_cast<int>(element_size *
+                                             STUN_STARS_RADIUS_CELLS),
+                            now);
+                      }
                     });
               });
         }
@@ -4704,6 +4729,14 @@ void Renderer::drawpacman() {
     SDL_SetTextureAlphaMod(pacman_texture, 255);
   }
   draw_slime_overlay(sdl_pacman_rect, 0.0);
+  if (game->pacman->paralyzed_until_ticks > now) {
+    drawStunStars(sdl_pacman_rect.x + sdl_pacman_rect.w / 2,
+                  sdl_pacman_rect.y - static_cast<int>(element_size * 0.25),
+                  static_cast<int>(element_size *
+                                   STUN_STARS_ORBIT_RADIUS_CELLS),
+                  static_cast<int>(element_size * STUN_STARS_RADIUS_CELLS),
+                  now);
+  }
 }
 
 void Renderer::drawbonusflask() {
@@ -6361,6 +6394,47 @@ void Renderer::drawbiohazardbeam() {
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
+void Renderer::drawStunStars(int center_x, int center_y, int orbit_radius_px,
+                             int star_radius_px, Uint32 now) {
+  if (orbit_radius_px <= 0 || star_radius_px <= 0) {
+    return;
+  }
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const double phase =
+      static_cast<double>(now) / static_cast<double>(STUN_STARS_ORBIT_PERIOD_MS);
+  const double base_angle = phase * 2.0 * M_PI;
+  for (int i = 0; i < STUN_STARS_COUNT; ++i) {
+    const double angle = base_angle +
+                         (2.0 * M_PI * static_cast<double>(i)) /
+                             static_cast<double>(STUN_STARS_COUNT);
+    const int sx = center_x +
+                   static_cast<int>(std::cos(angle) * orbit_radius_px);
+    const int sy = center_y +
+                   static_cast<int>(std::sin(angle) * orbit_radius_px * 0.45);
+
+    // Five-pointed star drawn as filled triangles via line bunch.
+    const double rot = phase * 4.0 * M_PI;
+    SDL_Point pts[11];
+    for (int k = 0; k < 10; ++k) {
+      const double r = (k % 2 == 0) ? star_radius_px : star_radius_px * 0.45;
+      const double a = rot + (M_PI * 2.0 * k) / 10.0 - M_PI / 2.0;
+      pts[k].x = sx + static_cast<int>(std::cos(a) * r);
+      pts[k].y = sy + static_cast<int>(std::sin(a) * r);
+    }
+    pts[10] = pts[0];
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 230, 90, 240);
+    SDL_RenderDrawLines(sdl_renderer, pts, 11);
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 200, 50, 200);
+    SDL_RenderFillCircle(sdl_renderer, sx, sy,
+                         std::max(1, star_radius_px / 3));
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
 void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
                                 double pulse_clock) {
   SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
@@ -7383,6 +7457,22 @@ void Renderer::drawExplosionParticles() {
           PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_AMPLITUDE_CELLS,
           PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_FREQUENCY_HZ,
           0.0f};
+    case ExplosionSmokePuffKind::GoatRedDust:
+      return SmokeRenderTuning{
+          2400,
+          PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_RADIUS_CELLS,
+          PLASTIC_EXPLOSIVE_WALL_DUST_FINAL_RADIUS_CELLS * 1.4f,
+          240,
+          SDL_Color{170, 40, 32, 255},
+          SDL_Color{220, 90, 70, 255},
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_MIN_COUNT,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_MAX_COUNT,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_OFFSET_FACTOR,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_RADIUS_MIN_FACTOR,
+          PLASTIC_EXPLOSIVE_WALL_DUST_BLOB_RADIUS_MAX_FACTOR,
+          PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_AMPLITUDE_CELLS * 1.4f,
+          PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_FREQUENCY_HZ,
+          0.15f};
     case ExplosionSmokePuffKind::MonsterSmoke:
     default:
       return SmokeRenderTuning{
@@ -9367,6 +9457,17 @@ void Renderer::drawmonsters() {
                                  now, monster->electrified_charge_target_id != -1);
     }
     SDL_SetTextureAlphaMod(monster_texture, 255);
+    if (monster->monster_char == GOAT &&
+        monster->goat_state == Monster::GoatState::Stunned &&
+        now < monster->goat_stun_until_ticks) {
+      drawStunStars(sdl_monster_rect.x + sdl_monster_rect.w / 2,
+                    sdl_monster_rect.y -
+                        static_cast<int>(element_size * 0.25),
+                    static_cast<int>(element_size *
+                                     STUN_STARS_ORBIT_RADIUS_CELLS),
+                    static_cast<int>(element_size * STUN_STARS_RADIUS_CELLS),
+                    now);
+    }
   }
 }
 

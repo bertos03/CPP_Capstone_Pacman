@@ -61,6 +61,27 @@ private:
   Uint32 next_grazing_ticks;
   Uint32 grazing_until_ticks;
   bool goat_is_jumping;
+  // Goat behavior state machine
+  enum class GoatState {
+    Grazing,
+    Charging,
+    Sliding,
+    Recovering,
+    Stunned,
+    PostHitGrace
+  };
+  GoatState goat_state;
+  Directions goat_slide_direction;
+  int goat_slide_remaining_steps;
+  Uint32 goat_stun_until_ticks;
+  Uint32 goat_recovery_until_ticks;
+  Uint32 goat_ignore_player_until_ticks;
+  // Audio / wall-break requests for the main thread (set by simulation)
+  bool goat_request_punch_sound;
+  bool goat_request_bleat_sound;
+  bool goat_request_crash_sound;
+  bool goat_request_wall_break;
+  MapCoord goat_wall_break_coord;
 
   friend class Renderer;
   friend class Game;

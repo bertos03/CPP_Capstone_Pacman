@@ -108,6 +108,8 @@ Uint32 GetSmokePuffLifetimeMs(ExplosionSmokePuffKind kind) {
     return NUCLEAR_B_CAP_SMOKE_LIFETIME_MS;
   case ExplosionSmokePuffKind::WallDust:
     return PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS;
+  case ExplosionSmokePuffKind::GoatRedDust:
+    return 2400;
   case ExplosionSmokePuffKind::MonsterSmoke:
   default:
     return MONSTER_EXPLOSION_SMOKE_LIFETIME_MS;
@@ -691,6 +693,8 @@ void Game::Update() {
     return;
   }
 
+  HandleGoatRequests(now);
+
   // Check for collision with Monsters ... game is lost if collision occurs.
   // Use precise sub-cell positions and hitbox circles so the collision matches
   // what the player sees on screen.
@@ -702,6 +706,29 @@ void Game::Update() {
     const SDL_FPoint monster_center = PreciseWorldCenter(i);
     if (CirclesOverlap(pacman_center, PACMAN_HITBOX_RADIUS_CELLS,
                        monster_center, MONSTER_HITBOX_RADIUS_CELLS)) {
+      if (i->monster_char == GOAT) {
+        // Goat collisions are non-lethal: charging/sliding goat punches
+        // pacman, then ignores him for a grace period. Other goat states
+        // produce no contact effect.
+        const bool active = (i->goat_state == Monster::GoatState::Charging ||
+                             i->goat_state == Monster::GoatState::Sliding);
+        if (active && now >= i->goat_ignore_player_until_ticks) {
+#ifdef AUDIO
+          if (audio != nullptr) {
+            audio->PlayPunch();
+          }
+#endif
+          pacman->paralyzed_until_ticks =
+              std::max(pacman->paralyzed_until_ticks,
+                       now + PACMAN_STUN_DURATION_MS);
+          i->goat_ignore_player_until_ticks = now + GOAT_PLAYER_GRACE_MS;
+          i->goat_state = Monster::GoatState::PostHitGrace;
+          i->goat_is_jumping = false;
+          i->px_delta.x = 0;
+          i->px_delta.y = 0;
+        }
+        continue;
+      }
       if (!IsPacmanInvulnerable(now)) {
         TriggerLoss(pacman->map_coord, now);
       }
@@ -741,6 +768,10 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
                      paused_duration_ms);
     ShiftActiveTicks(monster->next_grazing_ticks, paused_duration_ms);
     ShiftActiveTicks(monster->grazing_until_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->goat_stun_until_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->goat_recovery_until_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->goat_ignore_player_until_ticks,
+                     paused_duration_ms);
   }
 
   for (Fireball &fireball : fireballs) {
@@ -4325,6 +4356,84 @@ void Game::SpawnExplosionSmokeCloud(SDL_FPoint world_center, float radius_cells,
     puff.shape_seed = seed_dist(rng);
     puff.kind = ExplosionSmokePuffKind::BlastSmoke;
     explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnGoatRedDustCloud(SDL_FPoint world_center, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> radius_dist(
+      0.0f, GOAT_RED_DUST_CLOUD_RADIUS_CELLS);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+  std::uniform_real_distribution<float> drift_dist(-0.4f, 0.4f);
+  std::uniform_real_distribution<float> rise_dist(-0.2f, 0.05f);
+
+  for (int i = 0; i < GOAT_RED_DUST_PUFF_COUNT; ++i) {
+    const float angle = angle_dist(rng);
+    const float radius = radius_dist(rng);
+    ExplosionSmokePuff puff;
+    puff.world_position = {
+        world_center.x + std::cos(angle) * radius,
+        world_center.y + std::sin(angle) * radius};
+    puff.velocity_cells_per_sec = {drift_dist(rng), rise_dist(rng)};
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.kind = ExplosionSmokePuffKind::GoatRedDust;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::HandleGoatRequests(Uint32 now) {
+  for (Monster *monster : monsters) {
+    if (monster == nullptr || monster->monster_char != GOAT) {
+      continue;
+    }
+    if (monster->goat_request_bleat_sound) {
+      monster->goat_request_bleat_sound = false;
+#ifdef AUDIO
+      if (audio != nullptr) {
+        audio->PlayGoatBleat();
+      }
+#endif
+    }
+    if (monster->goat_request_punch_sound) {
+      monster->goat_request_punch_sound = false;
+#ifdef AUDIO
+      if (audio != nullptr) {
+        audio->PlayPunch();
+      }
+#endif
+    }
+    if (monster->goat_request_crash_sound) {
+      monster->goat_request_crash_sound = false;
+#ifdef AUDIO
+      if (audio != nullptr) {
+        audio->PlayRubbleCrash();
+      }
+#endif
+    }
+    if (monster->goat_request_wall_break) {
+      monster->goat_request_wall_break = false;
+      const MapCoord wall_coord = monster->goat_wall_break_coord;
+      const bool breakable =
+          IsInsideMapBounds(map, wall_coord) &&
+          map->map_entry(static_cast<size_t>(wall_coord.u),
+                         static_cast<size_t>(wall_coord.v)) ==
+              ElementType::TYPE_WALL &&
+          !IsOuterWallCoord(map, wall_coord);
+      if (breakable) {
+        const SDL_FPoint wall_center = MakeCellCenter(wall_coord);
+        map->SetEntry(wall_coord, ElementType::TYPE_PATH);
+        SpawnWallDestructionParticles(wall_center, now);
+        SpawnWallRubble(wall_coord);
+        SpawnGoatRedDustCloud(wall_center, now);
+      } else {
+        // Outer wall (can't break): just spawn the dust cloud at goat's
+        // current cell so the visual feedback still occurs.
+        SpawnGoatRedDustCloud(MakeCellCenter(monster->map_coord), now);
+      }
+    }
   }
 }
 

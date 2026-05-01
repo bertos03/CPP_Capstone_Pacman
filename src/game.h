@@ -287,7 +287,8 @@ enum class ExplosionSmokePuffKind {
   NuclearBRingSmoke,
   NuclearBTrailSmoke,
   NuclearBStemSmoke,
-  NuclearBCapSmoke
+  NuclearBCapSmoke,
+  GoatRedDust
 };
 
 struct ExplosionSmokePuff {
@@ -485,6 +486,8 @@ private:
   void SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now);
   void SpawnWallDestructionParticles(SDL_FPoint world_center, Uint32 now);
   void SpawnWallRubble(MapCoord destroyed_coord);
+  void HandleGoatRequests(Uint32 now);
+  void SpawnGoatRedDustCloud(SDL_FPoint world_center, Uint32 now);
   void SpawnExplosionSmokeCloud(SDL_FPoint world_center, float radius_cells,
                                 Uint32 now, float density_multiplier = 1.0f);
   void SpawnRocketBlastSmokeCloud(SDL_FPoint world_center, Uint32 now);

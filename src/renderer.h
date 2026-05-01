@@ -180,6 +180,8 @@ private:
                  double gait_phase, bool walking);
   void drawPacmanShield(int center_x, int center_y, int base_radius,
                         double pulse_clock);
+  void drawStunStars(int center_x, int center_y, int orbit_radius_px,
+                     int star_radius_px, Uint32 now);
   void drawWalkieTalkieIcon(const SDL_Rect &icon_rect, Uint8 alpha,
                             double animation_clock);
   void drawAirstrikePlane(const SDL_FPoint &center, double angle_degrees,

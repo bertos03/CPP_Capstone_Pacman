@@ -78,6 +78,9 @@ public:
   void PlayNuclearBombAlarm();
   void PlayNuclearBombDrop();
   void PlayNuclearBombExplosion();
+  void PlayPunch();
+  void PlayGoatBleat();
+  void PlayRubbleCrash();
   Uint32 GetAirstrikeRadioDurationMs() const;
   void StartInvulnerabilityLoop();
   void StopInvulnerabilityLoop();
@@ -141,6 +144,9 @@ private:
   Mix_Chunk *SFX_nuclear_bomb_drop;
   Mix_Chunk *SFX_nuclear_bomb_explosion;
   Mix_Chunk *SFX_invulnerability_loop;
+  Mix_Chunk *SFX_punch;
+  Mix_Chunk *SFX_goat_bleat;
+  Mix_Chunk *SFX_rubble_crash;
   Mix_Music *menu_music;
   Mix_Music *win_music;
   Mix_Music *lose_music;
