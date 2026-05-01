@@ -10,7 +10,7 @@ xx....K..xxxx.xxxxxOxGxG.....x
 x5O.x..x..xGx.PxGNx.x..xxxxx.x
 x.xxGxxxO.x.xxxxx.x..x...N2x.x
 x.x..1xGx.x...Gx..xG...xxx...x
-x.x...x...x.x..x.xxxxx.xG.xxGx
+x.x...x...x.x..xzxxxxx.xG.xxGx
 x...xxx.x...x.xx.x...x..x..xxx
 x.xxxxx.x.x..NxxG..x.....x..Gx
 xNGxK...NGx.x..xxxOxxxxx....xx

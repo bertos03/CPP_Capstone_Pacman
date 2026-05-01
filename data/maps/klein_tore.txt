@@ -4,7 +4,7 @@ xP.............OxG..xx
 x.x.x.xxxxx.x.x.x.x.xx
 xx..xO.........Gx...xx
 xxx.xxxxxxxxx.xxxxxMxx
-xM........N.........xx
+xM....z...N.........xx
 x.xxxxx.xxx.x.xMxxxxxx
 x.xG..xK......xG...Gxx
 x.x.x.x.xxxxxxxxxxx.xx

@@ -44,6 +44,7 @@ public:
   Pacman(MapCoord);
   ~Pacman();
   void simulate( Events *,Map *);
+  MapCoord getMapCoord() const;
 
 protected:
 private:

@@ -12,7 +12,7 @@ x...x.x.....x.x...x...x....Mxx
 xxx.x.xxxxxxx.x.x.x.x.x.xxx.xx
 x...x.x...x...x.....xG...G..xx
 x.xxx.x.x.x.xxxxx.x.xxxxxxx.xx
-x.x.x.....x..Gx............Gxx
+x.x.x.....x..Gx.........z..Gxx
 x.x.xxxxx.x.x.x.xxxxxxxxx.x.xx
 x..........G..xG...G...N.M.Oxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

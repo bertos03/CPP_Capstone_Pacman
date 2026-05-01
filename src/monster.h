@@ -32,12 +32,13 @@
 
 struct MapCoord;
 class Map;
+class Pacman;
 
 class Monster : public MapElement {
 public:
   Monster(MapCoord, int, char, int);
   ~Monster();
-  void simulate(Events *, Map *, const std::vector<Monster *> *);
+  void simulate(Events *, Map *, Pacman *, const std::vector<Monster *> *);
 
 protected:
 private:
@@ -57,6 +58,9 @@ private:
   int electrified_visual_seed;
   int electrified_charge_target_id;
   Uint32 biohazard_paralyzed_until_ticks;
+  Uint32 next_grazing_ticks;
+  Uint32 grazing_until_ticks;
+  bool goat_is_jumping;
 
   friend class Renderer;
   friend class Game;

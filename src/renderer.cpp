@@ -89,11 +89,12 @@ struct MonsterSpriteDescriptor {
   const char *color_name;
 };
 
-constexpr std::array<MonsterSpriteDescriptor, 4> kMonsterSpriteDescriptors{{
+constexpr std::array<MonsterSpriteDescriptor, 5> kMonsterSpriteDescriptors{{
     {MONSTER_FEW, "purple"},
     {MONSTER_MEDIUM, "blue"},
     {MONSTER_MANY, "red"},
     {MONSTER_EXTRA, "green"},
+    {GOAT, "goat"},
 }};
 
 SDL_Rect makeProjectedFaceRect(SDL_FPoint top_left, SDL_FPoint top_right,
@@ -286,6 +287,15 @@ size_t MonsterTextureIndex(char monster_char, Directions direction,
       kMonsterFramesPerDirection;
   return static_cast<size_t>(variant_index * 4 * kMonsterFramesPerDirection +
                              direction_index * kMonsterFramesPerDirection +
+                             normalized_frame);
+}
+
+size_t GoatDirectionalTextureIndex(Directions direction, int frame_index) {
+  const int direction_index = MonsterDirectionIndex(direction);
+  const int normalized_frame =
+      ((frame_index % kMonsterFramesPerDirection) + kMonsterFramesPerDirection) %
+      kMonsterFramesPerDirection;
+  return static_cast<size_t>(direction_index * kMonsterFramesPerDirection +
                              normalized_frame);
 }
 
@@ -602,6 +612,40 @@ void Renderer::initializeRenderer(size_t row_count_value,
       }
     }
   }
+  for (Directions direction : {Directions::Down, Directions::Up,
+                              Directions::Left, Directions::Right}) {
+    for (int frame = 1; frame <= kMonsterFramesPerDirection; ++frame) {
+      const std::string relative_path =
+          "monster_frames/monster_goat_grazing_" +
+          std::string(MonsterDirectionName(direction)) + "_f" +
+          std::to_string(frame) + "_256.png";
+      const std::string goat_frame_path = Paths::GetDataFilePath(relative_path);
+      SDL_Surface *goat_surface = IMG_Load(goat_frame_path.c_str());
+      if (goat_surface == nullptr) {
+        std::cerr << "Could not open goat grazing sprite asset "
+                  << goat_frame_path << ": " << IMG_GetError() << "\n";
+        exit(1);
+      }
+      sdl_goat_grazing_surfaces.push_back(goat_surface);
+    }
+  }
+  for (Directions direction : {Directions::Down, Directions::Up,
+                              Directions::Left, Directions::Right}) {
+    for (int frame = 1; frame <= kMonsterFramesPerDirection; ++frame) {
+      const std::string relative_path =
+          "monster_frames/monster_goat_jumping_" +
+          std::string(MonsterDirectionName(direction)) + "_f" +
+          std::to_string(frame) + "_256.png";
+      const std::string goat_frame_path = Paths::GetDataFilePath(relative_path);
+      SDL_Surface *goat_surface = IMG_Load(goat_frame_path.c_str());
+      if (goat_surface == nullptr) {
+        std::cerr << "Could not open goat jumping sprite asset "
+                  << goat_frame_path << ": " << IMG_GetError() << "\n";
+        exit(1);
+      }
+      sdl_goat_jumping_surfaces.push_back(goat_surface);
+    }
+  }
 
   const std::vector<std::string> pacman_frame_paths{
       Paths::GetDataFilePath("pacman_frames/down_0.png"),
@@ -678,6 +722,28 @@ void Renderer::initializeRenderer(size_t row_count_value,
     }
     configureSmoothTextureSampling(monster_texture);
     sdl_monster_textures.push_back(monster_texture);
+  }
+  for (SDL_Surface *goat_surface : sdl_goat_grazing_surfaces) {
+    SDL_Texture *goat_texture =
+        SDL_CreateTextureFromSurface(sdl_renderer, goat_surface);
+    if (goat_texture == nullptr) {
+      std::cerr << "Could not create goat grazing texture: " << SDL_GetError()
+                << "\n";
+      exit(1);
+    }
+    configureSmoothTextureSampling(goat_texture);
+    sdl_goat_grazing_textures.push_back(goat_texture);
+  }
+  for (SDL_Surface *goat_surface : sdl_goat_jumping_surfaces) {
+    SDL_Texture *goat_texture =
+        SDL_CreateTextureFromSurface(sdl_renderer, goat_surface);
+    if (goat_texture == nullptr) {
+      std::cerr << "Could not create goat jumping texture: " << SDL_GetError()
+                << "\n";
+      exit(1);
+    }
+    configureSmoothTextureSampling(goat_texture);
+    sdl_goat_jumping_textures.push_back(goat_texture);
   }
 
   const std::string logo_brick_path = Paths::GetDataFilePath("brick.png");
@@ -792,6 +858,16 @@ Renderer::~Renderer() {
       SDL_DestroyTexture(monster_texture);
     }
   }
+  for (SDL_Texture *goat_texture : sdl_goat_grazing_textures) {
+    if (goat_texture != nullptr) {
+      SDL_DestroyTexture(goat_texture);
+    }
+  }
+  for (SDL_Texture *goat_texture : sdl_goat_jumping_textures) {
+    if (goat_texture != nullptr) {
+      SDL_DestroyTexture(goat_texture);
+    }
+  }
   for (SDL_Texture *pacman_texture : sdl_pacman_textures) {
     if (pacman_texture != nullptr) {
       SDL_DestroyTexture(pacman_texture);
@@ -886,6 +962,16 @@ Renderer::~Renderer() {
   for (SDL_Surface *monster_surface : sdl_monster_surfaces) {
     if (monster_surface != nullptr) {
       SDL_FreeSurface(monster_surface);
+    }
+  }
+  for (SDL_Surface *goat_surface : sdl_goat_grazing_surfaces) {
+    if (goat_surface != nullptr) {
+      SDL_FreeSurface(goat_surface);
+    }
+  }
+  for (SDL_Surface *goat_surface : sdl_goat_jumping_surfaces) {
+    if (goat_surface != nullptr) {
+      SDL_FreeSurface(goat_surface);
     }
   }
   for (SDL_Surface *pacman_surface : sdl_pacman_surfaces) {
@@ -2008,8 +2094,16 @@ void Renderer::renderFrame(bool show_hud) {
             continue;
           }
 
-          SDL_Texture *monster_texture = getMonsterTexture(
-              monster->monster_char, monster->facing_direction, monster->id);
+          const bool goat_grazing =
+              monster->monster_char == GOAT && !waiting_for_blast &&
+              monster->grazing_until_ticks > now;
+          const bool goat_jumping =
+              monster->monster_char == GOAT && !waiting_for_blast &&
+              monster->goat_is_jumping;
+          SDL_Texture *monster_texture =
+              getMonsterTexture(monster->monster_char,
+                                monster->facing_direction, monster->id,
+                                goat_grazing, goat_jumping);
           if (monster_texture == nullptr) {
             continue;
           }
@@ -3174,7 +3268,7 @@ void Renderer::drawEditorOverlay(const std::string &map_name, MapCoord cursor,
   const std::string line_two =
       "X/W=Mauer | Leer/Entf=Weg | G=Goodie | P=Spielfigur";
   const std::string line_three =
-      "M/N/O/K=Monster | 1-5=Teleportpaare";
+      "M/N/O/K=Monster | Z=Ziege | 1-5=Teleportpaare";
   const std::string line_four =
       "Belegte Felder blockieren den Klick | Esc oeffnet Dialog";
   renderSimpleText(sdl_font_hud, line_one, kHudTextColor, screen_res_x / 2,
@@ -3351,29 +3445,59 @@ void Renderer::drawGameplayPauseOverlay(bool show_exit_dialog,
                    kStatusTextColor, screen_res_x / 2, dialog.y + dialog.h - 48);
 }
 
-int Renderer::getMonsterAnimationFrame(int animation_seed) const {
+int Renderer::getMonsterAnimationFrame(char monster_char,
+                                       int animation_seed,
+                                       bool grazing,
+                                       bool jumping) const {
   if (sdl_monster_textures.empty()) {
     return 0;
   }
 
+  const Uint32 frame_duration_ms =
+      (monster_char == GOAT && jumping)
+          ? GOAT_JUMP_ANIMATION_FRAME_MS
+          : ((monster_char == GOAT && grazing)
+                 ? GOAT_GRAZING_ANIMATION_FRAME_MS
+                 : ((monster_char == GOAT) ? GOAT_ANIMATION_FRAME_MS
+                                           : MONSTER_ANIMATION_FRAME_MS));
   const Uint32 total_offset =
       static_cast<Uint32>((animation_seed * 137) %
-                          (MONSTER_ANIMATION_FRAME_MS *
-                           kMonsterFramesPerDirection));
+                          (frame_duration_ms * kMonsterFramesPerDirection));
   const Uint32 frame_clock = SDL_GetTicks() + total_offset;
-  return static_cast<int>((frame_clock / MONSTER_ANIMATION_FRAME_MS) %
+  return static_cast<int>((frame_clock / frame_duration_ms) %
                           kMonsterFramesPerDirection);
 }
 
 SDL_Texture *Renderer::getMonsterTexture(char monster_char,
                                          Directions facing_direction,
-                                         int animation_seed) {
+                                         int animation_seed,
+                                         bool grazing,
+                                         bool jumping) {
   if (sdl_monster_textures.empty()) {
     return nullptr;
   }
 
-  const size_t texture_index = MonsterTextureIndex(
-      monster_char, facing_direction, getMonsterAnimationFrame(animation_seed));
+  const int frame_index =
+      getMonsterAnimationFrame(monster_char, animation_seed, grazing, jumping);
+  if (monster_char == GOAT && jumping) {
+    const size_t jumping_texture_index =
+        GoatDirectionalTextureIndex(facing_direction, frame_index);
+    if (jumping_texture_index >= sdl_goat_jumping_textures.size()) {
+      return nullptr;
+    }
+    return sdl_goat_jumping_textures[jumping_texture_index];
+  }
+  if (monster_char == GOAT && grazing) {
+    const size_t grazing_texture_index =
+        GoatDirectionalTextureIndex(facing_direction, frame_index);
+    if (grazing_texture_index >= sdl_goat_grazing_textures.size()) {
+      return nullptr;
+    }
+    return sdl_goat_grazing_textures[grazing_texture_index];
+  }
+
+  const size_t texture_index =
+      MonsterTextureIndex(monster_char, facing_direction, frame_index);
   if (texture_index >= sdl_monster_textures.size()) {
     return nullptr;
   }
@@ -7719,167 +7843,95 @@ void Renderer::drawNuclearCrater(const NuclearCrater &crater) {
                      static_cast<int>(indices.size()));
 }
 
-void Renderer::drawNuclearCraterBarricades(const NuclearCrater &crater) {
-  if (crater.cells.empty()) {
+void Renderer::drawNuclearCraterGreenCloud(const NuclearCrater &crater,
+                                           Uint32 now) {
+  if (crater.radius_cells <= 0.0f) {
     return;
   }
 
   const double tile_span = static_cast<double>(element_size) + 1.0;
-  const auto world_to_screen = [&](double col, double row, double z_cells) {
+  const auto world_to_screen = [&](double col, double row) {
     if (ENABLE_3D_VIEW) {
-      return projectScene(col, row, z_cells);
+      return projectScene(col, row, 0.018);
     }
     return SDL_FPoint{
         static_cast<float>(offset_x + 1) + static_cast<float>(col * tile_span),
-        static_cast<float>(offset_y + 1) +
-            static_cast<float>(row * tile_span - z_cells * element_size)};
+        static_cast<float>(offset_y + 1) + static_cast<float>(row * tile_span)};
   };
 
-  const auto has_crater_cell = [&](int row, int col) {
-    for (const MapCoord &cell : crater.cells) {
-      if (cell.u == row && cell.v == col) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  const auto draw_thick_line = [&](SDL_FPoint from, SDL_FPoint to,
-                                   int thickness, SDL_Color color) {
-    const double dx = static_cast<double>(to.x - from.x);
-    const double dy = static_cast<double>(to.y - from.y);
-    const double length = std::hypot(dx, dy);
-    if (length < 1.0) {
-      return;
-    }
-
-    const double normal_x = -dy / length;
-    const double normal_y = dx / length;
-    SDL_SetRenderDrawColor(sdl_renderer, color.r, color.g, color.b, color.a);
-    const int half = std::max(0, thickness / 2);
-    for (int offset = -half; offset <= half; ++offset) {
-      const int x1 =
-          static_cast<int>(std::round(from.x + normal_x * offset));
-      const int y1 =
-          static_cast<int>(std::round(from.y + normal_y * offset));
-      const int x2 =
-          static_cast<int>(std::round(to.x + normal_x * offset));
-      const int y2 =
-          static_cast<int>(std::round(to.y + normal_y * offset));
-      SDL_RenderDrawLine(sdl_renderer, x1, y1, x2, y2);
-    }
-  };
-
-  const auto draw_post = [&](double col, double row) {
-    const SDL_FPoint base = world_to_screen(col, row, 0.0);
-    const SDL_FPoint lower_mount = world_to_screen(col, row, 0.30);
-    const SDL_FPoint upper_mount = world_to_screen(col, row, 0.55);
-    const SDL_FPoint top = world_to_screen(col, row, 0.72);
-    const int post_outer = std::max(5, element_size / 8);
-    const int post_inner = std::max(3, post_outer - 2);
-    const SDL_Color black{18, 17, 15, 245};
-    const SDL_Color yellow{242, 194, 32, 255};
-    const SDL_Color yellow_light{255, 219, 66, 255};
-
-    SDL_SetRenderDrawColor(sdl_renderer, 16, 15, 14, 180);
-    SDL_RenderFillCircle(sdl_renderer, static_cast<int>(std::lround(base.x)),
-                         static_cast<int>(std::lround(base.y)),
-                         std::max(4, element_size / 9));
-    draw_thick_line(base, top, post_outer, black);
-    draw_thick_line(base, top, post_inner, yellow);
-    draw_thick_line(upper_mount, top, std::max(1, post_inner / 3),
-                    yellow_light);
-
-    const int bracket_size = std::max(3, element_size / 14);
-    for (SDL_FPoint mount : {lower_mount, upper_mount}) {
-      SDL_Rect bracket{
-          static_cast<int>(std::lround(mount.x)) - bracket_size / 2,
-          static_cast<int>(std::lround(mount.y)) - bracket_size,
-          std::max(2, bracket_size), std::max(3, bracket_size * 2)};
-      SDL_SetRenderDrawColor(sdl_renderer, black.r, black.g, black.b, black.a);
-      SDL_RenderFillRect(sdl_renderer, &bracket);
-      SDL_SetRenderDrawColor(sdl_renderer, 118, 116, 104, 240);
-      SDL_RenderDrawLine(sdl_renderer, bracket.x + bracket.w / 2, bracket.y + 1,
-                         bracket.x + bracket.w / 2,
-                         bracket.y + bracket.h - 2);
-    }
-  };
-
-  const auto draw_striped_tape = [&](SDL_FPoint from, SDL_FPoint to,
-                                     int tape_width) {
-    const double dx = static_cast<double>(to.x - from.x);
-    const double dy = static_cast<double>(to.y - from.y);
-    const double length = std::hypot(dx, dy);
-    if (length < 2.0) {
-      return;
-    }
-
-    const SDL_Color black{20, 18, 14, 235};
-    const SDL_Color quarantine_yellow{236, 201, 54, 245};
-    draw_thick_line(from, to, tape_width + 2, black);
-    draw_thick_line(from, to, tape_width, quarantine_yellow);
-
-    const double dir_x = dx / length;
-    const double dir_y = dy / length;
-    const double normal_x = -dir_y;
-    const double normal_y = dir_x;
-    const double spacing =
-        std::max(8.0, static_cast<double>(element_size) * 0.26);
-    const double stripe_length =
-        std::max(8.0, static_cast<double>(element_size) * 0.34);
-    const int stripe_count = std::max(1, static_cast<int>(length / spacing));
-    for (int index = 0; index <= stripe_count; ++index) {
-      const double t = (static_cast<double>(index) + 0.35) /
-                       (static_cast<double>(stripe_count) + 1.0);
-      const double cx = static_cast<double>(from.x) + dx * t;
-      const double cy = static_cast<double>(from.y) + dy * t;
-      const SDL_FPoint stripe_from{
-          static_cast<float>(cx - dir_x * stripe_length * 0.35 -
-                             normal_x * stripe_length * 0.45),
-          static_cast<float>(cy - dir_y * stripe_length * 0.35 -
-                             normal_y * stripe_length * 0.45)};
-      const SDL_FPoint stripe_to{
-          static_cast<float>(cx + dir_x * stripe_length * 0.35 +
-                             normal_x * stripe_length * 0.45),
-          static_cast<float>(cy + dir_y * stripe_length * 0.35 +
-                             normal_y * stripe_length * 0.45)};
-      draw_thick_line(stripe_from, stripe_to, std::max(2, tape_width / 2),
-                      black);
-    }
-  };
-
-  const auto draw_barricade_edge = [&](double col_a, double row_a,
-                                       double col_b, double row_b) {
-    const SDL_FPoint lower_from = world_to_screen(col_a, row_a, 0.30);
-    const SDL_FPoint lower_to = world_to_screen(col_b, row_b, 0.30);
-    const SDL_FPoint upper_from = world_to_screen(col_a, row_a, 0.55);
-    const SDL_FPoint upper_to = world_to_screen(col_b, row_b, 0.55);
-    const int tape_width = std::max(4, element_size / 9);
-    draw_striped_tape(upper_from, upper_to, tape_width);
-    draw_striped_tape(lower_from, lower_to, tape_width);
-    draw_post(col_a, row_a);
-    draw_post(col_b, row_b);
-  };
-
-  for (const MapCoord &cell : crater.cells) {
-    const double left = static_cast<double>(cell.v);
-    const double right = static_cast<double>(cell.v + 1);
-    const double top = static_cast<double>(cell.u);
-    const double bottom = static_cast<double>(cell.u + 1);
-
-    if (!has_crater_cell(cell.u - 1, cell.v)) {
-      draw_barricade_edge(left, top, right, top);
-    }
-    if (!has_crater_cell(cell.u + 1, cell.v)) {
-      draw_barricade_edge(left, bottom, right, bottom);
-    }
-    if (!has_crater_cell(cell.u, cell.v - 1)) {
-      draw_barricade_edge(left, top, left, bottom);
-    }
-    if (!has_crater_cell(cell.u, cell.v + 1)) {
-      draw_barricade_edge(right, top, right, bottom);
-    }
+  const Uint32 age = (now > crater.visible_ticks) ? (now - crater.visible_ticks)
+                                                  : 0;
+  const double fade_in =
+      std::clamp(static_cast<double>(age) /
+                     static_cast<double>(NUCLEAR_CRATER_GREEN_CLOUD_FADE_IN_MS),
+                 0.0, 1.0);
+  const double peak_alpha =
+      static_cast<double>(NUCLEAR_CRATER_GREEN_CLOUD_PEAK_ALPHA) * fade_in;
+  if (peak_alpha < 1.0) {
+    return;
   }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const double clock = static_cast<double>(now) / 1000.0;
+  const double cloud_radius_cells =
+      static_cast<double>(crater.radius_cells) *
+      static_cast<double>(NUCLEAR_CRATER_GREEN_CLOUD_RADIUS_FACTOR);
+  const double cloud_radius_px = cloud_radius_cells * tile_span;
+
+  constexpr int kBlobCount = 28;
+  for (int blob = 0; blob < kBlobCount; ++blob) {
+    const double base_angle =
+        blob * (2.0 * kLogoPi / static_cast<double>(kBlobCount));
+    const double phase =
+        HashUnit(crater.shape_seed + blob * 9173) * 2.0 * kLogoPi;
+    const double radial_unit =
+        0.55 + 0.45 * HashUnit(crater.shape_seed + blob * 6151 + 17);
+    const double waft =
+        0.18 * std::sin(clock * 0.45 + phase) +
+        0.12 * std::cos(clock * 0.27 + phase * 0.7);
+    const double angle =
+        base_angle + 0.20 * std::sin(clock * 0.33 + phase);
+    const double offset_cells =
+        cloud_radius_cells * (radial_unit + waft);
+    const double col =
+        static_cast<double>(crater.world_center.x) + std::cos(angle) * offset_cells;
+    const double row =
+        static_cast<double>(crater.world_center.y) +
+        std::sin(angle) * offset_cells * 0.78 -
+        0.04 * std::sin(clock * 0.6 + phase);
+    const SDL_FPoint screen = world_to_screen(col, row);
+    const double blob_radius_cells =
+        cloud_radius_cells *
+        (0.32 + 0.18 * HashUnit(crater.shape_seed + blob * 4421 + 91)) *
+        (0.92 + 0.08 * std::sin(clock * 0.9 + phase));
+    const double blob_radius_px = blob_radius_cells * tile_span;
+    const double alpha_jitter =
+        0.78 + 0.22 * HashUnit(crater.shape_seed + blob * 3331 + 47);
+    const Uint8 alpha = static_cast<Uint8>(
+        std::clamp(peak_alpha * alpha_jitter, 0.0, 255.0));
+    SDL_RenderFillCircleAA(
+        sdl_renderer, screen.x, screen.y, blob_radius_px,
+        SDL_Color{NUCLEAR_CRATER_GREEN_CLOUD_COLOR.r,
+                  NUCLEAR_CRATER_GREEN_CLOUD_COLOR.g,
+                  NUCLEAR_CRATER_GREEN_CLOUD_COLOR.b, alpha});
+  }
+
+  const SDL_FPoint center_screen =
+      world_to_screen(static_cast<double>(crater.world_center.x),
+                      static_cast<double>(crater.world_center.y));
+  const Uint8 halo_alpha = static_cast<Uint8>(
+      std::clamp(peak_alpha * 0.55, 0.0, 255.0));
+  SDL_RenderFillCircleAA(sdl_renderer, center_screen.x, center_screen.y,
+                         cloud_radius_px * 0.95,
+                         SDL_Color{NUCLEAR_CRATER_GREEN_CLOUD_COLOR.r,
+                                   NUCLEAR_CRATER_GREEN_CLOUD_COLOR.g,
+                                   NUCLEAR_CRATER_GREEN_CLOUD_COLOR.b,
+                                   halo_alpha});
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
 void Renderer::drawNuclearCraters() {
@@ -7896,7 +7948,7 @@ void Renderer::drawNuclearCraters() {
       continue;
     }
     drawNuclearCrater(crater);
-    drawNuclearCraterBarricades(crater);
+    drawNuclearCraterGreenCloud(crater, now);
   }
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
@@ -8262,12 +8314,16 @@ void Renderer::drawNuclearFireball(int center_x, int center_y, Uint32 elapsed,
   SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
 
   const Uint8 halo_alpha = static_cast<Uint8>(
-      std::clamp(150.0 * alpha_scale * surface_pulse, 0.0, 150.0));
+      std::clamp(205.0 * alpha_scale * surface_pulse, 0.0, 220.0));
   SDL_RenderFillCircleAA(
-      sdl_renderer, center_x, center_y, radius_px * 1.48,
-      SDL_Color{92, 24, 10, static_cast<Uint8>(halo_alpha / 2)});
-  SDL_RenderFillCircleAA(sdl_renderer, center_x, center_y, radius_px * 1.18,
-                         SDL_Color{184, 42, 14, halo_alpha});
+      sdl_renderer, center_x, center_y, radius_px * 1.62,
+      SDL_Color{255, 232, 178, static_cast<Uint8>(halo_alpha / 2)});
+  SDL_RenderFillCircleAA(sdl_renderer, center_x, center_y, radius_px * 1.30,
+                         SDL_Color{255, 168, 64, halo_alpha});
+  const Uint8 white_core_alpha = static_cast<Uint8>(
+      std::clamp(220.0 * alpha_scale, 0.0, 240.0));
+  SDL_RenderFillCircleAA(sdl_renderer, center_x, center_y, radius_px * 0.42,
+                         SDL_Color{255, 250, 226, white_core_alpha});
 
   std::mt19937 flame_rng(seed ^ 0xC2B2AE35u);
   std::uniform_real_distribution<double> flame_angle_jitter(-0.035, 0.035);
@@ -8275,8 +8331,8 @@ void Renderer::drawNuclearFireball(int center_x, int center_y, Uint32 elapsed,
   std::uniform_real_distribution<double> flame_inner_dist(0.12, 0.42);
   std::uniform_real_distribution<double> flame_phase_dist(0.0, 2.0 * kLogoPi);
   const Uint8 tongue_alpha = static_cast<Uint8>(
-      std::clamp(178.0 * alpha_scale * (1.0 - collapse_progress * 0.42), 0.0,
-                 178.0));
+      std::clamp(225.0 * alpha_scale * (1.0 - collapse_progress * 0.42), 0.0,
+                 230.0));
   for (int tongue = 0; tongue < NUCLEAR_FIREBALL_FLAME_TONGUE_COUNT; ++tongue) {
     const double base_angle =
         tongue * (2.0 * kLogoPi / NUCLEAR_FIREBALL_FLAME_TONGUE_COUNT);
@@ -8375,10 +8431,10 @@ void Renderer::drawNuclearFireball(int center_x, int center_y, Uint32 elapsed,
     }
   }
 
-  const int flare_count = 26;
+  const int flare_count = 32;
   const Uint8 flare_alpha = static_cast<Uint8>(
-      std::clamp(190.0 * alpha_scale * (1.0 - collapse_progress * 0.55), 0.0,
-                 190.0));
+      std::clamp(235.0 * alpha_scale * (1.0 - collapse_progress * 0.55), 0.0,
+                 240.0));
   for (int flare = 0; flare < flare_count; ++flare) {
     const double angle =
         clock * 0.09 + flare * (2.0 * kLogoPi / flare_count) +
@@ -9269,8 +9325,15 @@ void Renderer::drawmonsters() {
       continue;
     }
 
-    SDL_Texture *monster_texture = getMonsterTexture(
-        monster->monster_char, monster->facing_direction, monster->id);
+    const bool goat_grazing = monster->monster_char == GOAT &&
+                              !waiting_for_blast &&
+                              monster->grazing_until_ticks > now;
+    const bool goat_jumping = monster->monster_char == GOAT &&
+                              !waiting_for_blast &&
+                              monster->goat_is_jumping;
+    SDL_Texture *monster_texture =
+        getMonsterTexture(monster->monster_char, monster->facing_direction,
+                          monster->id, goat_grazing, goat_jumping);
     if (monster_texture == nullptr) {
       continue;
     }
@@ -11297,7 +11360,8 @@ void Renderer::drawLayoutEntities(const std::vector<std::string> &layout) {
           SDL_RenderCopy(sdl_renderer, pacman_texture, nullptr, &sdl_pacman_rect);
         }
       } else if (entry == MONSTER_FEW || entry == MONSTER_MEDIUM ||
-                 entry == MONSTER_MANY || entry == MONSTER_EXTRA) {
+                 entry == MONSTER_MANY || entry == MONSTER_EXTRA ||
+                 entry == GOAT) {
         const int animation_seed =
             static_cast<int>(row * layout[row].size() + col);
         SDL_Texture *monster_texture =

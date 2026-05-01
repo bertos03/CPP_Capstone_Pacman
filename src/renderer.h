@@ -146,7 +146,7 @@ private:
   void drawExplosionParticles();
   void drawNuclearCraters();
   void drawNuclearCrater(const NuclearCrater &crater);
-  void drawNuclearCraterBarricades(const NuclearCrater &crater);
+  void drawNuclearCraterGreenCloud(const NuclearCrater &crater, Uint32 now);
   void drawWallRubble();
   void drawWallRubblePiece(const WallRubblePiece &piece);
   void buildWallRubblePieceVertices(const WallRubblePiece &piece,
@@ -259,8 +259,12 @@ private:
   int getPacmanAnimationFrame(bool walking) const;
   SDL_Texture *getMonsterTexture(char monster_char,
                                  Directions facing_direction,
-                                 int animation_seed);
-  int getMonsterAnimationFrame(int animation_seed) const;
+                                 int animation_seed,
+                                 bool grazing = false,
+                                 bool jumping = false);
+  int getMonsterAnimationFrame(char monster_char, int animation_seed,
+                               bool grazing = false,
+                               bool jumping = false) const;
   SDL_Surface *createBrickTextSurface(TTF_Font *font, const std::string &text,
                                       const SDL_Color &outline_color);
   Uint32 readPixel(SDL_Surface *surface, int x, int y);
@@ -318,6 +322,10 @@ private:
 
   std::vector<SDL_Surface *> sdl_monster_surfaces;
   std::vector<SDL_Texture *> sdl_monster_textures;
+  std::vector<SDL_Surface *> sdl_goat_grazing_surfaces;
+  std::vector<SDL_Texture *> sdl_goat_grazing_textures;
+  std::vector<SDL_Surface *> sdl_goat_jumping_surfaces;
+  std::vector<SDL_Texture *> sdl_goat_jumping_textures;
   SDL_Rect sdl_monster_rect;
 
   std::vector<SDL_Surface *> sdl_pacman_surfaces;

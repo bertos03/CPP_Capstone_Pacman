@@ -49,6 +49,8 @@ Pacman::~Pacman() {
   lck.unlock();
 };
 
+MapCoord Pacman::getMapCoord() const { return map_coord; }
+
 /**
  * @brief The simulation loop for pacman
  * 

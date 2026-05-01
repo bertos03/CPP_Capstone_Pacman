@@ -15,7 +15,7 @@ xxx..xO.x..xxx...x.P.xxx...Gx..x.xx.xx
 xGxx..xx..x...x.xxxxxxxGxx.xxxx...Gx3x
 x.1xx.xGxxx.x.MGx...Nx..xx.x2.xx.x.x.x
 xN..x.x..xx....xxGx....x...x...xxxG..x
-x.x.xxxx.x...x...x.x.x.x.....Ox..x.x.x
+x.x.xxxx.x...x...x.x.x.x.....Ox.zx.x.x
 x.x.Gx...K....Nx...x.x...x.xxx..x.x..x
 x.xxxx.xx.x.xxM.xxxx.x....xx...x..x.xx
 xM.....xG...xG4KO....x.x.....x..NxK.Gx

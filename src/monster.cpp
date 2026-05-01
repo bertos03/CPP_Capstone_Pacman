@@ -15,6 +15,7 @@
  */
 
 #include "monster.h"
+#include "pacman.h"
 
 #include <algorithm>
 #include <limits>
@@ -25,6 +26,9 @@ bool HasLineOfSight(Map *map, MapCoord from, MapCoord to,
                     Directions &direction_out) {
   direction_out = Directions::None;
   if (map == nullptr) {
+    return false;
+  }
+  if (from.u == to.u && from.v == to.v) {
     return false;
   }
 
@@ -53,6 +57,13 @@ bool HasLineOfSight(Map *map, MapCoord from, MapCoord to,
   }
 
   return false;
+}
+
+Uint32 RandomTicksBetween(Uint32 minimum, Uint32 maximum) {
+  if (maximum <= minimum) {
+    return minimum;
+  }
+  return minimum + static_cast<Uint32>(rand()) % (maximum - minimum + 1);
 }
 
 } // namespace
@@ -89,6 +100,9 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char,
   electrified_visual_seed = 0;
   electrified_charge_target_id = -1;
   biohazard_paralyzed_until_ticks = 0;
+  next_grazing_ticks = 0;
+  grazing_until_ticks = 0;
+  goat_is_jumping = false;
 }
 
 /**
@@ -97,7 +111,7 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char,
  * @param events for reading keyboard input (signal for ending thread)
  * @param map for calculating the possible directions per move
  */
-void Monster::simulate(Events *events, Map *map,
+void Monster::simulate(Events *events, Map *map, Pacman *pacman,
                        const std::vector<Monster *> *all_monsters) {
   std::vector<Directions> options;
   Directions next_move;
@@ -133,11 +147,31 @@ void Monster::simulate(Events *events, Map *map,
 
     return direction_out;
   };
+  auto try_find_goat_jump_direction = [&]() {
+    Directions direction_out = Directions::None;
+    if (monster_char != GOAT || map == nullptr || pacman == nullptr) {
+      return direction_out;
+    }
+
+    const MapCoord pacman_coord = pacman->getMapCoord();
+    if (pacman_coord.u == map_coord.u && pacman_coord.v == map_coord.v) {
+      return direction_out;
+    }
+    if (!HasLineOfSight(map, map_coord, pacman_coord, direction_out)) {
+      return Directions::None;
+    }
+    return direction_out;
+  };
   // std::cout << "Simulating monster #" << id << "\n";
   lck.unlock();
   map->get_options(map_coord, options);
   if (options.empty()) {
     return;
+  }
+  if (monster_char == GOAT) {
+    next_grazing_ticks =
+        SDL_GetTicks() + RandomTicksBetween(GOAT_GRAZING_MIN_INTERVAL_MS,
+                                            GOAT_GRAZING_MAX_INTERVAL_MS);
   }
   next_move = try_find_charge_direction();
   if (next_move == Directions::None) {
@@ -149,13 +183,46 @@ void Monster::simulate(Events *events, Map *map,
     if (events->IsGameplayFrozen() || now < biohazard_paralyzed_until_ticks) {
       px_delta.x = 0;
       px_delta.y = 0;
+      goat_is_jumping = false;
       sleep(15);
       continue;
     }
 
+    const Directions goat_jump_direction = try_find_goat_jump_direction();
+    if (monster_char == GOAT) {
+      if (goat_jump_direction != Directions::None) {
+        grazing_until_ticks = 0;
+        goat_is_jumping = true;
+      } else {
+        goat_is_jumping = false;
+        if (next_grazing_ticks != 0 && now >= next_grazing_ticks) {
+          const Uint32 grazing_duration =
+              RandomTicksBetween(GOAT_GRAZING_MIN_DURATION_MS,
+                                 GOAT_GRAZING_MAX_DURATION_MS);
+          grazing_until_ticks = now + grazing_duration;
+          next_grazing_ticks =
+              grazing_until_ticks +
+              RandomTicksBetween(GOAT_GRAZING_MIN_INTERVAL_MS,
+                                 GOAT_GRAZING_MAX_INTERVAL_MS);
+        }
+        if (grazing_until_ticks != 0 && now < grazing_until_ticks) {
+          px_delta.x = 0;
+          px_delta.y = 0;
+          sleep(15);
+          continue;
+        }
+        if (grazing_until_ticks != 0 && now >= grazing_until_ticks) {
+          grazing_until_ticks = 0;
+        }
+      }
+    }
+
     int step_delay_ms = movement_step_delay_ms;
-    const Directions charge_direction = try_find_charge_direction();
-    if (charge_direction != Directions::None) {
+    if (goat_jump_direction != Directions::None) {
+      next_move = goat_jump_direction;
+      step_delay_ms = std::max(1, GOAT_JUMP_STEP_DELAY_MS);
+    } else if (const Directions charge_direction = try_find_charge_direction();
+               charge_direction != Directions::None) {
       next_move = charge_direction;
       step_delay_ms = std::max(1, BIOHAZARD_CHARGE_STEP_DELAY_MS);
     }
@@ -252,6 +319,15 @@ void Monster::simulate(Events *events, Map *map,
     }
 
     const Directions next_charge_direction = try_find_charge_direction();
+    const Directions next_goat_jump_direction = try_find_goat_jump_direction();
+    if (next_goat_jump_direction != Directions::None &&
+        std::find(options.begin(), options.end(), next_goat_jump_direction) !=
+            options.end()) {
+      next_move = next_goat_jump_direction;
+      goat_is_jumping = true;
+      sleep(1);
+      continue;
+    }
     if (next_charge_direction != Directions::None &&
         std::find(options.begin(), options.end(), next_charge_direction) !=
             options.end()) {

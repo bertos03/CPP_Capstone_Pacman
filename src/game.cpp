@@ -163,6 +163,10 @@ int GetMonsterMovementStepDelayMs(Difficulty difficulty) {
       1, static_cast<int>(std::ceil(base_delay_ms * tuning.monster_step_delay_scale)));
 }
 
+int GetGoatMovementStepDelayMs() {
+  return std::max(1, 10 - SPEED_GOAT);
+}
+
 MapCoord StepCoord(MapCoord coord, Directions direction) {
   switch (direction) {
   case Directions::Up:
@@ -528,9 +532,12 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
-    Monster *monster = new Monster(map->get_coord_monster(i), i,
-                                   map->get_char_monster(i),
-                                   GetMonsterMovementStepDelayMs(difficulty));
+    const char monster_char = map->get_char_monster(i);
+    const int movement_step_delay_ms =
+        (monster_char == GOAT) ? GetGoatMovementStepDelayMs()
+                               : GetMonsterMovementStepDelayMs(difficulty);
+    Monster *monster = new Monster(map->get_coord_monster(i), i, monster_char,
+                                   movement_step_delay_ms);
     if (monster->monster_char == MONSTER_MEDIUM) {
       monster->next_gas_cloud_ticks =
           last_update_ticks +
@@ -556,7 +563,7 @@ void Game::StartSimulation() {
 
   for (size_t i = 0; i < monsters.size(); i++) {
     monster_threads.emplace_back(&Monster::simulate, monsters[i], events, map,
-                                 &monsters);
+                                 pacman, &monsters);
   }
 
   pacman_thread = std::thread(&Pacman::simulate, pacman, events, map);
@@ -732,6 +739,8 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
     ShiftActiveTicks(monster->electrified_started_ticks, paused_duration_ms);
     ShiftActiveTicks(monster->biohazard_paralyzed_until_ticks,
                      paused_duration_ms);
+    ShiftActiveTicks(monster->next_grazing_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->grazing_until_ticks, paused_duration_ms);
   }
 
   for (Fireball &fireball : fireballs) {
@@ -2384,7 +2393,8 @@ void Game::UpdateBiohazardBeam(Uint32 now) {
   Monster *closest_target = nullptr;
   float closest_distance_squared = std::numeric_limits<float>::max();
   for (Monster *monster : monsters) {
-    if (monster == nullptr || !monster->is_alive || monster->is_electrified) {
+    if (monster == nullptr || !monster->is_alive || monster->is_electrified ||
+        monster->monster_char == GOAT) {
       continue;
     }
 
@@ -2705,7 +2715,7 @@ void Game::TriggerNuclearExplosionAt(SDL_FPoint world_center,
 
   active_nuclear_explosion.crater_created = true;
   CreateNuclearCrater(active_nuclear_explosion, now,
-                      now + NUCLEAR_EXPLOSION_FIREBALL_BURN_MS);
+                      now + NUCLEAR_CRATER_REVEAL_DELAY_MS);
 }
 
 void Game::TryTriggerNuclearExplosion(Uint32 now) {
@@ -3707,7 +3717,7 @@ Monster *Game::FindMonsterById(int monster_id) const {
 }
 
 void Game::ElectrifyMonster(Monster *monster, Uint32 now) {
-  if (monster == nullptr || !monster->is_alive) {
+  if (monster == nullptr || !monster->is_alive || monster->monster_char == GOAT) {
     return;
   }
 

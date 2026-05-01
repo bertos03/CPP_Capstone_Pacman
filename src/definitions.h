@@ -190,6 +190,7 @@ inline constexpr int PLAYER_DEFAULT_LIVES = 3;
  */
 inline constexpr int SPEED_PACMAN = 8;
 inline constexpr int SPEED_MONSTER = 6;
+inline constexpr int SPEED_GOAT = 4;
 
 /**
  * @brief Hitbox radii for visually accurate collision detection.
@@ -232,6 +233,14 @@ inline constexpr Uint32 FINAL_LOSS_SOUND_LEAD_IN_MS = 2000;
  * status effects more punishing.
  */
 inline constexpr Uint32 MONSTER_ANIMATION_FRAME_MS = 180;
+inline constexpr Uint32 GOAT_ANIMATION_FRAME_MS = 150;
+inline constexpr Uint32 GOAT_GRAZING_ANIMATION_FRAME_MS = 220;
+inline constexpr Uint32 GOAT_JUMP_ANIMATION_FRAME_MS = 90;
+inline constexpr int GOAT_JUMP_STEP_DELAY_MS = 1;
+inline constexpr Uint32 GOAT_GRAZING_MIN_INTERVAL_MS = 8000;
+inline constexpr Uint32 GOAT_GRAZING_MAX_INTERVAL_MS = 18000;
+inline constexpr Uint32 GOAT_GRAZING_MIN_DURATION_MS = 5500;
+inline constexpr Uint32 GOAT_GRAZING_MAX_DURATION_MS = 15000;
 inline constexpr Uint32 FIREBALL_STEP_DURATION_MS = 160;
 inline constexpr Uint32 MONSTER_GAS_MIN_INTERVAL_MS = 40000;
 inline constexpr Uint32 MONSTER_GAS_MAX_INTERVAL_MS = 60000;
@@ -490,6 +499,11 @@ inline constexpr Uint8 NUCLEAR_CRATER_BASE_ALPHA = 153;
 inline constexpr SDL_Color NUCLEAR_CRATER_OUTER_COLOR{54, 43, 36, 255};
 inline constexpr SDL_Color NUCLEAR_CRATER_INNER_COLOR{16, 14, 13, 255};
 inline constexpr SDL_Color NUCLEAR_CRATER_GLOW_COLOR{118, 70, 38, 255};
+inline constexpr Uint32 NUCLEAR_CRATER_REVEAL_DELAY_MS = 120;
+inline constexpr SDL_Color NUCLEAR_CRATER_GREEN_CLOUD_COLOR{86, 220, 92, 255};
+inline constexpr Uint8 NUCLEAR_CRATER_GREEN_CLOUD_PEAK_ALPHA = 28;
+inline constexpr float NUCLEAR_CRATER_GREEN_CLOUD_RADIUS_FACTOR = 1.05f;
+inline constexpr Uint32 NUCLEAR_CRATER_GREEN_CLOUD_FADE_IN_MS = 350;
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_OFFSET_FACTOR = 0.52f;
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_BLOB_MIN_FACTOR = 0.18f;
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_BLOB_MAX_FACTOR = 0.42f;
@@ -501,9 +515,9 @@ inline constexpr int NUCLEAR_FIREBALL_CORE_BLOB_COUNT = 14;
 inline constexpr int NUCLEAR_FIREBALL_FLAME_TONGUE_COUNT = 88;
 inline constexpr float NUCLEAR_SMOKE_RING_FINAL_RADIUS_CELLS = 18.0f;
 inline constexpr float NUCLEAR_SMOKE_RING_THICKNESS_CELLS = 1.05f;
-inline constexpr Uint32 NUCLEAR_CENTER_SMOKE_EMISSION_MS = 3600;
+inline constexpr Uint32 NUCLEAR_CENTER_SMOKE_EMISSION_MS = 4600;
 inline constexpr Uint32 NUCLEAR_CENTER_SMOKE_SPAWN_INTERVAL_MS = 72;
-inline constexpr int NUCLEAR_CENTER_SMOKE_PUFFS_PER_SPAWN = 7;
+inline constexpr int NUCLEAR_CENTER_SMOKE_PUFFS_PER_SPAWN = 11;
 inline constexpr float NUCLEAR_CENTER_SMOKE_SPREAD_CELLS = 1.45f;
 inline constexpr Uint32 NUCLEAR_MUSHROOM_BUILD_MS = 1900;
 inline constexpr Uint32 NUCLEAR_MUSHROOM_SPAWN_INTERVAL_MS = 68;
@@ -529,10 +543,10 @@ inline constexpr float NUCLEAR_RING_SMOKE_WOBBLE_AMPLITUDE_CELLS = 0.06f;
 inline constexpr float NUCLEAR_RING_SMOKE_WOBBLE_FREQUENCY_HZ = 1.15f;
 inline constexpr float NUCLEAR_RING_SMOKE_VERTICAL_RISE_CELLS = 0.20f;
 
-inline constexpr Uint32 NUCLEAR_CORE_SMOKE_LIFETIME_MS = 1550;
-inline constexpr float NUCLEAR_CORE_SMOKE_INITIAL_RADIUS_CELLS = 0.24f;
-inline constexpr float NUCLEAR_CORE_SMOKE_FINAL_RADIUS_CELLS = 1.12f;
-inline constexpr Uint8 NUCLEAR_CORE_SMOKE_INITIAL_ALPHA = 104;
+inline constexpr Uint32 NUCLEAR_CORE_SMOKE_LIFETIME_MS = 2550;
+inline constexpr float NUCLEAR_CORE_SMOKE_INITIAL_RADIUS_CELLS = 0.28f;
+inline constexpr float NUCLEAR_CORE_SMOKE_FINAL_RADIUS_CELLS = 1.22f;
+inline constexpr Uint8 NUCLEAR_CORE_SMOKE_INITIAL_ALPHA = 138;
 inline constexpr SDL_Color NUCLEAR_CORE_SMOKE_COLOR{82, 78, 74, 255};
 inline constexpr SDL_Color NUCLEAR_CORE_SMOKE_HIGHLIGHT_COLOR{142, 138, 132,
                                                               255};
@@ -967,6 +981,7 @@ inline constexpr char MONSTER_FEW = 'M';
 inline constexpr char MONSTER_MEDIUM = 'N';
 inline constexpr char MONSTER_MANY = 'O';
 inline constexpr char MONSTER_EXTRA = 'K';
+inline constexpr char GOAT = 'z';
 
 /**
  * @brief Tilted 3D gameplay projection.
