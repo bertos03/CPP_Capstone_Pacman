@@ -447,6 +447,7 @@ private:
   void UpdateBiohazardBeam(Uint32 now);
   void UpdateNuclearExplosion(Uint32 now);
   void UpdateNuclearExplosionB(Uint32 now);
+  void UpdateNuclearCraterClouds(Uint32 now);
   void StopBiohazardBeam();
   void UpdateAirstrike(Uint32 now);
   void UpdateRockets(Uint32 now);

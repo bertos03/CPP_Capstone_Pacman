@@ -190,7 +190,7 @@ inline constexpr int PLAYER_DEFAULT_LIVES = 3;
  */
 inline constexpr int SPEED_PACMAN = 8;
 inline constexpr int SPEED_MONSTER = 6;
-inline constexpr int SPEED_GOAT = 4;
+inline constexpr int SPEED_GOAT = 3;
 
 /**
  * @brief Hitbox radii for visually accurate collision detection.
@@ -245,21 +245,28 @@ inline constexpr Uint32 GOAT_GRAZING_MAX_DURATION_MS = 15000;
 inline constexpr int GOAT_SLIDE_TILES = 4;
 inline constexpr Uint32 GOAT_RECOVERY_PAUSE_MS = 700;
 inline constexpr Uint32 GOAT_STUN_DURATION_MS = 5000;
-inline constexpr Uint32 PACMAN_STUN_DURATION_MS = 2500;
+inline constexpr Uint32 PACMAN_STUN_DURATION_MS = 5000;
 inline constexpr Uint32 GOAT_PLAYER_GRACE_MS = 20000;
-inline constexpr float GOAT_RED_DUST_CLOUD_RADIUS_CELLS = 1.6f;
-inline constexpr int GOAT_RED_DUST_PUFF_COUNT = 14;
-inline constexpr int STUN_STARS_COUNT = 5;
-inline constexpr float STUN_STARS_ORBIT_RADIUS_CELLS = 0.55f;
-inline constexpr float STUN_STARS_RADIUS_CELLS = 0.13f;
-inline constexpr float STUN_STARS_ORBIT_PERIOD_MS = 1400.0f;
+inline constexpr float GOAT_RED_DUST_CLOUD_RADIUS_CELLS = 3.6f;
+inline constexpr int GOAT_RED_DUST_PUFF_COUNT = 34;
+inline constexpr int STUN_STARS_COUNT = 8;
+inline constexpr float STUN_STARS_ORBIT_RADIUS_CELLS = 0.95f;
+inline constexpr float STUN_STARS_RADIUS_CELLS = 0.33f;
+inline constexpr float STUN_STARS_ORBIT_PERIOD_MS = 2600.0f;
 inline constexpr Uint32 FIREBALL_STEP_DURATION_MS = 160;
 inline constexpr Uint32 MONSTER_GAS_MIN_INTERVAL_MS = 40000;
 inline constexpr Uint32 MONSTER_GAS_MAX_INTERVAL_MS = 60000;
-inline constexpr Uint32 GAS_CLOUD_ACTIVE_MS = 20000;
+// Total green-cloud lifetime (visible + fade). GAS_CLOUD_ACTIVE_MS is
+// derived so the whole cloud is gone by GAS_CLOUD_TOTAL_LIFETIME_MS.
+inline constexpr Uint32 GAS_CLOUD_TOTAL_LIFETIME_MS = 20000;
 inline constexpr Uint32 GAS_CLOUD_FADE_MS = 4000;
+inline constexpr Uint32 GAS_CLOUD_ACTIVE_MS =
+    GAS_CLOUD_TOTAL_LIFETIME_MS - GAS_CLOUD_FADE_MS;
 inline constexpr int GAS_CLOUD_MIN_PARTICLE_COUNT = 6;
 inline constexpr int GAS_CLOUD_MAX_PARTICLE_COUNT = 10;
+// Visual tuning: lower opacity and tighter spread of the green cloud.
+inline constexpr double GAS_CLOUD_OPACITY_SCALE = 0.55;
+inline constexpr double GAS_CLOUD_SPREAD_SCALE = 0.65;
 inline constexpr Uint32 BLUE_POTION_SPAWN_MIN_INTERVAL_MS = 20000;
 inline constexpr Uint32 BLUE_POTION_SPAWN_MAX_INTERVAL_MS = 60000;
 inline constexpr Uint32 BLUE_POTION_VISIBLE_MS = 15000;
@@ -499,23 +506,29 @@ inline constexpr int NUCLEAR_SMOKE_RING_PUFFS_PER_WAVE = 72;
 
 inline constexpr Uint32 NUCLEAR_FLASH_DURATION_MS = 950;
 inline constexpr Uint8 NUCLEAR_FLASH_PEAK_ALPHA = 230;
-inline constexpr SDL_Color NUCLEAR_FLASH_COLOR{205, 205, 240, 180};
+inline constexpr SDL_Color NUCLEAR_FLASH_COLOR{145, 145, 240, 180};
 inline constexpr float NUCLEAR_FIREBALL_START_RADIUS_CELLS =
     static_cast<float>(NUCLEAR_EXPLOSION_RADIUS_CELLS);
-inline constexpr float NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS = 5.8f;
+inline constexpr float NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS = 4.8f;
 inline constexpr float NUCLEAR_CRATER_RADIUS_CELLS =
     NUCLEAR_FIREBALL_PEAK_RADIUS_CELLS * 0.63f;
 inline constexpr float NUCLEAR_CRATER_Y_RADIUS_FACTOR = 0.78f;
 inline constexpr int NUCLEAR_CRATER_EDGE_SAMPLE_STEPS = 5;
-inline constexpr Uint8 NUCLEAR_CRATER_BASE_ALPHA = 153;
+inline constexpr Uint8 NUCLEAR_CRATER_BASE_ALPHA = 83;
 inline constexpr SDL_Color NUCLEAR_CRATER_OUTER_COLOR{54, 43, 36, 255};
 inline constexpr SDL_Color NUCLEAR_CRATER_INNER_COLOR{16, 14, 13, 255};
 inline constexpr SDL_Color NUCLEAR_CRATER_GLOW_COLOR{118, 70, 38, 255};
 inline constexpr Uint32 NUCLEAR_CRATER_REVEAL_DELAY_MS = 120;
 inline constexpr SDL_Color NUCLEAR_CRATER_GREEN_CLOUD_COLOR{86, 220, 92, 255};
-inline constexpr Uint8 NUCLEAR_CRATER_GREEN_CLOUD_PEAK_ALPHA = 28;
-inline constexpr float NUCLEAR_CRATER_GREEN_CLOUD_RADIUS_FACTOR = 1.05f;
+inline constexpr Uint8 NUCLEAR_CRATER_GREEN_CLOUD_PEAK_ALPHA = 24;
+inline constexpr float NUCLEAR_CRATER_GREEN_CLOUD_RADIUS_FACTOR = 1.55f;
 inline constexpr Uint32 NUCLEAR_CRATER_GREEN_CLOUD_FADE_IN_MS = 350;
+// Total lifetime of the green crater cloud (visible + fade-out). Adjust
+// here to change how long the radioactive cloud persists.
+inline constexpr Uint32 NUCLEAR_CRATER_GREEN_CLOUD_LIFETIME_MS = 20000;
+inline constexpr Uint32 NUCLEAR_CRATER_GREEN_CLOUD_FADE_OUT_MS = 4000;
+// Number of blob puffs in the cloud (lower = more compact / clustered).
+inline constexpr int NUCLEAR_CRATER_GREEN_CLOUD_BLOB_COUNT = 14;
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_OFFSET_FACTOR = 0.52f;
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_BLOB_MIN_FACTOR = 0.18f;
 inline constexpr float NUCLEAR_FIREBALL_TEXTURE_BLOB_MAX_FACTOR = 0.42f;

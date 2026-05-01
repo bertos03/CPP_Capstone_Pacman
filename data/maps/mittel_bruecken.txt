@@ -1,8 +1,8 @@
 Mittlere Bruecken
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-xP..x.......................xx
-x.x.x.x.xxxxx.xxxxx.x.x.x.x.xx
-x.....x.x.....x.....x......Gxx
+x...x....................z..xx
+x.x.x.x.xxxxx.xxxxx.xxxxxxx.xx
+x...P.x.x.....x.....x......Gxx
 x.xxx.x.x.x.xxx.x.xxxxx.xxx.xx
 x.x.......x.....x.........x.xx
 x.x.xxx.x.x.x.xxx.xzx.xxx.x.xx

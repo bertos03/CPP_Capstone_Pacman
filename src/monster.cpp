@@ -253,11 +253,25 @@ void Monster::simulate(Events *events, Map *map, Pacman *pacman,
         // Continue sliding in stored direction; LOS is irrelevant now.
         goat_jump_direction = goat_slide_direction;
         goat_is_jumping = true;
-      } else if (sighted_direction != Directions::None) {
-        // Saw player -> charging. If just transitioned, bleat once.
-        if (goat_state != GoatState::Charging) {
-          goat_request_bleat_sound = true;
+      } else if (goat_state == GoatState::Charging) {
+        // Already charging: do NOT track player around corners. Only stay
+        // charging while the player is still on the same axis we committed
+        // to. Otherwise transition to Sliding (player turned a corner OR
+        // dropped out of sight); slide budget is reset so the goat slides
+        // a fixed distance from this point.
+        if (sighted_direction == goat_slide_direction) {
+          goat_jump_direction = goat_slide_direction;
+          goat_is_jumping = true;
+        } else {
+          goat_state = GoatState::Sliding;
+          goat_slide_remaining_steps = GOAT_SLIDE_TILES;
+          goat_jump_direction = goat_slide_direction;
+          goat_is_jumping = true;
         }
+      } else if (sighted_direction != Directions::None) {
+        // Grazing/Recovering -> Charging: commit to the direction in which
+        // we first spotted the player. Bleat on transition.
+        goat_request_bleat_sound = true;
         goat_state = GoatState::Charging;
         goat_slide_direction = sighted_direction;
         goat_slide_remaining_steps = GOAT_SLIDE_TILES;
@@ -265,32 +279,26 @@ void Monster::simulate(Events *events, Map *map, Pacman *pacman,
         goat_is_jumping = true;
         goat_jump_direction = sighted_direction;
       } else {
-        // Lost sight. If we were charging, switch to sliding for a few tiles.
-        if (goat_state == GoatState::Charging) {
-          goat_state = GoatState::Sliding;
-          goat_jump_direction = goat_slide_direction;
-          goat_is_jumping = true;
-        } else {
-          goat_is_jumping = false;
-          if (next_grazing_ticks != 0 && now >= next_grazing_ticks) {
-            const Uint32 grazing_duration =
-                RandomTicksBetween(GOAT_GRAZING_MIN_DURATION_MS,
-                                   GOAT_GRAZING_MAX_DURATION_MS);
-            grazing_until_ticks = now + grazing_duration;
-            next_grazing_ticks =
-                grazing_until_ticks +
-                RandomTicksBetween(GOAT_GRAZING_MIN_INTERVAL_MS,
-                                   GOAT_GRAZING_MAX_INTERVAL_MS);
-          }
-          if (grazing_until_ticks != 0 && now < grazing_until_ticks) {
-            px_delta.x = 0;
-            px_delta.y = 0;
-            sleep(15);
-            continue;
-          }
-          if (grazing_until_ticks != 0 && now >= grazing_until_ticks) {
-            grazing_until_ticks = 0;
-          }
+        // Grazing.
+        goat_is_jumping = false;
+        if (next_grazing_ticks != 0 && now >= next_grazing_ticks) {
+          const Uint32 grazing_duration =
+              RandomTicksBetween(GOAT_GRAZING_MIN_DURATION_MS,
+                                 GOAT_GRAZING_MAX_DURATION_MS);
+          grazing_until_ticks = now + grazing_duration;
+          next_grazing_ticks =
+              grazing_until_ticks +
+              RandomTicksBetween(GOAT_GRAZING_MIN_INTERVAL_MS,
+                                 GOAT_GRAZING_MAX_INTERVAL_MS);
+        }
+        if (grazing_until_ticks != 0 && now < grazing_until_ticks) {
+          px_delta.x = 0;
+          px_delta.y = 0;
+          sleep(15);
+          continue;
+        }
+        if (grazing_until_ticks != 0 && now >= grazing_until_ticks) {
+          grazing_until_ticks = 0;
         }
       }
     }
@@ -448,14 +456,21 @@ void Monster::simulate(Events *events, Map *map, Pacman *pacman,
     }
 
     const Directions next_charge_direction = try_find_charge_direction();
-    const Directions next_goat_jump_direction = try_find_goat_jump_direction();
-    if (next_goat_jump_direction != Directions::None &&
-        std::find(options.begin(), options.end(), next_goat_jump_direction) !=
-            options.end()) {
-      next_move = next_goat_jump_direction;
-      goat_is_jumping = true;
-      sleep(1);
-      continue;
+    // Goats commit to their charge direction; do NOT let a fresh post-step
+    // line-of-sight snap them around a corner. Direction changes for goats
+    // happen exclusively at the top-of-loop state machine (after sliding to
+    // a halt or being stunned).
+    if (monster_char != GOAT) {
+      const Directions next_goat_jump_direction =
+          try_find_goat_jump_direction();
+      if (next_goat_jump_direction != Directions::None &&
+          std::find(options.begin(), options.end(), next_goat_jump_direction) !=
+              options.end()) {
+        next_move = next_goat_jump_direction;
+        goat_is_jumping = true;
+        sleep(1);
+        continue;
+      }
     }
     if (next_charge_direction != Directions::None &&
         std::find(options.begin(), options.end(), next_charge_direction) !=

@@ -1969,17 +1969,6 @@ void Renderer::renderFrame(bool show_hud) {
                             SDL_SetTextureAlphaMod(pacman_texture, 255);
                           }
                           draw_slime_overlay(pacman_rect, 0.0);
-                          if (game->pacman->paralyzed_until_ticks > now) {
-                            drawStunStars(
-                                pacman_rect.x + pacman_rect.w / 2,
-                                pacman_rect.y -
-                                    static_cast<int>(element_size * 0.25),
-                                static_cast<int>(element_size *
-                                                 STUN_STARS_ORBIT_RADIUS_CELLS),
-                                static_cast<int>(element_size *
-                                                 STUN_STARS_RADIUS_CELLS),
-                                now);
-                          }
                         });
                   });
             }
@@ -2105,16 +2094,22 @@ void Renderer::renderFrame(bool show_hud) {
             continue;
           }
 
+          const bool goat_stunned =
+              monster->monster_char == GOAT && !waiting_for_blast &&
+              monster->goat_state == Monster::GoatState::Stunned &&
+              now < monster->goat_stun_until_ticks;
           const bool goat_grazing =
               monster->monster_char == GOAT && !waiting_for_blast &&
-              monster->grazing_until_ticks > now;
+              !goat_stunned && monster->grazing_until_ticks > now;
           const bool goat_jumping =
               monster->monster_char == GOAT && !waiting_for_blast &&
-              monster->goat_is_jumping;
+              !goat_stunned && monster->goat_is_jumping;
           SDL_Texture *monster_texture =
-              getMonsterTexture(monster->monster_char,
-                                monster->facing_direction, monster->id,
-                                goat_grazing, goat_jumping);
+              goat_stunned
+                  ? getStunnedGoatTexture()
+                  : getMonsterTexture(monster->monster_char,
+                                      monster->facing_direction, monster->id,
+                                      goat_grazing, goat_jumping);
           if (monster_texture == nullptr) {
             continue;
           }
@@ -2126,11 +2121,16 @@ void Renderer::renderFrame(bool show_hud) {
               waiting_for_blast ? 0.0 : pixel_delta_to_cells(monster->px_delta.x);
           const double delta_row_cells =
               waiting_for_blast ? 0.0 : pixel_delta_to_cells(monster->px_delta.y);
-          const SDL_Rect monster_rect =
+          SDL_Rect monster_rect =
               makeBillboardRect(anchor_coord.v, anchor_coord.u,
                                 kMonsterRenderScale, kMonsterRenderScale,
                                 kSpriteFootRowFactor, delta_col_cells,
                                 delta_row_cells);
+          if (goat_stunned) {
+            const double sway = std::sin(static_cast<double>(now) / 120.0) *
+                                element_size * 0.04;
+            monster_rect.x += static_cast<int>(std::lround(sway));
+          }
           const double depth =
               projectScene(0.5, anchor_coord.u + kSpriteFootRowFactor +
                                     delta_row_cells,
@@ -2176,20 +2176,6 @@ void Renderer::renderFrame(bool show_hud) {
                             monster->electrified_charge_target_id != -1);
                       }
                       SDL_SetTextureAlphaMod(monster_texture, 255);
-                      if (monster->monster_char == GOAT &&
-                          monster->goat_state ==
-                              Monster::GoatState::Stunned &&
-                          now < monster->goat_stun_until_ticks) {
-                        drawStunStars(
-                            monster_rect.x + monster_rect.w / 2,
-                            monster_rect.y -
-                                static_cast<int>(element_size * 0.25),
-                            static_cast<int>(element_size *
-                                             STUN_STARS_ORBIT_RADIUS_CELLS),
-                            static_cast<int>(element_size *
-                                             STUN_STARS_RADIUS_CELLS),
-                            now);
-                      }
                     });
               });
         }
@@ -2292,6 +2278,55 @@ void Renderer::renderFrame(bool show_hud) {
 
       for (auto &command : depth_commands) {
         command.draw();
+      }
+
+      // Stun stars overlay: drawn after depth-sorted scene so walls do not
+      // occlude them.
+      const Uint32 stars_now = SDL_GetTicks();
+      if (game != nullptr && game->pacman != nullptr &&
+          game->pacman->paralyzed_until_ticks > stars_now) {
+        const double delta_col_cells =
+            pixel_delta_to_cells(game->pacman->px_delta.x);
+        const double delta_row_cells =
+            pixel_delta_to_cells(game->pacman->px_delta.y);
+        const SDL_Rect pacman_rect =
+            makeBillboardRect(game->pacman->map_coord.v,
+                              game->pacman->map_coord.u, 0.9, 0.9,
+                              kSpriteFootRowFactor, delta_col_cells,
+                              delta_row_cells);
+        drawStunStars(
+            pacman_rect.x + pacman_rect.w / 2,
+            pacman_rect.y - static_cast<int>(element_size * 0.25),
+            static_cast<int>(element_size * STUN_STARS_ORBIT_RADIUS_CELLS),
+            static_cast<int>(element_size * STUN_STARS_RADIUS_CELLS),
+            stars_now);
+      }
+      if (game != nullptr) {
+        for (Monster *monster : game->monsters) {
+          if (monster == nullptr || !monster->is_alive ||
+              monster->monster_char != GOAT) {
+            continue;
+          }
+          if (monster->goat_state != Monster::GoatState::Stunned ||
+              stars_now >= monster->goat_stun_until_ticks) {
+            continue;
+          }
+          const double m_delta_col_cells =
+              pixel_delta_to_cells(monster->px_delta.x);
+          const double m_delta_row_cells =
+              pixel_delta_to_cells(monster->px_delta.y);
+          const SDL_Rect monster_rect = makeBillboardRect(
+              monster->map_coord.v, monster->map_coord.u,
+              kMonsterRenderScale, kMonsterRenderScale, kSpriteFootRowFactor,
+              m_delta_col_cells, m_delta_row_cells);
+          drawStunStars(
+              monster_rect.x + monster_rect.w / 2,
+              monster_rect.y - static_cast<int>(element_size * 0.25),
+              static_cast<int>(element_size *
+                               STUN_STARS_ORBIT_RADIUS_CELLS),
+              static_cast<int>(element_size * STUN_STARS_RADIUS_CELLS),
+            stars_now);
+        }
       }
 
       if (game != nullptr && (game->dead ||
@@ -3527,6 +3562,15 @@ SDL_Texture *Renderer::getMonsterTexture(char monster_char,
     return nullptr;
   }
   return sdl_monster_textures[texture_index];
+}
+
+SDL_Texture *Renderer::getStunnedGoatTexture() {
+  // Stunned goat: front-facing, first frame, no animation.
+  const size_t idx = MonsterTextureIndex(GOAT, Directions::Down, 0);
+  if (idx >= sdl_monster_textures.size()) {
+    return nullptr;
+  }
+  return sdl_monster_textures[idx];
 }
 
 void Renderer::renderSimpleText(TTF_Font *font, const std::string &text,
@@ -5361,6 +5405,9 @@ void Renderer::drawOrganicGasCloud(int center_x, int center_y, int base_size,
   if (base_size <= 0 || alpha_factor <= 0.0) {
     return;
   }
+  base_size = std::max(
+      1, static_cast<int>(std::lround(base_size * GAS_CLOUD_SPREAD_SCALE)));
+  alpha_factor *= GAS_CLOUD_OPACITY_SCALE;
 
   constexpr double kPi = 3.14159265358979323846;
   const std::array<SDL_Color, 5> palette{{
@@ -7951,12 +7998,29 @@ void Renderer::drawNuclearCraterGreenCloud(const NuclearCrater &crater,
 
   const Uint32 age = (now > crater.visible_ticks) ? (now - crater.visible_ticks)
                                                   : 0;
+  if (age >= NUCLEAR_CRATER_GREEN_CLOUD_LIFETIME_MS) {
+    return;
+  }
   const double fade_in =
       std::clamp(static_cast<double>(age) /
                      static_cast<double>(NUCLEAR_CRATER_GREEN_CLOUD_FADE_IN_MS),
                  0.0, 1.0);
+  const Uint32 fade_out_start =
+      (NUCLEAR_CRATER_GREEN_CLOUD_LIFETIME_MS >
+       NUCLEAR_CRATER_GREEN_CLOUD_FADE_OUT_MS)
+          ? NUCLEAR_CRATER_GREEN_CLOUD_LIFETIME_MS -
+                NUCLEAR_CRATER_GREEN_CLOUD_FADE_OUT_MS
+          : 0;
+  double fade_out = 1.0;
+  if (age >= fade_out_start) {
+    fade_out = 1.0 - std::clamp(static_cast<double>(age - fade_out_start) /
+                                    static_cast<double>(std::max<Uint32>(
+                                        1, NUCLEAR_CRATER_GREEN_CLOUD_FADE_OUT_MS)),
+                                0.0, 1.0);
+  }
   const double peak_alpha =
-      static_cast<double>(NUCLEAR_CRATER_GREEN_CLOUD_PEAK_ALPHA) * fade_in;
+      static_cast<double>(NUCLEAR_CRATER_GREEN_CLOUD_PEAK_ALPHA) * fade_in *
+      fade_out;
   if (peak_alpha < 1.0) {
     return;
   }
@@ -7971,17 +8035,19 @@ void Renderer::drawNuclearCraterGreenCloud(const NuclearCrater &crater,
       static_cast<double>(NUCLEAR_CRATER_GREEN_CLOUD_RADIUS_FACTOR);
   const double cloud_radius_px = cloud_radius_cells * tile_span;
 
-  constexpr int kBlobCount = 28;
+  const int kBlobCount = std::max(4, NUCLEAR_CRATER_GREEN_CLOUD_BLOB_COUNT);
   for (int blob = 0; blob < kBlobCount; ++blob) {
     const double base_angle =
         blob * (2.0 * kLogoPi / static_cast<double>(kBlobCount));
     const double phase =
         HashUnit(crater.shape_seed + blob * 9173) * 2.0 * kLogoPi;
+    // Tighter clustering: radial unit pulled inward and the random spread
+    // narrowed so blobs hug the crater center.
     const double radial_unit =
-        0.55 + 0.45 * HashUnit(crater.shape_seed + blob * 6151 + 17);
+        0.20 + 0.30 * HashUnit(crater.shape_seed + blob * 6151 + 17);
     const double waft =
-        0.18 * std::sin(clock * 0.45 + phase) +
-        0.12 * std::cos(clock * 0.27 + phase * 0.7);
+        0.10 * std::sin(clock * 0.45 + phase) +
+        0.07 * std::cos(clock * 0.27 + phase * 0.7);
     const double angle =
         base_angle + 0.20 * std::sin(clock * 0.33 + phase);
     const double offset_cells =
@@ -9415,15 +9481,23 @@ void Renderer::drawmonsters() {
       continue;
     }
 
-    const bool goat_grazing = monster->monster_char == GOAT &&
+    const bool goat_stunned = monster->monster_char == GOAT &&
                               !waiting_for_blast &&
+                              monster->goat_state ==
+                                  Monster::GoatState::Stunned &&
+                              now < monster->goat_stun_until_ticks;
+    const bool goat_grazing = monster->monster_char == GOAT &&
+                              !waiting_for_blast && !goat_stunned &&
                               monster->grazing_until_ticks > now;
     const bool goat_jumping = monster->monster_char == GOAT &&
-                              !waiting_for_blast &&
+                              !waiting_for_blast && !goat_stunned &&
                               monster->goat_is_jumping;
     SDL_Texture *monster_texture =
-        getMonsterTexture(monster->monster_char, monster->facing_direction,
-                          monster->id, goat_grazing, goat_jumping);
+        goat_stunned
+            ? getStunnedGoatTexture()
+            : getMonsterTexture(monster->monster_char,
+                                monster->facing_direction, monster->id,
+                                goat_grazing, goat_jumping);
     if (monster_texture == nullptr) {
       continue;
     }
@@ -9436,6 +9510,11 @@ void Renderer::drawmonsters() {
           element_size * monster->px_delta.y / 100.0);
     }
     sdl_monster_rect = MonsterRenderRect(monster->px_coord, element_size);
+    if (goat_stunned) {
+      const double sway = std::sin(static_cast<double>(now) / 120.0) *
+                          element_size * 0.04;
+      sdl_monster_rect.x += static_cast<int>(std::lround(sway));
+    }
     if (waiting_for_blast) {
       const Uint32 remaining_ticks = monster->scheduled_dynamite_blast_ticks - now;
       const double blink = std::sin(static_cast<double>(now) / 60.0);

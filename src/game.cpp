@@ -694,6 +694,7 @@ void Game::Update() {
   }
 
   HandleGoatRequests(now);
+  UpdateNuclearCraterClouds(now);
 
   // Check for collision with Monsters ... game is lost if collision occurs.
   // Use precise sub-cell positions and hitbox circles so the collision matches
@@ -4002,6 +4003,35 @@ void Game::UpdateSlimeballs(Uint32 now) {
   }
 }
 
+void Game::UpdateNuclearCraterClouds(Uint32 now) {
+  if (pacman == nullptr || nuclear_craters.empty() ||
+      IsPacmanInvulnerable(now)) {
+    return;
+  }
+  const SDL_FPoint pacman_world{
+      static_cast<float>(pacman->map_coord.v) + 0.5f +
+          static_cast<float>(pacman->px_delta.x) / 100.0f,
+      static_cast<float>(pacman->map_coord.u) + 0.5f +
+          static_cast<float>(pacman->px_delta.y) / 100.0f};
+  for (const NuclearCrater &crater : nuclear_craters) {
+    if (now < crater.visible_ticks) {
+      continue;
+    }
+    const Uint32 age = now - crater.visible_ticks;
+    if (age >= NUCLEAR_CRATER_GREEN_CLOUD_LIFETIME_MS) {
+      continue;
+    }
+    const float dx = pacman_world.x - crater.world_center.x;
+    const float dy = pacman_world.y - crater.world_center.y;
+    const float radius_cells =
+        crater.radius_cells * NUCLEAR_CRATER_GREEN_CLOUD_RADIUS_FACTOR;
+    if (dx * dx + dy * dy <= radius_cells * radius_cells) {
+      TriggerLoss(pacman->map_coord, now);
+      return;
+    }
+  }
+}
+
 void Game::UpdateGasClouds(Uint32 now) {
   for (size_t index = 0; index < gas_clouds.size();) {
     GasCloud &cloud = gas_clouds[index];
@@ -4017,14 +4047,7 @@ void Game::UpdateGasClouds(Uint32 now) {
       const Monster *owner = FindMonsterById(cloud.owner_id);
       if ((owner == nullptr || !owner->is_electrified) &&
           !IsPacmanInvulnerable(now)) {
-        pacman->paralyzed_until_ticks =
-            std::max(pacman->paralyzed_until_ticks, now + PACMAN_PARALYSIS_MS);
-        pacman->px_delta.x = 0;
-        pacman->px_delta.y = 0;
-        ActivateSlimeCover(now);
-#ifdef AUDIO
-        audio->PlayPacmanGag();
-#endif
+        TriggerLoss(pacman->map_coord, now);
       }
     }
 
