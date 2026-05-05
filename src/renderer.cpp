@@ -2681,7 +2681,7 @@ void Renderer::drawhud() {
 
   auto draw_keycap = [&](const SDL_Rect &key_rect, char key_label,
                          bool enabled) {
-    const int key_index = static_cast<int>(key_label - '1');
+    const int key_index = static_cast<int>(key_label - '0');
     if (key_index >= 0 &&
         key_index < static_cast<int>(sdl_hud_keycap_textures.size())) {
       SDL_Texture *keycap_texture =
