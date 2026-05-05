@@ -77,7 +77,10 @@ private:
   Uint32 goat_recovery_until_ticks;
   Uint32 goat_ignore_player_until_ticks;
   Uint32 goat_love_started_ticks;
+  Uint32 goat_love_attack_at_ticks;
   int goat_love_target_id;
+  bool goat_love_sequence_active;
+  bool goat_pacified;
   // Audio / wall-break requests for the main thread (set by simulation)
   bool goat_request_punch_sound;
   bool goat_request_bleat_sound;

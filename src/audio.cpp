@@ -212,6 +212,7 @@ Audio::Audio() {
   SFX_teleporter_arc = nullptr;
   SFX_editor_blocked = nullptr;
   SFX_potion_spawn = nullptr;
+  SFX_love_potion = nullptr;
   SFX_dynamite_spawn = nullptr;
   SFX_dynamite_ignite = nullptr;
   SFX_dynamite_explosion = nullptr;
@@ -341,6 +342,7 @@ Audio::Audio() {
   SFX_teleporter_arc = CreateTeleporterArcChunk();
   SFX_editor_blocked = CreateEditorBlockedChunk();
   SFX_potion_spawn = CreatePotionSpawnChunk();
+  SFX_love_potion = CreateLovePotionChunk();
   SFX_dynamite_spawn = CreateDynamiteSpawnChunk();
   SFX_dynamite_ignite = Mix_LoadWAV(dynamite_ignite_sound_path.c_str());
   if (SFX_dynamite_ignite == nullptr) {
@@ -545,6 +547,9 @@ Audio::~Audio() {
   }
   if (SFX_potion_spawn != nullptr) {
     Mix_FreeChunk(SFX_potion_spawn);
+  }
+  if (SFX_love_potion != nullptr) {
+    Mix_FreeChunk(SFX_love_potion);
   }
   if (SFX_dynamite_spawn != nullptr) {
     Mix_FreeChunk(SFX_dynamite_spawn);
@@ -1110,6 +1115,60 @@ Mix_Chunk *Audio::CreatePotionSpawnChunk() {
   return Mix_LoadWAV_RW(wav_stream, 1);
 }
 
+Mix_Chunk *Audio::CreateLovePotionChunk() {
+  struct Note {
+    double frequency;
+    int duration_ms;
+    double volume;
+  };
+
+  const std::vector<Note> melody{
+      {659.25, 170, 0.20}, {783.99, 170, 0.21}, {987.77, 230, 0.22},
+      {1318.51, 360, 0.18}};
+  std::vector<Sint16> pcm_samples;
+
+  double time_offset = 0.0;
+  for (const auto &note : melody) {
+    const int sample_count = std::max(1, note.duration_ms * kSampleRate / 1000);
+    const int attack_samples = std::max(1, sample_count / 9);
+    const int release_samples = std::max(1, sample_count / 4);
+    for (int i = 0; i < sample_count; ++i) {
+      double envelope = 1.0;
+      if (i < attack_samples) {
+        envelope = static_cast<double>(i) / static_cast<double>(attack_samples);
+      } else if (i > sample_count - release_samples) {
+        envelope = static_cast<double>(sample_count - i) /
+                   static_cast<double>(std::max(1, release_samples));
+      }
+      envelope = std::clamp(envelope, 0.0, 1.0);
+
+      const double time = static_cast<double>(i) / kSampleRate;
+      const double absolute_time = time_offset + time;
+      const double vibrato =
+          1.0 + 0.006 * std::sin(2.0 * kPi * 5.2 * absolute_time);
+      const double tone =
+          0.72 * std::sin(2.0 * kPi * note.frequency * vibrato * time) +
+          0.28 * std::sin(2.0 * kPi * note.frequency * 2.0 * time + 0.4);
+      const double chime =
+          0.20 * std::sin(2.0 * kPi * note.frequency * 3.0 * time + 1.0);
+      const double sample_value =
+          std::clamp((tone + chime) * envelope * note.volume, -1.0, 1.0);
+      const Sint16 pcm = static_cast<Sint16>(sample_value * 32767.0);
+      pcm_samples.push_back(pcm);
+      pcm_samples.push_back(pcm);
+    }
+    time_offset += static_cast<double>(note.duration_ms) / 1000.0;
+  }
+
+  std::vector<Uint8> wav_buffer = build_wav_buffer(pcm_samples);
+  SDL_RWops *wav_stream =
+      SDL_RWFromConstMem(wav_buffer.data(), static_cast<int>(wav_buffer.size()));
+  if (wav_stream == nullptr) {
+    return nullptr;
+  }
+  return Mix_LoadWAV_RW(wav_stream, 1);
+}
+
 Mix_Chunk *Audio::CreateDynamiteSpawnChunk() {
   struct Note {
     double frequency;
@@ -1615,6 +1674,8 @@ void Audio::PlayTeleporterArc() { PlayChunk(SFX_teleporter_arc); };
 void Audio::PlayEditorBlocked() { PlayChunk(SFX_editor_blocked); };
 
 void Audio::PlayPotionSpawn() { PlayChunk(SFX_potion_spawn); };
+
+void Audio::PlayLovePotion() { PlayChunk(SFX_love_potion); };
 
 void Audio::PlayDynamiteSpawn() { PlayChunk(SFX_dynamite_spawn); };
 

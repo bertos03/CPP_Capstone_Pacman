@@ -224,6 +224,17 @@ struct RocketProjectile {
   int animation_seed = 0;
 };
 
+struct LoveSmokeProjectile {
+  MapCoord origin_coord{0, 0};
+  Directions direction = Directions::None;
+  Uint32 spawned_ticks = 0;
+  Uint32 step_duration_ms = 0;
+  int segments_emitted = 0;
+  int max_segments = 0;
+  bool finished = false;
+  int animation_seed = 0;
+};
+
 struct ActiveBiohazardBeam {
   bool is_active = false;
   Directions direction = Directions::Right;
@@ -299,7 +310,9 @@ enum class ExplosionSmokePuffKind {
   NuclearBStemSmoke,
   NuclearBCapSmoke,
   GoatRedDust,
-  MonsterDustCloud
+  MonsterDustCloud,
+  LoveSmokeTrail,
+  LoveSmokeImpact
 };
 
 struct ExplosionSmokePuff {
@@ -393,6 +406,7 @@ private:
   bool plastic_explosive_is_armed;
   ActiveAirstrike active_airstrike;
   std::vector<RocketProjectile> active_rockets;
+  std::vector<LoveSmokeProjectile> active_love_smokes;
   ActiveBiohazardBeam active_biohazard_beam;
   ActiveNuclearExplosion active_nuclear_explosion;
   ActiveNuclearExplosionB active_nuclear_explosion_b;
@@ -457,6 +471,11 @@ private:
   void TryUseBiohazardBeam(Uint32 now);
   void TryUseNuclearBomb(Uint32 now);
   void TryUseLovePotion(Uint32 now);
+  void UpdateLoveSmokeProjectiles(Uint32 now);
+  void ApplyLovePotionToGoat(Monster *goat, Uint32 now);
+  void SpawnLoveSmokeTrailPuff(SDL_FPoint world_center, Directions direction,
+                               Uint32 now);
+  void SpawnLoveSmokeImpactPuff(SDL_FPoint world_center, Uint32 now);
   void ApplyCheats();
   void UpdateNuclearBombDrop(Uint32 now);
   void TryTriggerNuclearExplosion(Uint32 now);
@@ -508,6 +527,8 @@ private:
   void SpawnWallDestructionParticles(SDL_FPoint world_center, Uint32 now);
   void SpawnWallRubble(MapCoord destroyed_coord);
   void HandleGoatRequests(Uint32 now);
+  Monster *FindClosestMonsterInGoatSight(Monster *goat,
+                                         Directions &direction_out) const;
   void SpawnGoatRedDustCloud(SDL_FPoint world_center, Uint32 now);
   void SpawnExplosionSmokeCloud(SDL_FPoint world_center, float radius_cells,
                                 Uint32 now, float density_multiplier = 1.0f);

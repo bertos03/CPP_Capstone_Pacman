@@ -110,7 +110,10 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char,
   goat_recovery_until_ticks = 0;
   goat_ignore_player_until_ticks = 0;
   goat_love_started_ticks = 0;
+  goat_love_attack_at_ticks = 0;
   goat_love_target_id = -1;
+  goat_love_sequence_active = false;
+  goat_pacified = false;
   goat_request_punch_sound = false;
   goat_request_bleat_sound = false;
   goat_request_crash_sound = false;
@@ -227,6 +230,16 @@ void Monster::simulate(Events *events, Map *map, Pacman *pacman,
 
     Directions goat_jump_direction = Directions::None;
     if (monster_char == GOAT) {
+      if (goat_pacified ||
+          (goat_love_sequence_active && goat_love_target_id == -1)) {
+        px_delta.x = 0;
+        px_delta.y = 0;
+        goat_is_jumping = false;
+        grazing_until_ticks = std::max(grazing_until_ticks, now + 250);
+        sleep(15);
+        continue;
+      }
+
       // Stunned goat: stand still until stun expires.
       if (goat_state == GoatState::Stunned) {
         if (now >= goat_stun_until_ticks) {

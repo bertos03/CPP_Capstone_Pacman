@@ -2160,7 +2160,10 @@ void Renderer::renderFrame(bool show_hud) {
               now < monster->goat_stun_until_ticks;
           const bool goat_grazing =
               monster->monster_char == GOAT && !waiting_for_blast &&
-              !goat_stunned && monster->grazing_until_ticks > now;
+              !goat_stunned &&
+              (monster->grazing_until_ticks > now || monster->goat_pacified ||
+               (monster->goat_love_sequence_active &&
+                monster->goat_love_target_id == -1));
           const bool goat_jumping =
               monster->monster_char == GOAT && !waiting_for_blast &&
               !goat_stunned && monster->goat_is_jumping;
@@ -2228,8 +2231,17 @@ void Renderer::renderFrame(bool show_hud) {
                       } else {
                         SDL_SetTextureAlphaMod(monster_texture, 255);
                       }
+                      if (monster->monster_char == GOAT &&
+                          monster->goat_love_target_id != -1) {
+                        const bool red_flash =
+                            (static_cast<int>(now / 80) % 2) == 0;
+                        SDL_SetTextureColorMod(monster_texture, 255,
+                                               red_flash ? 72 : 128,
+                                               red_flash ? 72 : 128);
+                      }
                       SDL_RenderCopy(sdl_renderer, monster_texture, nullptr,
                                      &monster_rect);
+                      SDL_SetTextureColorMod(monster_texture, 255, 255, 255);
                       if (monster->is_electrified) {
                         drawElectrifiedMonsterAura(
                             monster_rect, monster->electrified_visual_seed, now,
@@ -2375,7 +2387,8 @@ void Renderer::renderFrame(bool show_hud) {
               monster->map_coord.v, monster->map_coord.u,
               kMonsterRenderScale, kMonsterRenderScale, kSpriteFootRowFactor,
               m_delta_col_cells, m_delta_row_cells);
-          if (monster->goat_love_target_id != -1 &&
+          if (monster->goat_love_sequence_active &&
+              monster->goat_love_target_id == -1 &&
               stars_now - monster->goat_love_started_ticks <=
                   GOAT_LOVE_HEART_VISIBLE_MS) {
             const double pulse =
@@ -7738,6 +7751,38 @@ void Renderer::drawExplosionParticles() {
           MONSTER_EXPLOSION_SMOKE_WOBBLE_AMPLITUDE_CELLS * 1.6f,
           MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ * 0.65f,
           0.05f};
+    case ExplosionSmokePuffKind::LoveSmokeTrail:
+      return SmokeRenderTuning{
+          LOVE_SMOKE_TRAIL_LIFETIME_MS,
+          LOVE_SMOKE_TRAIL_INITIAL_RADIUS_CELLS,
+          LOVE_SMOKE_TRAIL_FINAL_RADIUS_CELLS,
+          LOVE_SMOKE_TRAIL_INITIAL_ALPHA,
+          LOVE_SMOKE_COLOR,
+          LOVE_SMOKE_HIGHLIGHT_COLOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_MIN_COUNT,
+          MONSTER_EXPLOSION_SMOKE_BLOB_MAX_COUNT,
+          MONSTER_EXPLOSION_SMOKE_BLOB_OFFSET_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MAX_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_AMPLITUDE_CELLS * 1.2f,
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ,
+          0.0f};
+    case ExplosionSmokePuffKind::LoveSmokeImpact:
+      return SmokeRenderTuning{
+          LOVE_SMOKE_IMPACT_LIFETIME_MS,
+          LOVE_SMOKE_IMPACT_INITIAL_RADIUS_CELLS,
+          LOVE_SMOKE_IMPACT_FINAL_RADIUS_CELLS,
+          LOVE_SMOKE_IMPACT_INITIAL_ALPHA,
+          LOVE_SMOKE_COLOR,
+          LOVE_SMOKE_HIGHLIGHT_COLOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_MIN_COUNT + 1,
+          MONSTER_EXPLOSION_SMOKE_BLOB_MAX_COUNT + 2,
+          MONSTER_EXPLOSION_SMOKE_BLOB_OFFSET_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MAX_FACTOR * 1.1f,
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_AMPLITUDE_CELLS * 1.4f,
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ * 0.8f,
+          0.05f};
     case ExplosionSmokePuffKind::MonsterSmoke:
     default:
       return SmokeRenderTuning{
@@ -9719,7 +9764,10 @@ void Renderer::drawmonsters() {
                               now < monster->goat_stun_until_ticks;
     const bool goat_grazing = monster->monster_char == GOAT &&
                               !waiting_for_blast && !goat_stunned &&
-                              monster->grazing_until_ticks > now;
+                              (monster->grazing_until_ticks > now ||
+                               monster->goat_pacified ||
+                               (monster->goat_love_sequence_active &&
+                                monster->goat_love_target_id == -1));
     const bool goat_jumping = monster->monster_char == GOAT &&
                               !waiting_for_blast && !goat_stunned &&
                               monster->goat_is_jumping;
@@ -9761,13 +9809,20 @@ void Renderer::drawmonsters() {
     } else {
       SDL_SetTextureAlphaMod(monster_texture, 255);
     }
+    if (monster->monster_char == GOAT && monster->goat_love_target_id != -1) {
+      const bool red_flash = (static_cast<int>(now / 80) % 2) == 0;
+      SDL_SetTextureColorMod(monster_texture, 255, red_flash ? 72 : 128,
+                             red_flash ? 72 : 128);
+    }
     SDL_RenderCopy(sdl_renderer, monster_texture, nullptr, &sdl_monster_rect);
+    SDL_SetTextureColorMod(monster_texture, 255, 255, 255);
     if (monster->is_electrified) {
       drawElectrifiedMonsterAura(sdl_monster_rect, monster->electrified_visual_seed,
                                  now, monster->electrified_charge_target_id != -1);
     }
     SDL_SetTextureAlphaMod(monster_texture, 255);
-    if (monster->monster_char == GOAT && monster->goat_love_target_id != -1 &&
+    if (monster->monster_char == GOAT && monster->goat_love_sequence_active &&
+        monster->goat_love_target_id == -1 &&
         now - monster->goat_love_started_ticks <= GOAT_LOVE_HEART_VISIBLE_MS) {
       const double pulse =
           0.82 + 0.18 * std::sin(static_cast<double>(now) / 105.0);

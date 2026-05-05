@@ -112,6 +112,10 @@ Uint32 GetSmokePuffLifetimeMs(ExplosionSmokePuffKind kind) {
     return 2400;
   case ExplosionSmokePuffKind::MonsterDustCloud:
     return GOAT_MONSTER_DUST_LIFETIME_MS;
+  case ExplosionSmokePuffKind::LoveSmokeTrail:
+    return LOVE_SMOKE_TRAIL_LIFETIME_MS;
+  case ExplosionSmokePuffKind::LoveSmokeImpact:
+    return LOVE_SMOKE_IMPACT_LIFETIME_MS;
   case ExplosionSmokePuffKind::MonsterSmoke:
   default:
     return MONSTER_EXPLOSION_SMOKE_LIFETIME_MS;
@@ -691,6 +695,7 @@ void Game::Update() {
   TryUsePlasticExplosive(now);
   TryFireRocket(now);
   TryUseLovePotion(now);
+  UpdateLoveSmokeProjectiles(now);
   UpdateAirstrike(now);
   UpdatePlacedDynamites(now);
   UpdateRockets(now);
@@ -814,6 +819,7 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
     ShiftActiveTicks(monster->goat_ignore_player_until_ticks,
                      paused_duration_ms);
     ShiftActiveTicks(monster->goat_love_started_ticks, paused_duration_ms);
+    ShiftActiveTicks(monster->goat_love_attack_at_ticks, paused_duration_ms);
   }
 
   for (Fireball &fireball : fireballs) {
@@ -894,6 +900,10 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
   for (RocketProjectile &rocket : active_rockets) {
     ShiftActiveTicks(rocket.segment_started_ticks, paused_duration_ms);
     ShiftActiveTicks(rocket.last_smoke_spawn_ticks, paused_duration_ms);
+  }
+
+  for (LoveSmokeProjectile &smoke : active_love_smokes) {
+    ShiftActiveTicks(smoke.spawned_ticks, paused_duration_ms);
   }
 
   ShiftActiveTicks(active_biohazard_beam.started_ticks, paused_duration_ms);
@@ -2742,61 +2752,186 @@ void Game::TryUseLovePotion(Uint32 now) {
     return;
   }
 
-  Monster *adjacent_goat = nullptr;
-  for (Monster *monster : monsters) {
-    if (monster == nullptr || !monster->is_alive ||
-        monster->monster_char != GOAT) {
-      continue;
-    }
-    const int distance = std::abs(monster->map_coord.u - pacman->map_coord.u) +
-                         std::abs(monster->map_coord.v - pacman->map_coord.v);
-    if (distance == 1) {
-      adjacent_goat = monster;
-      break;
-    }
+  Directions facing_direction = events->get_next_move();
+  if (facing_direction != Directions::None) {
+    pacman->facing_direction = facing_direction;
+  } else {
+    facing_direction = pacman->facing_direction;
   }
-  if (adjacent_goat == nullptr) {
-    return;
-  }
-
-  Monster *closest_target = nullptr;
-  Directions target_direction = Directions::None;
-  int closest_distance = std::numeric_limits<int>::max();
-  for (Monster *monster : monsters) {
-    if (monster == nullptr || monster == adjacent_goat || !monster->is_alive ||
-        monster->monster_char == GOAT) {
-      continue;
-    }
-
-    Directions direction = Directions::None;
-    if (!HasClearAxisLineOfSight(map, adjacent_goat->map_coord,
-                                 monster->map_coord, direction)) {
-      continue;
-    }
-    const int distance =
-        std::abs(monster->map_coord.u - adjacent_goat->map_coord.u) +
-        std::abs(monster->map_coord.v - adjacent_goat->map_coord.v);
-    if (distance < closest_distance) {
-      closest_distance = distance;
-      closest_target = monster;
-      target_direction = direction;
-    }
-  }
-  if (closest_target == nullptr || target_direction == Directions::None) {
-    return;
+  if (facing_direction == Directions::None) {
+    facing_direction = Directions::Down;
   }
 
   love_potion_inventory--;
-  adjacent_goat->goat_love_started_ticks = now;
-  adjacent_goat->goat_love_target_id = closest_target->id;
-  adjacent_goat->goat_state = Monster::GoatState::Charging;
-  adjacent_goat->goat_slide_direction = target_direction;
-  adjacent_goat->goat_slide_remaining_steps = GOAT_SLIDE_TILES;
-  adjacent_goat->goat_ignore_player_until_ticks =
-      std::max(adjacent_goat->goat_ignore_player_until_ticks,
+
+  LoveSmokeProjectile projectile;
+  projectile.origin_coord = pacman->map_coord;
+  projectile.direction = facing_direction;
+  projectile.spawned_ticks = now;
+  projectile.step_duration_ms = LOVE_SMOKE_STEP_DURATION_MS;
+  projectile.segments_emitted = 0;
+  projectile.max_segments = LOVE_SMOKE_RANGE_CELLS;
+  projectile.finished = false;
+  projectile.animation_seed =
+      static_cast<int>((now % 997) + pacman->map_coord.u * 73 +
+                       pacman->map_coord.v * 41 + love_potion_inventory * 19);
+  active_love_smokes.push_back(projectile);
+
+#ifdef AUDIO
+  if (audio != nullptr) {
+    audio->PlayLovePotion();
+  }
+#endif
+}
+
+void Game::ApplyLovePotionToGoat(Monster *goat, Uint32 now) {
+  if (goat == nullptr) {
+    return;
+  }
+  goat->goat_love_sequence_active = true;
+  goat->goat_love_started_ticks = now;
+  goat->goat_love_attack_at_ticks = now + GOAT_LOVE_HEART_VISIBLE_MS;
+  goat->goat_love_target_id = -1;
+  goat->goat_pacified = false;
+  goat->goat_state = Monster::GoatState::Grazing;
+  goat->goat_slide_direction = Directions::None;
+  goat->goat_slide_remaining_steps = 0;
+  goat->goat_ignore_player_until_ticks =
+      std::max(goat->goat_ignore_player_until_ticks,
                now + GOAT_PLAYER_GRACE_MS);
-  adjacent_goat->goat_is_jumping = true;
-  adjacent_goat->goat_request_bleat_sound = true;
+  goat->goat_is_jumping = false;
+  goat->px_delta.x = 0;
+  goat->px_delta.y = 0;
+}
+
+void Game::SpawnLoveSmokeTrailPuff(SDL_FPoint world_center,
+                                   Directions direction, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> jitter_dist(-0.18f, 0.18f);
+  std::uniform_real_distribution<float> drift_dist(-0.25f, 0.25f);
+  std::uniform_real_distribution<float> rise_dist(-0.15f, 0.05f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  float forward_x = 0.0f;
+  float forward_y = 0.0f;
+  switch (direction) {
+  case Directions::Up:
+    forward_y = -0.6f;
+    break;
+  case Directions::Down:
+    forward_y = 0.6f;
+    break;
+  case Directions::Left:
+    forward_x = -0.6f;
+    break;
+  case Directions::Right:
+    forward_x = 0.6f;
+    break;
+  default:
+    break;
+  }
+
+  for (int i = 0; i < LOVE_SMOKE_TRAIL_PUFF_COUNT; ++i) {
+    ExplosionSmokePuff puff;
+    puff.world_position = {world_center.x + jitter_dist(rng),
+                           world_center.y + jitter_dist(rng)};
+    puff.velocity_cells_per_sec = {forward_x + drift_dist(rng),
+                                   forward_y + rise_dist(rng)};
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.kind = ExplosionSmokePuffKind::LoveSmokeTrail;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnLoveSmokeImpactPuff(SDL_FPoint world_center, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> radius_dist(0.0f, 0.55f);
+  std::uniform_real_distribution<float> drift_dist(-0.5f, 0.5f);
+  std::uniform_real_distribution<float> rise_dist(-0.4f, 0.05f);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  for (int i = 0; i < LOVE_SMOKE_IMPACT_PUFF_COUNT; ++i) {
+    const float angle = angle_dist(rng);
+    const float radius = radius_dist(rng);
+    ExplosionSmokePuff puff;
+    puff.world_position = {world_center.x + std::cos(angle) * radius,
+                           world_center.y + std::sin(angle) * radius};
+    puff.velocity_cells_per_sec = {drift_dist(rng), rise_dist(rng)};
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.kind = ExplosionSmokePuffKind::LoveSmokeImpact;
+    explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::UpdateLoveSmokeProjectiles(Uint32 now) {
+  for (size_t index = 0; index < active_love_smokes.size();) {
+    LoveSmokeProjectile &smoke = active_love_smokes[index];
+    const Uint32 step_ms = std::max<Uint32>(1, smoke.step_duration_ms);
+
+    while (!smoke.finished && smoke.segments_emitted < smoke.max_segments) {
+      const Uint32 next_segment_index =
+          static_cast<Uint32>(smoke.segments_emitted) + 1;
+      const Uint32 due_at_ticks = smoke.spawned_ticks + next_segment_index * step_ms;
+      if (now < due_at_ticks) {
+        break;
+      }
+
+      MapCoord segment_coord = smoke.origin_coord;
+      for (Uint32 step = 0; step < next_segment_index; ++step) {
+        segment_coord = StepCoord(segment_coord, smoke.direction);
+      }
+
+      if (!IsInsideMapBounds(map, segment_coord) ||
+          IsBlockingMapElement(
+              map->map_entry(static_cast<size_t>(segment_coord.u),
+                             static_cast<size_t>(segment_coord.v)))) {
+        smoke.finished = true;
+        break;
+      }
+
+      const SDL_FPoint cell_center = MakeCellCenter(segment_coord);
+      SpawnLoveSmokeTrailPuff(cell_center, smoke.direction, due_at_ticks);
+
+      Monster *hit_goat = nullptr;
+      for (Monster *monster : monsters) {
+        if (monster == nullptr || !monster->is_alive ||
+            monster->monster_char != GOAT) {
+          continue;
+        }
+        if (monster->goat_love_sequence_active ||
+            monster->goat_love_target_id != -1) {
+          continue;
+        }
+        if (SameCoord(monster->map_coord, segment_coord)) {
+          hit_goat = monster;
+          break;
+        }
+      }
+
+      if (hit_goat != nullptr) {
+        ApplyLovePotionToGoat(hit_goat, due_at_ticks);
+        SpawnLoveSmokeImpactPuff(PreciseWorldCenter(hit_goat), due_at_ticks);
+        smoke.finished = true;
+        break;
+      }
+
+      smoke.segments_emitted = static_cast<int>(next_segment_index);
+      if (smoke.segments_emitted >= smoke.max_segments) {
+        smoke.finished = true;
+      }
+    }
+
+    if (smoke.finished) {
+      active_love_smokes.erase(active_love_smokes.begin() +
+                               static_cast<long>(index));
+    } else {
+      ++index;
+    }
+  }
 }
 
 void Game::ApplyCheats() {
@@ -4688,15 +4823,75 @@ void Game::SpawnGoatRedDustCloud(SDL_FPoint world_center, Uint32 now) {
   }
 }
 
+Monster *Game::FindClosestMonsterInGoatSight(Monster *goat,
+                                             Directions &direction_out) const {
+  direction_out = Directions::None;
+  if (goat == nullptr || map == nullptr) {
+    return nullptr;
+  }
+
+  Monster *closest_target = nullptr;
+  int closest_distance = std::numeric_limits<int>::max();
+  for (Monster *monster : monsters) {
+    if (monster == nullptr || monster == goat || !monster->is_alive ||
+        monster->monster_char == GOAT) {
+      continue;
+    }
+
+    Directions direction = Directions::None;
+    if (!HasClearAxisLineOfSight(map, goat->map_coord, monster->map_coord,
+                                 direction)) {
+      continue;
+    }
+
+    const int distance = std::abs(monster->map_coord.u - goat->map_coord.u) +
+                         std::abs(monster->map_coord.v - goat->map_coord.v);
+    if (distance < closest_distance) {
+      closest_distance = distance;
+      closest_target = monster;
+      direction_out = direction;
+    }
+  }
+
+  return closest_target;
+}
+
 void Game::HandleGoatRequests(Uint32 now) {
   for (Monster *monster : monsters) {
     if (monster == nullptr || monster->monster_char != GOAT) {
       continue;
     }
+    if (monster->is_alive && monster->goat_love_sequence_active &&
+        monster->goat_love_target_id == -1 &&
+        monster->goat_love_attack_at_ticks != 0 &&
+        now >= monster->goat_love_attack_at_ticks) {
+      Directions attack_direction = Directions::None;
+      Monster *target =
+          FindClosestMonsterInGoatSight(monster, attack_direction);
+      if (target == nullptr || attack_direction == Directions::None) {
+        monster->goat_love_sequence_active = false;
+        monster->goat_love_attack_at_ticks = 0;
+        monster->goat_pacified = true;
+        monster->goat_state = Monster::GoatState::Grazing;
+        monster->goat_is_jumping = false;
+        monster->px_delta.x = 0;
+        monster->px_delta.y = 0;
+      } else {
+        monster->goat_love_target_id = target->id;
+        monster->goat_state = Monster::GoatState::Charging;
+        monster->goat_slide_direction = attack_direction;
+        monster->goat_slide_remaining_steps = GOAT_SLIDE_TILES;
+        monster->grazing_until_ticks = 0;
+        monster->goat_is_jumping = true;
+      }
+    }
     if (monster->is_alive && monster->goat_love_target_id != -1) {
       Monster *target = FindMonsterById(monster->goat_love_target_id);
       if (target == nullptr || !target->is_alive) {
         monster->goat_love_target_id = -1;
+        monster->goat_love_sequence_active = false;
+        monster->goat_love_attack_at_ticks = 0;
+        monster->goat_pacified = true;
       } else if (CirclesOverlap(PreciseWorldCenter(monster),
                                 MONSTER_HITBOX_RADIUS_CELLS,
                                 PreciseWorldCenter(target),
@@ -4708,8 +4903,12 @@ void Game::HandleGoatRequests(Uint32 now) {
 #endif
         EliminateMonsterWithDustCloud(target, now);
         monster->goat_love_target_id = -1;
-        monster->goat_state = Monster::GoatState::Recovering;
-        monster->goat_recovery_until_ticks = now + GOAT_RECOVERY_PAUSE_MS;
+        monster->goat_love_sequence_active = false;
+        monster->goat_love_attack_at_ticks = 0;
+        monster->goat_pacified = true;
+        monster->goat_state = Monster::GoatState::Grazing;
+        monster->goat_slide_direction = Directions::None;
+        monster->goat_slide_remaining_steps = 0;
         monster->goat_is_jumping = false;
         monster->px_delta.x = 0;
         monster->px_delta.y = 0;

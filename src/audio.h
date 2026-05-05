@@ -59,6 +59,7 @@ public:
   void PlayTeleporterArc();
   void PlayEditorBlocked();
   void PlayPotionSpawn();
+  void PlayLovePotion();
   void PlayDynamiteSpawn();
   void PlayDynamiteIgnite();
   void PlayDynamiteExplosion();
@@ -99,6 +100,7 @@ private:
   Mix_Chunk *CreateTeleporterArcChunk();
   Mix_Chunk *CreateEditorBlockedChunk();
   Mix_Chunk *CreatePotionSpawnChunk();
+  Mix_Chunk *CreateLovePotionChunk();
   Mix_Chunk *CreateDynamiteSpawnChunk();
   Mix_Chunk *CreateDynamiteIgniteChunk();
   Mix_Chunk *CreateDynamiteExplosionChunk();
@@ -128,6 +130,7 @@ private:
   Mix_Chunk *SFX_teleporter_arc;
   Mix_Chunk *SFX_editor_blocked;
   Mix_Chunk *SFX_potion_spawn;
+  Mix_Chunk *SFX_love_potion;
   Mix_Chunk *SFX_dynamite_spawn;
   Mix_Chunk *SFX_dynamite_ignite;
   Mix_Chunk *SFX_dynamite_explosion;
