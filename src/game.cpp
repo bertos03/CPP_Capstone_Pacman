@@ -4869,13 +4869,8 @@ void Game::HandleGoatRequests(Uint32 now) {
       Monster *target =
           FindClosestMonsterInGoatSight(monster, attack_direction);
       if (target == nullptr || attack_direction == Directions::None) {
-        monster->goat_love_sequence_active = false;
-        monster->goat_love_attack_at_ticks = 0;
-        monster->goat_pacified = true;
-        monster->goat_state = Monster::GoatState::Grazing;
-        monster->goat_is_jumping = false;
-        monster->px_delta.x = 0;
-        monster->px_delta.y = 0;
+        // No monster in line of sight yet. Stay in love mode and retry.
+        monster->goat_love_attack_at_ticks = now + GOAT_LOVE_HEART_VISIBLE_MS;
       } else {
         monster->goat_love_target_id = target->id;
         monster->goat_state = Monster::GoatState::Charging;
@@ -4888,10 +4883,15 @@ void Game::HandleGoatRequests(Uint32 now) {
     if (monster->is_alive && monster->goat_love_target_id != -1) {
       Monster *target = FindMonsterById(monster->goat_love_target_id);
       if (target == nullptr || !target->is_alive) {
+        // Target lost before contact: stay in love mode, look for a new one.
         monster->goat_love_target_id = -1;
-        monster->goat_love_sequence_active = false;
-        monster->goat_love_attack_at_ticks = 0;
-        monster->goat_pacified = true;
+        monster->goat_love_attack_at_ticks = now + GOAT_LOVE_HEART_VISIBLE_MS;
+        monster->goat_state = Monster::GoatState::Grazing;
+        monster->goat_slide_direction = Directions::None;
+        monster->goat_slide_remaining_steps = 0;
+        monster->goat_is_jumping = false;
+        monster->px_delta.x = 0;
+        monster->px_delta.y = 0;
       } else if (CirclesOverlap(PreciseWorldCenter(monster),
                                 MONSTER_HITBOX_RADIUS_CELLS,
                                 PreciseWorldCenter(target),

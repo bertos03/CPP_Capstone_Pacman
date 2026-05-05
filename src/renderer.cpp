@@ -2232,7 +2232,7 @@ void Renderer::renderFrame(bool show_hud) {
                         SDL_SetTextureAlphaMod(monster_texture, 255);
                       }
                       if (monster->monster_char == GOAT &&
-                          monster->goat_love_target_id != -1) {
+                          monster->goat_love_sequence_active) {
                         const bool red_flash =
                             (static_cast<int>(now / 80) % 2) == 0;
                         SDL_SetTextureColorMod(monster_texture, 255,
@@ -2387,10 +2387,7 @@ void Renderer::renderFrame(bool show_hud) {
               monster->map_coord.v, monster->map_coord.u,
               kMonsterRenderScale, kMonsterRenderScale, kSpriteFootRowFactor,
               m_delta_col_cells, m_delta_row_cells);
-          if (monster->goat_love_sequence_active &&
-              monster->goat_love_target_id == -1 &&
-              stars_now - monster->goat_love_started_ticks <=
-                  GOAT_LOVE_HEART_VISIBLE_MS) {
+          if (monster->goat_love_sequence_active) {
             const double pulse =
                 0.82 + 0.18 * std::sin(static_cast<double>(stars_now) / 105.0);
             drawPulsingHeart(
@@ -9809,7 +9806,7 @@ void Renderer::drawmonsters() {
     } else {
       SDL_SetTextureAlphaMod(monster_texture, 255);
     }
-    if (monster->monster_char == GOAT && monster->goat_love_target_id != -1) {
+    if (monster->monster_char == GOAT && monster->goat_love_sequence_active) {
       const bool red_flash = (static_cast<int>(now / 80) % 2) == 0;
       SDL_SetTextureColorMod(monster_texture, 255, red_flash ? 72 : 128,
                              red_flash ? 72 : 128);
@@ -9821,9 +9818,7 @@ void Renderer::drawmonsters() {
                                  now, monster->electrified_charge_target_id != -1);
     }
     SDL_SetTextureAlphaMod(monster_texture, 255);
-    if (monster->monster_char == GOAT && monster->goat_love_sequence_active &&
-        monster->goat_love_target_id == -1 &&
-        now - monster->goat_love_started_ticks <= GOAT_LOVE_HEART_VISIBLE_MS) {
+    if (monster->monster_char == GOAT && monster->goat_love_sequence_active) {
       const double pulse =
           0.82 + 0.18 * std::sin(static_cast<double>(now) / 105.0);
       drawPulsingHeart(
