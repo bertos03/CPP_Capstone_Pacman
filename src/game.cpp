@@ -694,7 +694,7 @@ void Game::Update() {
   UpdateAirstrike(now);
   UpdatePlacedDynamites(now);
   UpdateRockets(now);
-  if (dead) {
+  if (dead || IsFinalLossSequenceActive(now)) {
     return;
   }
 
@@ -3166,6 +3166,7 @@ void Game::CreateNuclearCrater(const ActiveNuclearExplosion &explosion,
   RemoveUnreachableGoodiesAfterCrater();
 
   if (pacman != nullptr && IsCraterCell(pacman->map_coord)) {
+    remaining_lives = 1;
     TriggerLoss(pacman->map_coord, now);
   }
 }
@@ -4284,12 +4285,7 @@ void Game::UpdateGasClouds(Uint32 now) {
       const Monster *owner = FindMonsterById(cloud.owner_id);
       if ((owner == nullptr || !owner->is_electrified) &&
           !IsPacmanInvulnerable(now)) {
-        const Uint32 stun_until = now + PACMAN_STUN_DURATION_MS;
-        pacman->px_delta.x = 0;
-        pacman->px_delta.y = 0;
-        TriggerLoss(pacman->map_coord, now);
-        pacman->paralyzed_until_ticks =
-            std::max(pacman->paralyzed_until_ticks, stun_until);
+        ActivateSlimeCover(now);
       }
     }
 
