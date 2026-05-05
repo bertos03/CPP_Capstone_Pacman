@@ -60,6 +60,31 @@ bool PreferMapCandidate(const MapDefinition &candidate,
   return candidate.file_path < existing.file_path;
 }
 
+bool IsValidMapTextChar(unsigned char ch) {
+  if (ch == '\t' || ch == '\r') {
+    return true;
+  }
+  return ch >= 0x20 && ch < 0x7F;
+}
+
+bool IsValidMapLayoutChar(char ch) {
+  switch (ch) {
+  case BRICK:
+  case PATH:
+  case GOODIE:
+  case PACMAN:
+  case MONSTER_FEW:
+  case MONSTER_MEDIUM:
+  case MONSTER_MANY:
+  case MONSTER_EXTRA:
+  case GOAT:
+  case ' ':
+    return true;
+  default:
+    return ch >= '1' && ch <= '5';
+  }
+}
+
 bool ReadMapFileContents(const std::string &map_path, MapFileData &map_file) {
   std::ifstream stream(map_path);
   if (!stream) {
@@ -71,11 +96,23 @@ bool ReadMapFileContents(const std::string &map_path, MapFileData &map_file) {
     map_file.display_name = std::filesystem::path(map_path).stem().string();
   }
 
+  for (unsigned char ch : map_file.display_name) {
+    if (!IsValidMapTextChar(ch)) {
+      return false;
+    }
+  }
+
   std::string line;
   while (std::getline(stream, line)) {
-    if (!line.empty()) {
-      map_file.layout_rows.push_back(line);
+    if (line.empty()) {
+      continue;
     }
+    for (char ch : line) {
+      if (!IsValidMapLayoutChar(ch)) {
+        return false;
+      }
+    }
+    map_file.layout_rows.push_back(line);
   }
 
   return !map_file.layout_rows.empty();

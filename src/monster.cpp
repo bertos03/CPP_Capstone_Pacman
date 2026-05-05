@@ -109,6 +109,8 @@ Monster::Monster(MapCoord _coord, int _id, char _monster_char,
   goat_stun_until_ticks = 0;
   goat_recovery_until_ticks = 0;
   goat_ignore_player_until_ticks = 0;
+  goat_love_started_ticks = 0;
+  goat_love_target_id = -1;
   goat_request_punch_sound = false;
   goat_request_bleat_sound = false;
   goat_request_crash_sound = false;
@@ -169,6 +171,30 @@ void Monster::simulate(Events *events, Map *map, Pacman *pacman,
       return direction_out;
     }
     if (!HasLineOfSight(map, map_coord, pacman_coord, direction_out)) {
+      return Directions::None;
+    }
+    return direction_out;
+  };
+  auto try_find_goat_love_direction = [&]() {
+    Directions direction_out = Directions::None;
+    if (monster_char != GOAT || map == nullptr || all_monsters == nullptr ||
+        goat_love_target_id == -1) {
+      return direction_out;
+    }
+
+    Monster *target = nullptr;
+    for (Monster *other : *all_monsters) {
+      if (other != nullptr && other->id == goat_love_target_id &&
+          other->is_alive) {
+        target = other;
+        break;
+      }
+    }
+    if (target == nullptr) {
+      goat_love_target_id = -1;
+      return direction_out;
+    }
+    if (!HasLineOfSight(map, map_coord, target->map_coord, direction_out)) {
       return Directions::None;
     }
     return direction_out;
@@ -240,14 +266,19 @@ void Monster::simulate(Events *events, Map *map, Pacman *pacman,
 
       const bool ignoring_player =
           (goat_state == GoatState::PostHitGrace) ||
-          (now < goat_ignore_player_until_ticks);
+          (now < goat_ignore_player_until_ticks) ||
+          goat_love_target_id != -1;
       if (goat_state == GoatState::PostHitGrace &&
           now >= goat_ignore_player_until_ticks) {
         goat_state = GoatState::Grazing;
       }
 
+      const Directions love_direction = try_find_goat_love_direction();
       const Directions sighted_direction =
-          ignoring_player ? Directions::None : try_find_goat_jump_direction();
+          (love_direction != Directions::None)
+              ? love_direction
+              : (ignoring_player ? Directions::None
+                                 : try_find_goat_jump_direction());
 
       if (goat_state == GoatState::Sliding) {
         // Continue sliding in stored direction; LOS is irrelevant now.

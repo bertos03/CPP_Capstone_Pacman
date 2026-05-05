@@ -38,6 +38,9 @@ ExtraSlot KeycodeToExtraSlot(SDL_Keycode keycode) {
   case SDLK_6:
   case SDLK_KP_6:
     return ExtraSlot::NuclearBomb;
+  case SDLK_7:
+  case SDLK_KP_7:
+    return ExtraSlot::LovePotion;
   default:
     return ExtraSlot::None;
   }

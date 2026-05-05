@@ -1085,24 +1085,22 @@ bool Renderer::TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
   const int grid_origin_x = offset_x + 1;
   const int grid_origin_y = offset_y + 1;
   const int cell_stride = element_size + 1;
+  const int row_count = static_cast<int>(rows);
+  const int col_count = static_cast<int>(cols);
+  const int grid_width = col_count * cell_stride;
+  const int grid_height = row_count * cell_stride;
   const int relative_x = screen_x - grid_origin_x;
   const int relative_y = screen_y - grid_origin_y;
 
-  if (relative_x < 0 || relative_y < 0) {
+  if (relative_x < 0 || relative_y < 0 || relative_x >= grid_width ||
+      relative_y >= grid_height) {
     return false;
   }
 
-  const int col = relative_x / cell_stride;
-  const int row = relative_y / cell_stride;
-  if (row < 0 || col < 0 || row >= static_cast<int>(rows) ||
-      col >= static_cast<int>(cols)) {
-    return false;
-  }
-
-  if (relative_x % cell_stride >= element_size ||
-      relative_y % cell_stride >= element_size) {
-    return false;
-  }
+  const int col =
+      std::clamp(relative_x / cell_stride, 0, col_count - 1);
+  const int row =
+      std::clamp(relative_y / cell_stride, 0, row_count - 1);
 
   coord = {row, col};
   return true;
@@ -1113,9 +1111,9 @@ void Renderer::renderFrame(bool show_hud) {
   SDL_RenderClear(sdl_renderer);
   if (ENABLE_3D_VIEW) {
     drawmap3DFloors();
+    drawWallRubble();
     drawNuclearCraters();
     drawmap3DWallTops();
-    drawWallRubble();
 
     if (map != nullptr) {
       struct DepthDrawCommand {
@@ -1746,6 +1744,67 @@ void Renderer::renderFrame(bool show_hud) {
           }
         }
 
+        const auto &love_potion = game->love_potion_pickup;
+        if (love_potion.is_visible) {
+          double alpha_factor = 1.0;
+          if (love_potion.is_fading) {
+            alpha_factor =
+                1.0 - std::clamp(static_cast<double>(
+                                      now - love_potion.fade_started_ticks) /
+                                     static_cast<double>(LOVE_POTION_FADE_MS),
+                                 0.0, 1.0);
+          }
+          if (alpha_factor > 0.0) {
+            const MapCoord coord = love_potion.coord;
+            const double depth =
+                projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
+            push_depth_command(depth, [&, coord, love_potion, alpha_factor, now]() {
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
+                    const double animation_clock =
+                        static_cast<double>(
+                            now + love_potion.animation_seed * 53) /
+                        160.0;
+                    const double pulse =
+                        0.84 + 0.16 * std::sin(animation_clock * 1.35);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(132.0 * alpha_factor, 0.0, 180.0));
+                    const Uint8 body_alpha = static_cast<Uint8>(
+                        std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 30, 54,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(8, static_cast<int>(element_size * 0.32 *
+                                                     pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 150, 160,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(10, static_cast<int>(element_size * 0.43 *
+                                                      pulse)));
+
+                    const int icon_size =
+                        std::max(12, static_cast<int>(element_size * 0.82));
+                    const SDL_Rect icon_rect{center_x - icon_size / 2,
+                                             center_y - icon_size / 2,
+                                             icon_size, icon_size};
+                    drawLovePotionIcon(icon_rect, body_alpha, animation_clock);
+                  });
+            });
+          }
+        }
+
         const auto &nuclear_marker = game->nuclear_bomb_target_marker;
         if (nuclear_marker.is_marked) {
           const MapCoord coord = nuclear_marker.coord;
@@ -2308,10 +2367,6 @@ void Renderer::renderFrame(bool show_hud) {
               monster->monster_char != GOAT) {
             continue;
           }
-          if (monster->goat_state != Monster::GoatState::Stunned ||
-              stars_now >= monster->goat_stun_until_ticks) {
-            continue;
-          }
           const double m_delta_col_cells =
               pixel_delta_to_cells(monster->px_delta.x);
           const double m_delta_row_cells =
@@ -2320,6 +2375,21 @@ void Renderer::renderFrame(bool show_hud) {
               monster->map_coord.v, monster->map_coord.u,
               kMonsterRenderScale, kMonsterRenderScale, kSpriteFootRowFactor,
               m_delta_col_cells, m_delta_row_cells);
+          if (monster->goat_love_target_id != -1 &&
+              stars_now - monster->goat_love_started_ticks <=
+                  GOAT_LOVE_HEART_VISIBLE_MS) {
+            const double pulse =
+                0.82 + 0.18 * std::sin(static_cast<double>(stars_now) / 105.0);
+            drawPulsingHeart(
+                monster_rect.x + monster_rect.w / 2,
+                monster_rect.y - static_cast<int>(element_size * 0.20),
+                std::max(8, static_cast<int>(element_size * 0.38)), 230,
+                pulse);
+          }
+          if (monster->goat_state != Monster::GoatState::Stunned ||
+              stars_now >= monster->goat_stun_until_ticks) {
+            continue;
+          }
           drawStunStars(
               monster_rect.x + monster_rect.w / 2,
               monster_rect.y - static_cast<int>(element_size * 0.25),
@@ -2365,6 +2435,7 @@ void Renderer::renderFrame(bool show_hud) {
     drawrocketpickup();
     drawbiohazardpickup();
     drawnuclearbombpickup();
+    drawlovepotionpickup();
     drawNuclearBombTargetMarker();
     drawpacman();
     drawplaceddynamites();
@@ -2492,6 +2563,8 @@ void Renderer::drawhud() {
       std::to_string(game->biohazard_inventory) + "x";
   const std::string nuclear_bomb_text =
       std::to_string(game->nuclear_bomb_inventory) + "x";
+  const std::string love_potion_text =
+      std::to_string(game->love_potion_inventory) + "x";
   const bool plastic_explosive_armed = game->plastic_explosive_is_armed;
   const bool airstrike_available =
       game->airstrike_inventory > 0 && !game->active_airstrike.is_active;
@@ -2504,6 +2577,7 @@ void Renderer::drawhud() {
        game->nuclear_bomb_target_marker.is_marked) &&
       !game->active_nuclear_bomb_drop.is_active &&
       !game->active_nuclear_explosion.is_active;
+  const bool love_potion_available = game->love_potion_inventory > 0;
   struct ExtraHudSlot {
     ExtraSlot slot;
     char key_label;
@@ -2513,7 +2587,7 @@ void Renderer::drawhud() {
     bool armed;
     bool active;
   };
-  const std::array<ExtraHudSlot, 6> extra_slots{{
+  const std::array<ExtraHudSlot, 7> extra_slots{{
       {ExtraSlot::Dynamite, '1', dynamite_text, game->dynamite_inventory > 0,
        game->dynamite_inventory > 0, false, false},
       {ExtraSlot::PlasticExplosive, '2', plastic_explosive_text,
@@ -2533,12 +2607,14 @@ void Renderer::drawhud() {
            game->active_nuclear_bomb_drop.is_active,
        game->nuclear_bomb_target_marker.is_marked,
        game->active_nuclear_bomb_drop.is_active},
+      {ExtraSlot::LovePotion, '7', love_potion_text, love_potion_available,
+       game->love_potion_inventory > 0, false, false},
   }};
   int title_width = 0;
   int lives_text_width = 0;
   int score_width = 0;
-  std::array<int, 6> extra_text_widths{};
-  std::array<int, 6> extra_slot_widths{};
+  std::array<int, 7> extra_text_widths{};
+  std::array<int, 7> extra_slot_widths{};
   TTF_SizeUTF8(sdl_font_hud, title_text.c_str(), &title_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, lives_text.c_str(), &lives_text_width, nullptr);
   TTF_SizeUTF8(sdl_font_hud, score_text.c_str(), &score_width, nullptr);
@@ -2699,6 +2775,9 @@ void Renderer::drawhud() {
       drawNuclearBombIcon(icon_rect, icon_alpha,
                           slot.active ? std::sin(animation_clock / 120.0) * 7.0
                                       : 0.0);
+      break;
+    case ExtraSlot::LovePotion:
+      drawLovePotionIcon(icon_rect, icon_alpha, animation_clock / 160.0);
       break;
     case ExtraSlot::None:
     default:
@@ -4886,6 +4965,51 @@ void Renderer::drawbonusflask() {
                        std::max(5, flask_width / 2));
 }
 
+void Renderer::drawLovePotionIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                                  double animation_clock) {
+  const int center_x = icon_rect.x + icon_rect.w / 2;
+  const int center_y = icon_rect.y + icon_rect.h / 2;
+  const int tube_width = std::max(5, icon_rect.w / 3);
+  const int tube_height = std::max(10, icon_rect.h * 3 / 4);
+  const int tube_top = center_y - tube_height / 2;
+  const SDL_Rect tube_rect{center_x - tube_width / 2, tube_top, tube_width,
+                           tube_height};
+  const Uint8 glass_alpha = static_cast<Uint8>(
+      std::clamp(static_cast<double>(alpha) * 0.78, 0.0, 255.0));
+  const Uint8 liquid_alpha = alpha;
+
+  SDL_SetRenderDrawColor(sdl_renderer, 240, 250, 255, glass_alpha / 4);
+  SDL_RenderFillRect(sdl_renderer, &tube_rect);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 42, 54, liquid_alpha);
+  const int liquid_height = std::max(
+      4, static_cast<int>(tube_height * (0.58 + 0.08 * std::sin(animation_clock))));
+  SDL_Rect liquid_rect{tube_rect.x + 2, tube_rect.y + tube_rect.h - liquid_height,
+                       std::max(2, tube_rect.w - 4), liquid_height};
+  SDL_RenderFillRect(sdl_renderer, &liquid_rect);
+  SDL_RenderFillCircle(sdl_renderer, center_x, liquid_rect.y,
+                       std::max(2, tube_width / 2 - 2));
+
+  for (int bubble = 0; bubble < 4; ++bubble) {
+    const double phase = animation_clock * 0.9 + bubble * 1.8;
+    const double progress = std::fmod(animation_clock * 0.13 + bubble * 0.27, 1.0);
+    const int bubble_x = center_x +
+                         static_cast<int>(std::sin(phase) * tube_width * 0.22);
+    const int bubble_y =
+        liquid_rect.y + liquid_rect.h -
+        static_cast<int>(progress * std::max(4, liquid_rect.h));
+    const int bubble_radius = std::max(1, icon_rect.w / 13 + (bubble % 2));
+    SDL_SetRenderDrawColor(sdl_renderer, 255, 164, 170, glass_alpha);
+    SDL_RenderFillCircle(sdl_renderer, bubble_x, bubble_y, bubble_radius);
+  }
+
+  SDL_SetRenderDrawColor(sdl_renderer, 232, 246, 255, glass_alpha);
+  SDL_RenderDrawRect(sdl_renderer, &tube_rect);
+  SDL_RenderDrawLine(sdl_renderer, tube_rect.x - tube_width / 4, tube_rect.y,
+                     tube_rect.x + tube_rect.w + tube_width / 4, tube_rect.y);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, tube_rect.y + tube_rect.h,
+                       std::max(3, tube_width / 2));
+}
+
 void Renderer::drawWalkieTalkieIcon(const SDL_Rect &icon_rect, Uint8 alpha,
                                     double animation_clock) {
   if (sdl_walkie_talkie_texture != nullptr && sdl_walkie_talkie_size.x > 0 &&
@@ -5896,6 +6020,52 @@ void Renderer::drawnuclearbombpickup() {
                       4.0 * std::sin(animation_clock * 0.7));
 }
 
+void Renderer::drawlovepotionpickup() {
+  if (game == nullptr || game->dead) {
+    return;
+  }
+
+  const auto &potion = game->love_potion_pickup;
+  if (!potion.is_visible) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  double alpha_factor = 1.0;
+  if (potion.is_fading) {
+    alpha_factor =
+        1.0 - std::clamp(static_cast<double>(now - potion.fade_started_ticks) /
+                             static_cast<double>(LOVE_POTION_FADE_MS),
+                         0.0, 1.0);
+  }
+  if (alpha_factor <= 0.0) {
+    return;
+  }
+
+  const PixelCoord pickup_px = getPixelCoord(potion.coord, 0, 0);
+  const int center_x = pickup_px.x + element_size / 2;
+  const int center_y = pickup_px.y + element_size / 2;
+  const double animation_clock =
+      static_cast<double>(now + potion.animation_seed * 53) / 160.0;
+  const double pulse = 0.84 + 0.16 * std::sin(animation_clock * 1.35);
+  const Uint8 glow_alpha = static_cast<Uint8>(
+      std::clamp(132.0 * alpha_factor, 0.0, 180.0));
+  const Uint8 body_alpha = static_cast<Uint8>(
+      std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 30, 54, glow_alpha / 2);
+  SDL_RenderFillCircle(sdl_renderer, center_x, center_y,
+                       std::max(8, static_cast<int>(element_size * 0.32 * pulse)));
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 150, 160, glow_alpha);
+  SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                       std::max(10, static_cast<int>(element_size * 0.43 * pulse)));
+
+  const int icon_size = std::max(12, static_cast<int>(element_size * 0.82));
+  const SDL_Rect icon_rect{center_x - icon_size / 2, center_y - icon_size / 2,
+                           icon_size, icon_size};
+  drawLovePotionIcon(icon_rect, body_alpha, animation_clock);
+}
+
 void Renderer::drawNuclearBombTargetMarker() {
   if (game == nullptr || game->dead ||
       !game->nuclear_bomb_target_marker.is_marked) {
@@ -6479,6 +6649,37 @@ void Renderer::drawStunStars(int center_x, int center_y, int orbit_radius_px,
     SDL_RenderFillCircle(sdl_renderer, sx, sy,
                          std::max(1, star_radius_px / 3));
   }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
+void Renderer::drawPulsingHeart(int center_x, int center_y, int size_px,
+                                Uint8 alpha, double pulse) {
+  if (size_px <= 0 || alpha == 0) {
+    return;
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const int radius = std::max(2, static_cast<int>(size_px * 0.25 * pulse));
+  const int half_width = std::max(3, static_cast<int>(size_px * 0.46 * pulse));
+  const int top_y = center_y - static_cast<int>(size_px * 0.14 * pulse);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 44, 62,
+                         static_cast<Uint8>(std::clamp<int>(alpha, 0, 255)));
+  SDL_RenderFillCircle(sdl_renderer, center_x - radius, top_y, radius);
+  SDL_RenderFillCircle(sdl_renderer, center_x + radius, top_y, radius);
+  for (int y = 0; y < size_px; ++y) {
+    const double progress = static_cast<double>(y) / std::max(1, size_px - 1);
+    const int half = static_cast<int>(half_width * (1.0 - progress));
+    const int row_y = top_y + y / 2;
+    SDL_RenderDrawLine(sdl_renderer, center_x - half, row_y, center_x + half,
+                       row_y);
+  }
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 152, 164, alpha / 2);
+  SDL_RenderDrawCircle(sdl_renderer, center_x - radius, top_y, radius);
+  SDL_RenderDrawCircle(sdl_renderer, center_x + radius, top_y, radius);
 
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
@@ -7521,6 +7722,22 @@ void Renderer::drawExplosionParticles() {
           PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_AMPLITUDE_CELLS * 1.4f,
           PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_FREQUENCY_HZ,
           0.15f};
+    case ExplosionSmokePuffKind::MonsterDustCloud:
+      return SmokeRenderTuning{
+          GOAT_MONSTER_DUST_LIFETIME_MS,
+          MONSTER_EXPLOSION_SMOKE_INITIAL_RADIUS_CELLS * 1.4f,
+          MONSTER_EXPLOSION_SMOKE_FINAL_RADIUS_CELLS * 1.8f,
+          190,
+          SDL_Color{82, 80, 78, 255},
+          SDL_Color{150, 146, 140, 255},
+          MONSTER_EXPLOSION_SMOKE_BLOB_MIN_COUNT,
+          MONSTER_EXPLOSION_SMOKE_BLOB_MAX_COUNT + 2,
+          MONSTER_EXPLOSION_SMOKE_BLOB_OFFSET_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MIN_FACTOR,
+          MONSTER_EXPLOSION_SMOKE_BLOB_RADIUS_MAX_FACTOR * 1.15f,
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_AMPLITUDE_CELLS * 1.6f,
+          MONSTER_EXPLOSION_SMOKE_WOBBLE_FREQUENCY_HZ * 0.65f,
+          0.05f};
     case ExplosionSmokePuffKind::MonsterSmoke:
     default:
       return SmokeRenderTuning{
@@ -9550,6 +9767,15 @@ void Renderer::drawmonsters() {
                                  now, monster->electrified_charge_target_id != -1);
     }
     SDL_SetTextureAlphaMod(monster_texture, 255);
+    if (monster->monster_char == GOAT && monster->goat_love_target_id != -1 &&
+        now - monster->goat_love_started_ticks <= GOAT_LOVE_HEART_VISIBLE_MS) {
+      const double pulse =
+          0.82 + 0.18 * std::sin(static_cast<double>(now) / 105.0);
+      drawPulsingHeart(
+          sdl_monster_rect.x + sdl_monster_rect.w / 2,
+          sdl_monster_rect.y - static_cast<int>(element_size * 0.20),
+          std::max(8, static_cast<int>(element_size * 0.38)), 230, pulse);
+    }
     if (monster->monster_char == GOAT &&
         monster->goat_state == Monster::GoatState::Stunned &&
         now < monster->goat_stun_until_ticks) {

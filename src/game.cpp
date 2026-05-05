@@ -110,6 +110,8 @@ Uint32 GetSmokePuffLifetimeMs(ExplosionSmokePuffKind kind) {
     return PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS;
   case ExplosionSmokePuffKind::GoatRedDust:
     return 2400;
+  case ExplosionSmokePuffKind::MonsterDustCloud:
+    return GOAT_MONSTER_DUST_LIFETIME_MS;
   case ExplosionSmokePuffKind::MonsterSmoke:
   default:
     return MONSTER_EXPLOSION_SMOKE_LIFETIME_MS;
@@ -211,6 +213,40 @@ bool IsOuterWallCoord(Map *map, MapCoord coord) {
   const int last_col = static_cast<int>(map->get_map_cols()) - 1;
   return coord.u == 0 || coord.v == 0 || coord.u == last_row ||
          coord.v == last_col;
+}
+
+bool HasClearAxisLineOfSight(Map *map, MapCoord from, MapCoord to,
+                             Directions &direction_out) {
+  direction_out = Directions::None;
+  if (map == nullptr || SameCoord(from, to)) {
+    return false;
+  }
+
+  if (from.u == to.u) {
+    direction_out = (to.v > from.v) ? Directions::Right : Directions::Left;
+    const int step = (to.v > from.v) ? 1 : -1;
+    for (int col = from.v + step; col != to.v; col += step) {
+      if (IsBlockingMapElement(map->map_entry(static_cast<size_t>(from.u),
+                                              static_cast<size_t>(col)))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  if (from.v == to.v) {
+    direction_out = (to.u > from.u) ? Directions::Down : Directions::Up;
+    const int step = (to.u > from.u) ? 1 : -1;
+    for (int row = from.u + step; row != to.u; row += step) {
+      if (IsBlockingMapElement(map->map_entry(static_cast<size_t>(row),
+                                              static_cast<size_t>(from.v)))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
 }
 
 int DistanceSquared(MapCoord left, MapCoord right) {
@@ -508,6 +544,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   rocket_inventory = 0;
   biohazard_inventory = 0;
   nuclear_bomb_inventory = 0;
+  love_potion_inventory = 0;
   nuclear_bomb_collected_once = false;
   plastic_explosive_is_armed = false;
   active_airstrike = {};
@@ -531,6 +568,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   ScheduleNextRocketSpawn(last_update_ticks);
   ScheduleNextBiohazardSpawn(last_update_ticks);
   ScheduleNextNuclearBombSpawn(last_update_ticks);
+  ScheduleNextLovePotionSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -639,6 +677,7 @@ void Game::Update() {
   UpdateRocketPickup(now);
   UpdateBiohazardPickup(now);
   UpdateNuclearBombPickup(now);
+  UpdateLovePotionPickup(now);
   TryUseBiohazardBeam(now);
   UpdateBiohazardBeam(now);
   TryUseNuclearBomb(now);
@@ -651,6 +690,7 @@ void Game::Update() {
   TryPlaceDynamite(now);
   TryUsePlasticExplosive(now);
   TryFireRocket(now);
+  TryUseLovePotion(now);
   UpdateAirstrike(now);
   UpdatePlacedDynamites(now);
   UpdateRockets(now);
@@ -773,6 +813,7 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
     ShiftActiveTicks(monster->goat_recovery_until_ticks, paused_duration_ms);
     ShiftActiveTicks(monster->goat_ignore_player_until_ticks,
                      paused_duration_ms);
+    ShiftActiveTicks(monster->goat_love_started_ticks, paused_duration_ms);
   }
 
   for (Fireball &fireball : fireballs) {
@@ -822,6 +863,10 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
   ShiftActiveTicks(nuclear_bomb_pickup.appeared_ticks, paused_duration_ms);
   ShiftActiveTicks(nuclear_bomb_pickup.fade_started_ticks, paused_duration_ms);
   ShiftActiveTicks(nuclear_bomb_pickup.next_spawn_ticks, paused_duration_ms);
+
+  ShiftActiveTicks(love_potion_pickup.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(love_potion_pickup.fade_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(love_potion_pickup.next_spawn_ticks, paused_duration_ms);
   ShiftActiveTicks(nuclear_bomb_target_marker.marked_ticks, paused_duration_ms);
   ShiftActiveTicks(active_nuclear_bomb_drop.alarm_started_ticks,
                    paused_duration_ms);
@@ -1146,6 +1191,14 @@ void Game::ScheduleNextNuclearBombSpawn(Uint32 now) {
                                  tuning.extra_spawn_interval_scale);
 }
 
+void Game::ScheduleNextLovePotionSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  love_potion_pickup.next_spawn_ticks =
+      now + RandomScaledInterval(LOVE_POTION_SPAWN_MIN_INTERVAL_MS,
+                                 LOVE_POTION_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
+}
+
 bool Game::IsWithinRadius(MapCoord center, MapCoord target,
                           int radius_cells) const {
   const int clamped_radius = std::max(0, radius_cells);
@@ -1294,6 +1347,11 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
     return false;
   }
 
+  if (love_potion_pickup.is_visible &&
+      SameCoord(coord, love_potion_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -1402,6 +1460,11 @@ bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
     return false;
   }
 
+  if (love_potion_pickup.is_visible &&
+      SameCoord(coord, love_potion_pickup.coord)) {
+    return false;
+  }
+
   for (const auto &dynamite : placed_dynamites) {
     if (SameCoord(coord, dynamite.coord)) {
       return false;
@@ -1457,6 +1520,11 @@ bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
 
   if (nuclear_bomb_pickup.is_visible &&
       SameCoord(coord, nuclear_bomb_pickup.coord)) {
+    return false;
+  }
+
+  if (love_potion_pickup.is_visible &&
+      SameCoord(coord, love_potion_pickup.coord)) {
     return false;
   }
 
@@ -1541,6 +1609,11 @@ bool Game::IsCellFreeForWalkieTalkiePickup(MapCoord coord) const {
 
   if (nuclear_bomb_pickup.is_visible &&
       SameCoord(coord, nuclear_bomb_pickup.coord)) {
+    return false;
+  }
+
+  if (love_potion_pickup.is_visible &&
+      SameCoord(coord, love_potion_pickup.coord)) {
     return false;
   }
 
@@ -1629,6 +1702,11 @@ bool Game::IsCellFreeForRocketPickup(MapCoord coord) const {
     return false;
   }
 
+  if (love_potion_pickup.is_visible &&
+      SameCoord(coord, love_potion_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -1714,6 +1792,11 @@ bool Game::IsCellFreeForBiohazardPickup(MapCoord coord) const {
     return false;
   }
 
+  if (love_potion_pickup.is_visible &&
+      SameCoord(coord, love_potion_pickup.coord)) {
+    return false;
+  }
+
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
          monster->scheduled_dynamite_blast_ticks != 0) &&
@@ -1764,6 +1847,10 @@ bool Game::IsCellFreeForNuclearBombPickup(MapCoord coord) const {
   return !nuclear_bomb_collected_once && IsCellFreeForBiohazardPickup(coord);
 }
 
+bool Game::IsCellFreeForLovePotionPickup(MapCoord coord) const {
+  return IsCellFreeForBiohazardPickup(coord);
+}
+
 bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
   if (!IsInsideMapBounds(map, coord)) {
     return false;
@@ -1799,6 +1886,10 @@ bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
   }
   if (nuclear_bomb_pickup.is_visible &&
       SameCoord(coord, nuclear_bomb_pickup.coord)) {
+    return false;
+  }
+  if (love_potion_pickup.is_visible &&
+      SameCoord(coord, love_potion_pickup.coord)) {
     return false;
   }
   for (const auto &dynamite : placed_dynamites) {
@@ -2300,6 +2391,75 @@ void Game::UpdateNuclearBombPickup(Uint32 now) {
   }
 }
 
+void Game::TrySpawnLovePotion(Uint32 now) {
+  if (love_potion_pickup.is_visible || now < love_potion_pickup.next_spawn_ticks) {
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForLovePotionPickup(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    love_potion_pickup.next_spawn_ticks = now + 1000;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  love_potion_pickup.coord = candidates[distribution(RandomGenerator())];
+  love_potion_pickup.appeared_ticks = now;
+  love_potion_pickup.fade_started_ticks = 0;
+  love_potion_pickup.animation_seed =
+      static_cast<int>((now % 997) + love_potion_pickup.coord.u * 109 +
+                       love_potion_pickup.coord.v * 79);
+  love_potion_pickup.is_visible = true;
+  love_potion_pickup.is_fading = false;
+#ifdef AUDIO
+  audio->PlayPotionSpawn();
+#endif
+}
+
+void Game::UpdateLovePotionPickup(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  TrySpawnLovePotion(now);
+  if (!love_potion_pickup.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, love_potion_pickup.coord)) {
+    love_potion_inventory++;
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
+    love_potion_pickup.is_visible = false;
+    love_potion_pickup.is_fading = false;
+    love_potion_pickup.fade_started_ticks = 0;
+    ScheduleNextLovePotionSpawn(now);
+    return;
+  }
+
+  if (!love_potion_pickup.is_fading &&
+      now - love_potion_pickup.appeared_ticks >= tuning.pickup_visible_ms) {
+    love_potion_pickup.is_fading = true;
+    love_potion_pickup.fade_started_ticks = now;
+  }
+
+  if (love_potion_pickup.is_fading &&
+      now - love_potion_pickup.fade_started_ticks >= LOVE_POTION_FADE_MS) {
+    love_potion_pickup.is_visible = false;
+    love_potion_pickup.is_fading = false;
+    love_potion_pickup.fade_started_ticks = 0;
+    ScheduleNextLovePotionSpawn(now);
+  }
+}
+
 void Game::TryUseBiohazardBeam(Uint32 now) {
   if (events == nullptr || pacman == nullptr) {
     return;
@@ -2571,6 +2731,74 @@ void Game::TryUsePlasticExplosive(Uint32 now) {
 #endif
 }
 
+void Game::TryUseLovePotion(Uint32 now) {
+  if (events == nullptr || pacman == nullptr || map == nullptr) {
+    return;
+  }
+
+  const bool use_requested =
+      events->ConsumeExtraUseRequest(ExtraSlot::LovePotion);
+  if (!use_requested || love_potion_inventory <= 0) {
+    return;
+  }
+
+  Monster *adjacent_goat = nullptr;
+  for (Monster *monster : monsters) {
+    if (monster == nullptr || !monster->is_alive ||
+        monster->monster_char != GOAT) {
+      continue;
+    }
+    const int distance = std::abs(monster->map_coord.u - pacman->map_coord.u) +
+                         std::abs(monster->map_coord.v - pacman->map_coord.v);
+    if (distance == 1) {
+      adjacent_goat = monster;
+      break;
+    }
+  }
+  if (adjacent_goat == nullptr) {
+    return;
+  }
+
+  Monster *closest_target = nullptr;
+  Directions target_direction = Directions::None;
+  int closest_distance = std::numeric_limits<int>::max();
+  for (Monster *monster : monsters) {
+    if (monster == nullptr || monster == adjacent_goat || !monster->is_alive ||
+        monster->monster_char == GOAT) {
+      continue;
+    }
+
+    Directions direction = Directions::None;
+    if (!HasClearAxisLineOfSight(map, adjacent_goat->map_coord,
+                                 monster->map_coord, direction)) {
+      continue;
+    }
+    const int distance =
+        std::abs(monster->map_coord.u - adjacent_goat->map_coord.u) +
+        std::abs(monster->map_coord.v - adjacent_goat->map_coord.v);
+    if (distance < closest_distance) {
+      closest_distance = distance;
+      closest_target = monster;
+      target_direction = direction;
+    }
+  }
+  if (closest_target == nullptr || target_direction == Directions::None) {
+    return;
+  }
+
+  love_potion_inventory--;
+  adjacent_goat->goat_love_started_ticks = now;
+  adjacent_goat->goat_love_target_id = closest_target->id;
+  adjacent_goat->goat_state = Monster::GoatState::Charging;
+  adjacent_goat->goat_slide_direction = target_direction;
+  adjacent_goat->goat_slide_remaining_steps = GOAT_SLIDE_TILES;
+  adjacent_goat->goat_ignore_player_until_ticks =
+      std::max(adjacent_goat->goat_ignore_player_until_ticks,
+               now + GOAT_PLAYER_GRACE_MS);
+  adjacent_goat->goat_is_jumping = true;
+  adjacent_goat->goat_request_bleat_sound = true;
+}
+
 void Game::ApplyCheats() {
   if (events == nullptr) {
     return;
@@ -2592,6 +2820,9 @@ void Game::ApplyCheats() {
   }
   if (events->ConsumeCheatRequest(ExtraSlot::NuclearBomb)) {
     nuclear_bomb_inventory++;
+  }
+  if (events->ConsumeCheatRequest(ExtraSlot::LovePotion)) {
+    love_potion_inventory++;
   }
 }
 
@@ -2881,6 +3112,12 @@ void Game::CreateNuclearCrater(const ActiveNuclearExplosion &explosion,
         nuclear_bomb_pickup.is_visible = false;
         nuclear_bomb_pickup.is_fading = false;
         ScheduleNextNuclearBombSpawn(now);
+      }
+      if (love_potion_pickup.is_visible &&
+          SameCoord(love_potion_pickup.coord, coord)) {
+        love_potion_pickup.is_visible = false;
+        love_potion_pickup.is_fading = false;
+        ScheduleNextLovePotionSpawn(now);
       }
       if (nuclear_bomb_target_marker.is_marked &&
           SameCoord(nuclear_bomb_target_marker.coord, coord)) {
@@ -4047,7 +4284,12 @@ void Game::UpdateGasClouds(Uint32 now) {
       const Monster *owner = FindMonsterById(cloud.owner_id);
       if ((owner == nullptr || !owner->is_electrified) &&
           !IsPacmanInvulnerable(now)) {
+        const Uint32 stun_until = now + PACMAN_STUN_DURATION_MS;
+        pacman->px_delta.x = 0;
+        pacman->px_delta.y = 0;
         TriggerLoss(pacman->map_coord, now);
+        pacman->paralyzed_until_ticks =
+            std::max(pacman->paralyzed_until_ticks, stun_until);
       }
     }
 
@@ -4156,6 +4398,25 @@ void Game::EliminateMonster(Monster *monster, Uint32 now) {
 #endif
 }
 
+void Game::EliminateMonsterWithDustCloud(Monster *monster, Uint32 now) {
+  if (monster == nullptr || !monster->is_alive) {
+    return;
+  }
+
+  SDL_FPoint sprite_center = MakeCellCenter(monster->map_coord);
+  sprite_center.x += static_cast<float>(monster->px_delta.x) / 100.0f;
+  sprite_center.y += static_cast<float>(monster->px_delta.y) / 100.0f;
+
+  monster->is_alive = false;
+  monster->px_delta.x = 0;
+  monster->px_delta.y = 0;
+  monster->scheduled_dynamite_blast_ticks = 0;
+  monster->electrified_charge_target_id = -1;
+  monster->death_coord = monster->map_coord;
+  monster->death_started_ticks = now;
+  SpawnMonsterDustCloud(sprite_center, now);
+}
+
 void Game::SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now) {
   static thread_local std::mt19937 rng{std::random_device{}()};
   std::uniform_int_distribution<int> count_dist(
@@ -4186,6 +4447,30 @@ void Game::SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now) {
         MONSTER_EXPLOSION_PARTICLE_RADIUS_CELLS * radius_dist(rng);
     particle.kind = ExplosionParticleKind::MonsterExplosion;
     explosion_particles.push_back(particle);
+  }
+}
+
+void Game::SpawnMonsterDustCloud(SDL_FPoint world_center, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> radius_dist(
+      0.0f, MONSTER_EXPLOSION_SMOKE_FINAL_RADIUS_CELLS * 1.3f);
+  std::uniform_real_distribution<float> drift_dist(-0.16f, 0.16f);
+  std::uniform_real_distribution<float> rise_dist(-0.20f, -0.04f);
+  std::uniform_int_distribution<Uint32> seed_dist(1u, 0xFFFFFFu);
+
+  for (int i = 0; i < GOAT_MONSTER_DUST_PUFF_COUNT; ++i) {
+    const float angle = angle_dist(rng);
+    const float radius = radius_dist(rng);
+    ExplosionSmokePuff puff;
+    puff.world_position = {world_center.x + std::cos(angle) * radius,
+                           world_center.y + std::sin(angle) * radius};
+    puff.velocity_cells_per_sec = {drift_dist(rng), rise_dist(rng)};
+    puff.spawned_ticks = now;
+    puff.shape_seed = seed_dist(rng);
+    puff.kind = ExplosionSmokePuffKind::MonsterDustCloud;
+    explosion_smoke_puffs.push_back(puff);
   }
 }
 
@@ -4411,6 +4696,28 @@ void Game::HandleGoatRequests(Uint32 now) {
   for (Monster *monster : monsters) {
     if (monster == nullptr || monster->monster_char != GOAT) {
       continue;
+    }
+    if (monster->is_alive && monster->goat_love_target_id != -1) {
+      Monster *target = FindMonsterById(monster->goat_love_target_id);
+      if (target == nullptr || !target->is_alive) {
+        monster->goat_love_target_id = -1;
+      } else if (CirclesOverlap(PreciseWorldCenter(monster),
+                                MONSTER_HITBOX_RADIUS_CELLS,
+                                PreciseWorldCenter(target),
+                                MONSTER_HITBOX_RADIUS_CELLS)) {
+#ifdef AUDIO
+        if (audio != nullptr) {
+          audio->PlayPunch();
+        }
+#endif
+        EliminateMonsterWithDustCloud(target, now);
+        monster->goat_love_target_id = -1;
+        monster->goat_state = Monster::GoatState::Recovering;
+        monster->goat_recovery_until_ticks = now + GOAT_RECOVERY_PAUSE_MS;
+        monster->goat_is_jumping = false;
+        monster->px_delta.x = 0;
+        monster->px_delta.y = 0;
+      }
     }
     if (monster->goat_request_bleat_sound) {
       monster->goat_request_bleat_sound = false;

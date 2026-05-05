@@ -125,6 +125,7 @@ private:
   void drawrocketpickup();
   void drawbiohazardpickup();
   void drawnuclearbombpickup();
+  void drawlovepotionpickup();
   void drawNuclearBombTargetMarker();
   void drawActiveNuclearBombDrop();
   void drawpacman();
@@ -184,6 +185,8 @@ private:
                         double pulse_clock);
   void drawStunStars(int center_x, int center_y, int orbit_radius_px,
                      int star_radius_px, Uint32 now);
+  void drawPulsingHeart(int center_x, int center_y, int size_px, Uint8 alpha,
+                        double pulse);
   SDL_Texture *getStunnedGoatTexture();
   void drawWalkieTalkieIcon(const SDL_Rect &icon_rect, Uint8 alpha,
                             double animation_clock);
@@ -198,6 +201,8 @@ private:
                            double rotation_degrees);
   void drawNuclearTargetMarkerIcon(const SDL_Rect &icon_rect, Uint8 alpha,
                                    double scale);
+  void drawLovePotionIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                          double animation_clock);
   void drawRocketFlight(const SDL_FPoint &center, Directions direction,
                         int max_dimension, int frame_index, Uint8 alpha);
   void drawDynamiteIcon(const SDL_Rect &icon_rect, bool lit_fuse,

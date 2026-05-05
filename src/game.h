@@ -139,6 +139,16 @@ struct NuclearBombPickup {
   bool is_fading = false;
 };
 
+struct LovePotionPickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
 struct NuclearBombTargetMarker {
   bool is_marked = false;
   MapCoord coord{0, 0};
@@ -288,7 +298,8 @@ enum class ExplosionSmokePuffKind {
   NuclearBTrailSmoke,
   NuclearBStemSmoke,
   NuclearBCapSmoke,
-  GoatRedDust
+  GoatRedDust,
+  MonsterDustCloud
 };
 
 struct ExplosionSmokePuff {
@@ -374,6 +385,7 @@ private:
   RocketPickup rocket_pickup;
   BiohazardPickup biohazard_pickup;
   NuclearBombPickup nuclear_bomb_pickup;
+  LovePotionPickup love_potion_pickup;
   NuclearBombTargetMarker nuclear_bomb_target_marker;
   ActiveNuclearBombDrop active_nuclear_bomb_drop;
   std::vector<PlacedDynamite> placed_dynamites;
@@ -398,6 +410,7 @@ private:
   int rocket_inventory;
   int biohazard_inventory;
   int nuclear_bomb_inventory;
+  int love_potion_inventory;
   bool nuclear_bomb_collected_once;
   friend class Renderer;
   bool dead;
@@ -436,10 +449,14 @@ private:
   void ScheduleNextNuclearBombSpawn(Uint32 now);
   void TrySpawnNuclearBomb(Uint32 now);
   void UpdateNuclearBombPickup(Uint32 now);
+  void ScheduleNextLovePotionSpawn(Uint32 now);
+  void TrySpawnLovePotion(Uint32 now);
+  void UpdateLovePotionPickup(Uint32 now);
   void TryUseAirstrike(Uint32 now);
   void TryFireRocket(Uint32 now);
   void TryUseBiohazardBeam(Uint32 now);
   void TryUseNuclearBomb(Uint32 now);
+  void TryUseLovePotion(Uint32 now);
   void ApplyCheats();
   void UpdateNuclearBombDrop(Uint32 now);
   void TryTriggerNuclearExplosion(Uint32 now);
@@ -467,6 +484,7 @@ private:
   bool IsCellFreeForRocketPickup(MapCoord coord) const;
   bool IsCellFreeForBiohazardPickup(MapCoord coord) const;
   bool IsCellFreeForNuclearBombPickup(MapCoord coord) const;
+  bool IsCellFreeForLovePotionPickup(MapCoord coord) const;
   bool CanPlacePlasticExplosiveAt(MapCoord coord) const;
   bool IsCraterCell(MapCoord coord) const;
   bool IsWithinRadius(MapCoord center, MapCoord target, int radius_cells) const;
@@ -484,7 +502,9 @@ private:
   void ShiftPausedTimers(Uint32 paused_duration_ms);
   void EliminateMonsterWithDynamiteBlast(Monster *monster, Uint32 now);
   void EliminateMonster(Monster *monster, Uint32 now);
+  void EliminateMonsterWithDustCloud(Monster *monster, Uint32 now);
   void SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now);
+  void SpawnMonsterDustCloud(SDL_FPoint world_center, Uint32 now);
   void SpawnWallDestructionParticles(SDL_FPoint world_center, Uint32 now);
   void SpawnWallRubble(MapCoord destroyed_coord);
   void HandleGoatRequests(Uint32 now);

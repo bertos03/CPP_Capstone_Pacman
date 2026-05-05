@@ -55,9 +55,9 @@ private:
   bool exit_dialog_requested;
   bool confirm_requested;
   // Cheat: Shift + Ziffer erhöht das jeweilige Inventar.
-  // Index entspricht dem ExtraSlot-Enum (0..6).
-  std::array<bool, 7> cheat_pending{};
-  std::array<Uint32, 7> cheat_last_inc_ms{};
+  // Index entspricht dem ExtraSlot-Enum (0..7).
+  std::array<bool, 8> cheat_pending{};
+  std::array<Uint32, 8> cheat_last_inc_ms{};
   std::atomic<bool> gameplay_frozen;
 };
 

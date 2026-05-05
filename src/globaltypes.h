@@ -40,7 +40,8 @@ enum class ExtraSlot {
   Airstrike,
   Rocket,
   Biohazard,
-  NuclearBomb
+  NuclearBomb,
+  LovePotion
 };
 
 
