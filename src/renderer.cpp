@@ -7119,9 +7119,9 @@ void Renderer::drawDiscoBall(int center_x, int center_y, int radius_px,
   const double spin = -rotation_phase * 2.0 * kLogoPi;
   const double theta_step = kLogoPi / DISCO_BALL_LATITUDE_COUNT;
   const double phi_step = 2.0 * kLogoPi / DISCO_BALL_LONGITUDE_COUNT;
-  for (int lat_index = 1; lat_index < DISCO_BALL_LATITUDE_COUNT; ++lat_index) {
+  for (int lat_index = 0; lat_index < DISCO_BALL_LATITUDE_COUNT; ++lat_index) {
     const double theta =
-        -0.5 * kLogoPi + static_cast<double>(lat_index) * theta_step;
+        -0.5 * kLogoPi + (static_cast<double>(lat_index) + 0.5) * theta_step;
     const double cos_theta = std::cos(theta);
     const double sin_theta = std::sin(theta);
 
@@ -7264,14 +7264,6 @@ void Renderer::drawDiscoBall(int center_x, int center_y, int radius_px,
     }
   }
 
-  for (int ring = 0; ring < 3; ++ring) {
-    SDL_SetRenderDrawColor(
-        sdl_renderer, 238, 246, 255,
-        static_cast<Uint8>(std::clamp(56 - ring * 18, 0, 80)));
-    SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
-                         std::max(1, radius_px - ring));
-  }
-
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
@@ -7338,7 +7330,12 @@ void Renderer::drawDiscoEasterEggOverlay(Uint32 now) {
   const int chain_top = DISCO_CHAIN_TOP_Y;
   const double kDiscoAxisTiltRadians =
       DISCO_AXIS_TILT_DEGREES * kLogoPi / 180.0;
-  const int chain_bottom = ball_y;
+  const double axis_projection_y = std::cos(kDiscoAxisTiltRadians);
+  const int chain_bottom =
+      ball_y -
+      static_cast<int>(std::lround(
+          radius * DISCO_CHAIN_TOP_ATTACHMENT_RADIUS_Y_SCALE *
+          axis_projection_y));
   const double chain_spin = -rotation_phase * 2.0 * kLogoPi;
   const int link_step =
       std::max(DISCO_CHAIN_LINK_MIN_STEP_PX,
