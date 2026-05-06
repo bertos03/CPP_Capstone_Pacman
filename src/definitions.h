@@ -646,16 +646,16 @@ inline constexpr float
 // Atombomben-Fragmente: gleiche Logik wie Mauer-Debris, aber graue
 // Truemmerstuecke und graue Rauchspuren. Riesige Anzahl an Partikeln, die in
 // parabelfoermiger Flugbahn weggeschleudert werden.
-inline constexpr int NUCLEAR_BOMB_DEBRIS_MIN_COUNT = 280;
-inline constexpr int NUCLEAR_BOMB_DEBRIS_MAX_COUNT = 340;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_MIN_SPEED_CELLS_PER_SEC = 3.5f;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_MAX_SPEED_CELLS_PER_SEC = 12.0f;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_MIN_COUNT = 180;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_MAX_COUNT = 240;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_MIN_SPEED_CELLS_PER_SEC = 7.5f;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_MAX_SPEED_CELLS_PER_SEC = 24.0f;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_GRAVITY_CELLS_PER_SEC2 = 12.4f;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_INITIAL_UPWARD_BIAS = 1.32f;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_INITIAL_UPWARD_BIAS = 0.25f;
 inline constexpr Uint32 NUCLEAR_BOMB_DEBRIS_LIFETIME_MS = 5200;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_RADIUS_CELLS = 0.22f;
-inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MIN_COUNT = 4;
-inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MAX_COUNT = 12;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MIN_COUNT = 9;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MAX_COUNT = 22;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_OFFSET_FACTOR = 0.68f;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_RADIUS_MIN_FACTOR = 0.52f;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_RADIUS_MAX_FACTOR = 1.44f;
