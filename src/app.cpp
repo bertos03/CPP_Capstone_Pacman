@@ -30,6 +30,7 @@
 
 #include "audio.h"
 #include "events.h"
+#include "frametimer.h"
 #include "game.h"
 #include "globaltypes.h"
 #include "map.h"
@@ -560,6 +561,7 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
   };
 
   while (!quit_requested && !finished) {
+    const Uint32 frame_start = SDL_GetTicks();
     SDL_Event event;
 
     while (SDL_PollEvent(&event)) {
@@ -766,7 +768,10 @@ EditorResult RunEditorSession(const EditorRequest &editor_request, Audio *audio)
                           editor_state.show_name_dialog,
                           editor_state.name_input,
                           editor_state.name_dialog_message);
-    sleep(40);
+    {
+      const Uint32 elapsed = SDL_GetTicks() - frame_start;
+      if (elapsed < 16) sleep(16 - elapsed);
+    }
   }
 
   SDL_StopTextInput();
@@ -1128,6 +1133,7 @@ int BobManApp::Run() {
     audio->StartMenuMusic();
 
     while (!quit_application && !start_requested && !launch_editor) {
+      const Uint32 frame_start = SDL_GetTicks();
       const std::vector<std::string> map_display_names =
           GetMapDisplayNames(available_maps);
       std::vector<std::string> editor_items;
@@ -1190,7 +1196,10 @@ int BobManApp::Run() {
         renderer.RenderEditorSizeSelectionMenu(editor_size_selected_item);
       }
 
-      sleep(40);
+      {
+        const Uint32 elapsed = SDL_GetTicks() - frame_start;
+        if (elapsed < 16) sleep(16 - elapsed);
+      }
     }
 
     if (quit_application) {
@@ -1313,10 +1322,21 @@ int BobManApp::Run() {
       paused_before_exit_dialog = false;
     };
 
+    FrameTimer frame_timer;
+    bool show_frame_stats = false;
+    renderer.SetFrameStatsOverlay(false, &frame_timer.GetStats());
+
     while ((!events->is_quit() || frozen_end_screen) && !return_to_menu &&
            !quit_application) {
+      const Uint32 frame_start = SDL_GetTicks();
       if (!game->is_lost() && !game->is_won()) {
         events->update();
+
+        if (events->ConsumeFrameStatsToggleRequest()) {
+          show_frame_stats = !show_frame_stats;
+          renderer.SetFrameStatsOverlay(show_frame_stats,
+                                        &frame_timer.GetStats());
+        }
 
         if (events->ConsumeExitDialogRequest()) {
           if (show_exit_dialog) {
@@ -1394,8 +1414,13 @@ int BobManApp::Run() {
       }
 
       renderer.Render(gameplay_paused, show_exit_dialog, exit_dialog_selected);
-      sleep(40);
+      frame_timer.Tick();
+      {
+        const Uint32 elapsed = SDL_GetTicks() - frame_start;
+        if (elapsed < 16) sleep(16 - elapsed);
+      }
     }
+    renderer.SetFrameStatsOverlay(false, nullptr);
 
     audio->StopEndScreenMusic();
   }

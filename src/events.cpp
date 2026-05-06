@@ -63,6 +63,7 @@ Events::Events() {
   pause_toggle_requested = false;
   exit_dialog_requested = false;
   confirm_requested = false;
+  frame_stats_toggle_requested = false;
   gameplay_frozen.store(false, std::memory_order_relaxed);
 }
 
@@ -144,6 +145,12 @@ bool Events::ConsumeConfirmRequest() {
   return requested;
 }
 
+bool Events::ConsumeFrameStatsToggleRequest() {
+  const bool requested = frame_stats_toggle_requested;
+  frame_stats_toggle_requested = false;
+  return requested;
+}
+
 /**
  * @brief Updates the input buffer each cycle
  *
@@ -173,6 +180,11 @@ void Events::update() {
       break;
     case SDLK_ESCAPE:
       exit_dialog_requested = true;
+      break;
+    case SDLK_f:
+      if (sdl_events->key.repeat == 0) {
+        frame_stats_toggle_requested = true;
+      }
       break;
     default:
       break;

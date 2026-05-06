@@ -28,7 +28,10 @@
 #include <vector>
 
 #include "definitions.h"
+#include "frametimer.h"
 #include "globaltypes.h"
+#include "inline_callable.h"
+#include "textcache.h"
 
 class Map;
 class Game;
@@ -65,6 +68,8 @@ public:
                     const std::string &name_dialog_message);
   // Countdown before the game starts.
   void RenderCountdown(int seconds_left);
+  // Toggle live frame-time overlay (top-left corner).
+  void SetFrameStatsOverlay(bool enabled, const FrameTimer::Stats *stats);
   // Helper for the editor: screen coordinate => map cell.
   bool TryGetLayoutCoordFromScreen(int screen_x, int screen_y,
                                    MapCoord &coord) const;
@@ -241,6 +246,8 @@ private:
   void drawCountdownOverlay(int seconds_left);
   void drawGameplayPauseOverlay(bool show_exit_dialog,
                                 int exit_dialog_selected);
+  void drawFrameStatsOverlay();
+  void rebuildWallOcclusionLookupIfNeeded();
   void renderSimpleText(TTF_Font *font, const std::string &text,
                         const SDL_Color &color, int center_x, int top_y);
   void renderTextLeft(TTF_Font *font, const std::string &text,
@@ -396,6 +403,20 @@ private:
 
   int texW;
   int texH;
+
+  bool frame_stats_overlay_enabled_ = false;
+  const FrameTimer::Stats *frame_stats_ = nullptr;
+  TextCache text_cache_;
+
+  struct DepthDrawCommand {
+    float depth = 0.0f;
+    size_t order = 0;
+    InlineCallable<192> draw;
+  };
+  std::vector<DepthDrawCommand> depth_commands_;
+
+  std::vector<int> wall_top_y_lookup_;
+  bool wall_top_y_dirty_ = true;
 };
 
 #endif

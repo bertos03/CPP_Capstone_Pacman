@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <functional>
 #include <random>
@@ -1008,7 +1009,48 @@ void Renderer::Render(bool show_pause_overlay, bool show_exit_dialog,
   if (show_pause_overlay || show_exit_dialog) {
     drawGameplayPauseOverlay(show_exit_dialog, exit_dialog_selected);
   }
+  if (frame_stats_overlay_enabled_) {
+    drawFrameStatsOverlay();
+  }
   endSupersampledFrameAndPresent();
+}
+
+void Renderer::SetFrameStatsOverlay(bool enabled,
+                                    const FrameTimer::Stats *stats) {
+  frame_stats_overlay_enabled_ = enabled;
+  frame_stats_ = stats;
+}
+
+void Renderer::drawFrameStatsOverlay() {
+  if (frame_stats_ == nullptr || sdl_font_hud == nullptr) {
+    return;
+  }
+  const FrameTimer::Stats &s = *frame_stats_;
+  char line1[96];
+  char line2[96];
+  std::snprintf(line1, sizeof(line1), "FPS %5.1f  avg %5.2fms",
+                s.fps, s.avg_ms);
+  std::snprintf(line2, sizeof(line2),
+                "p50 %ums p95 %ums p99 %ums max %ums  n=%zu",
+                s.p50_ms, s.p95_ms, s.p99_ms, s.max_ms, s.window_frames);
+  const int line_height = TTF_FontHeight(sdl_font_hud) + 2;
+  int line_w1 = 0, line_w2 = 0;
+  TTF_SizeUTF8(sdl_font_hud, line1, &line_w1, nullptr);
+  TTF_SizeUTF8(sdl_font_hud, line2, &line_w2, nullptr);
+  const int box_w = std::max(line_w1, line_w2) + 16;
+  const int box_h = line_height * 2 + 12;
+  const int box_x = 10;
+  const int box_y = 10;
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(sdl_renderer, 0, 0, 0, 180);
+  SDL_Rect bg{box_x, box_y, box_w, box_h};
+  SDL_RenderFillRect(sdl_renderer, &bg);
+  SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, 180);
+  SDL_RenderDrawRect(sdl_renderer, &bg);
+  const SDL_Color text_color{255, 255, 0, 255};
+  renderTextLeft(sdl_font_hud, line1, text_color, box_x + 8, box_y + 6);
+  renderTextLeft(sdl_font_hud, line2, text_color, box_x + 8,
+                 box_y + 6 + line_height);
 }
 
 void Renderer::RenderStartMenu(int selected_item, const std::string &map_name,
@@ -1116,45 +1158,36 @@ void Renderer::renderFrame(bool show_hud) {
     drawmap3DWallTops();
 
     if (map != nullptr) {
-      struct DepthDrawCommand {
-        float depth = 0.0f;
-        size_t order = 0;
-        std::function<void()> draw;
-      };
-
-      std::vector<DepthDrawCommand> depth_commands;
-      depth_commands.reserve(rows * cols + 64);
+      auto &depth_commands = depth_commands_;
+      depth_commands.clear();
+      if (depth_commands.capacity() < rows * cols + 64) {
+        depth_commands.reserve(rows * cols + 64);
+      }
       const double tile_span = static_cast<double>(element_size) + 1.0;
       const auto pixel_delta_to_cells = [&](int delta_percent) {
         const double delta_pixels =
             static_cast<double>(element_size * delta_percent) / 100.0;
         return delta_pixels / tile_span;
       };
-      auto push_depth_command = [&](double depth, std::function<void()> draw) {
-        depth_commands.push_back(DepthDrawCommand{
-            static_cast<float>(depth), depth_commands.size(), std::move(draw)});
+      auto push_depth_command = [&](double depth, InlineCallable<192> draw) {
+        DepthDrawCommand cmd;
+        cmd.depth = static_cast<float>(depth);
+        cmd.order = depth_commands.size();
+        cmd.draw = std::move(draw);
+        depth_commands.push_back(std::move(cmd));
       };
+      rebuildWallOcclusionLookupIfNeeded();
       const auto wall_occlusion_top_y = [&](double col_cells,
                                             double row_cells) -> int {
         const int column =
             std::clamp(static_cast<int>(std::floor(col_cells)), 0,
                        static_cast<int>(cols) - 1);
         const int search_start_row =
-            std::max(0, static_cast<int>(std::floor(row_cells)) + 1);
-        for (int wall_row = search_start_row; wall_row < static_cast<int>(rows);
-             ++wall_row) {
-          if (map->map_entry(static_cast<size_t>(wall_row),
-                             static_cast<size_t>(column)) !=
-              ElementType::TYPE_WALL) {
-            continue;
-          }
-
-          return static_cast<int>(std::floor(
-              projectScene(static_cast<double>(column) + 0.5,
-                           static_cast<double>(wall_row), 1.0)
-                  .y));
-        }
-        return screen_res_y;
+            std::clamp(static_cast<int>(std::floor(row_cells)) + 1, 0,
+                       static_cast<int>(rows));
+        const size_t idx = static_cast<size_t>(search_start_row) * cols +
+                           static_cast<size_t>(column);
+        return wall_top_y_lookup_[idx];
       };
       const auto draw_with_wall_occlusion =
           [&](double col_cells, double row_cells,
@@ -2474,6 +2507,7 @@ void Renderer::updateSceneLayout(size_t row_count_value,
                                  size_t col_count_value) {
   rows = row_count_value;
   cols = col_count_value;
+  wall_top_y_dirty_ = true;
 
   constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
   cos_tilt = ENABLE_3D_VIEW ? std::cos(VIEW_3D_TILT_DEGREES * kDegToRad) : 1.0;
@@ -2526,10 +2560,39 @@ void Renderer::updateSceneLayout(size_t row_count_value,
 void Renderer::SetScene(Map *new_map, Game *new_game) {
   map = new_map;
   game = new_game;
+  wall_top_y_dirty_ = true;
 
   if (map != nullptr) {
     updateSceneLayout(map->get_map_rows(), map->get_map_cols());
   }
+}
+
+void Renderer::rebuildWallOcclusionLookupIfNeeded() {
+  const size_t expected_size = (rows + 1) * cols;
+  if (!wall_top_y_dirty_ && wall_top_y_lookup_.size() == expected_size) {
+    return;
+  }
+  wall_top_y_lookup_.assign(expected_size, screen_res_y);
+  if (map == nullptr) {
+    wall_top_y_dirty_ = false;
+    return;
+  }
+  for (size_t col = 0; col < cols; ++col) {
+    int last_y = screen_res_y;
+    for (int start_row = static_cast<int>(rows); start_row >= 0;
+         --start_row) {
+      if (start_row < static_cast<int>(rows) &&
+          map->map_entry(static_cast<size_t>(start_row), col) ==
+              ElementType::TYPE_WALL) {
+        last_y = static_cast<int>(std::floor(
+            projectScene(static_cast<double>(col) + 0.5,
+                         static_cast<double>(start_row), 1.0)
+                .y));
+      }
+      wall_top_y_lookup_[static_cast<size_t>(start_row) * cols + col] = last_y;
+    }
+  }
+  wall_top_y_dirty_ = false;
 }
 
 void Renderer::SetFloorTextureIndex(int floor_texture_index) {
@@ -2716,30 +2779,22 @@ void Renderer::drawhud() {
                        depth_rect.y + depth_rect.h - 1);
 
     const std::string key_text(1, key_label);
-    SDL_Surface *text_surface =
-        TTF_RenderUTF8_Blended(sdl_font_hud, key_text.c_str(), label_color);
-    if (text_surface == nullptr) {
+    const TextCache::Entry *entry = text_cache_.GetOrCreate(
+        sdl_renderer, sdl_font_hud, key_text, label_color);
+    if (entry == nullptr) {
       return;
     }
-
-    SDL_Texture *text_texture =
-        SDL_CreateTextureFromSurface(sdl_renderer, text_surface);
-    if (text_texture != nullptr) {
-      const double label_scale = 0.52;
-      const int label_width =
-          std::max(1, static_cast<int>(std::lround(text_surface->w * label_scale)));
-      const int label_height =
-          std::max(1, static_cast<int>(std::lround(text_surface->h * label_scale)));
-      const SDL_Rect label_rect{
-          key_rect.x + (key_rect.w - label_width) / 2,
-          key_rect.y + std::max(0, (key_rect.h - label_height) / 2) - 1,
-          label_width,
-          label_height};
-      SDL_RenderCopy(sdl_renderer, text_texture, nullptr, &label_rect);
-      SDL_DestroyTexture(text_texture);
-    }
-
-    SDL_FreeSurface(text_surface);
+    const double label_scale = 0.52;
+    const int label_width =
+        std::max(1, static_cast<int>(std::lround(entry->w * label_scale)));
+    const int label_height =
+        std::max(1, static_cast<int>(std::lround(entry->h * label_scale)));
+    const SDL_Rect label_rect{
+        key_rect.x + (key_rect.w - label_width) / 2,
+        key_rect.y + std::max(0, (key_rect.h - label_height) / 2) - 1,
+        label_width,
+        label_height};
+    SDL_RenderCopy(sdl_renderer, entry->texture, nullptr, &label_rect);
   };
 
   auto draw_extra_slot = [&](size_t index) {
@@ -3669,23 +3724,13 @@ void Renderer::renderSimpleText(TTF_Font *font, const std::string &text,
   if (text.empty()) {
     return;
   }
-
-  SDL_Surface *text_surface =
-      TTF_RenderUTF8_Blended(font, text.c_str(), color);
-  if (text_surface == nullptr) {
+  const TextCache::Entry *entry =
+      text_cache_.GetOrCreate(sdl_renderer, font, text, color);
+  if (entry == nullptr) {
     return;
   }
-
-  SDL_Texture *text_texture =
-      SDL_CreateTextureFromSurface(sdl_renderer, text_surface);
-  if (text_texture != nullptr) {
-    SDL_Rect destination{center_x - text_surface->w / 2, top_y, text_surface->w,
-                         text_surface->h};
-    SDL_RenderCopy(sdl_renderer, text_texture, nullptr, &destination);
-    SDL_DestroyTexture(text_texture);
-  }
-
-  SDL_FreeSurface(text_surface);
+  SDL_Rect destination{center_x - entry->w / 2, top_y, entry->w, entry->h};
+  SDL_RenderCopy(sdl_renderer, entry->texture, nullptr, &destination);
 }
 
 void Renderer::renderTextLeft(TTF_Font *font, const std::string &text,
@@ -3693,22 +3738,13 @@ void Renderer::renderTextLeft(TTF_Font *font, const std::string &text,
   if (text.empty()) {
     return;
   }
-
-  SDL_Surface *text_surface =
-      TTF_RenderUTF8_Blended(font, text.c_str(), color);
-  if (text_surface == nullptr) {
+  const TextCache::Entry *entry =
+      text_cache_.GetOrCreate(sdl_renderer, font, text, color);
+  if (entry == nullptr) {
     return;
   }
-
-  SDL_Texture *text_texture =
-      SDL_CreateTextureFromSurface(sdl_renderer, text_surface);
-  if (text_texture != nullptr) {
-    SDL_Rect destination{left_x, top_y, text_surface->w, text_surface->h};
-    SDL_RenderCopy(sdl_renderer, text_texture, nullptr, &destination);
-    SDL_DestroyTexture(text_texture);
-  }
-
-  SDL_FreeSurface(text_surface);
+  SDL_Rect destination{left_x, top_y, entry->w, entry->h};
+  SDL_RenderCopy(sdl_renderer, entry->texture, nullptr, &destination);
 }
 
 void Renderer::renderStartLogo(TTF_Font *font, const std::string &text,

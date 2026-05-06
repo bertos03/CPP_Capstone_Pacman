@@ -42,6 +42,7 @@ public:
   bool ConsumePauseToggleRequest();
   bool ConsumeExitDialogRequest();
   bool ConsumeConfirmRequest();
+  bool ConsumeFrameStatsToggleRequest();
 
 protected:
 private:
@@ -54,6 +55,7 @@ private:
   bool pause_toggle_requested;
   bool exit_dialog_requested;
   bool confirm_requested;
+  bool frame_stats_toggle_requested;
   // Cheat: Shift + Ziffer erhöht das jeweilige Inventar.
   // Index entspricht dem ExtraSlot-Enum (0..7).
   std::array<bool, 8> cheat_pending{};
