@@ -1380,12 +1380,16 @@ int BobManApp::Run() {
             events->Keyreset();
           }
           if (events->ConsumePauseToggleRequest()) {
-            if (gameplay_paused) {
+            if (game->IsDiscoEasterEggActive()) {
+              game->RequestDiscoEasterEggEnd(SDL_GetTicks());
+            } else if (gameplay_paused) {
               resume_gameplay();
             } else {
               pause_gameplay();
             }
-            audio->PlayMenuSelect();
+            if (!game->IsDiscoEasterEggActive()) {
+              audio->PlayMenuSelect();
+            }
           }
         }
 

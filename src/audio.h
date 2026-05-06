@@ -46,6 +46,9 @@ public:
   bool StartMenuMusic();
   bool FadeOutMenuMusic(int fade_out_ms);
   void StopMenuMusic();
+  bool StartDiscoMusic();
+  bool FadeOutDiscoMusic(int fade_out_ms);
+  void StopDiscoMusic();
   void StopEndScreenMusic();
   bool IsMenuMusicPlaying() const;
   void PlayMonsterShot();
@@ -151,6 +154,7 @@ private:
   Mix_Chunk *SFX_goat_bleat;
   Mix_Chunk *SFX_rubble_crash;
   Mix_Music *menu_music;
+  Mix_Music *disco_music;
   Mix_Music *win_music;
   Mix_Music *lose_music;
   int rocket_launch_channel;

@@ -39,6 +39,7 @@ public:
   bool ConsumeCheatRequest(ExtraSlot slot);
   bool ConsumeNuclearTestRequest();
   bool ConsumeNuclearTestBRequest();
+  bool ConsumeDiscoTestRequest();
   bool ConsumePauseToggleRequest();
   bool ConsumeExitDialogRequest();
   bool ConsumeConfirmRequest();
@@ -52,6 +53,7 @@ private:
   ExtraSlot requested_extra;
   bool nuclear_test_requested;
   bool nuclear_test_b_requested;
+  bool disco_test_requested;
   bool pause_toggle_requested;
   bool exit_dialog_requested;
   bool confirm_requested;

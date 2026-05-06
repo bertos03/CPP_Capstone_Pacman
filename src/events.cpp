@@ -60,6 +60,7 @@ Events::Events() {
   requested_extra = ExtraSlot::None;
   nuclear_test_requested = false;
   nuclear_test_b_requested = false;
+  disco_test_requested = false;
   pause_toggle_requested = false;
   exit_dialog_requested = false;
   confirm_requested = false;
@@ -88,6 +89,7 @@ void Events::SetGameplayFrozen(bool frozen) {
     requested_extra = ExtraSlot::None;
     nuclear_test_requested = false;
     nuclear_test_b_requested = false;
+    disco_test_requested = false;
     cheat_pending.fill(false);
   }
 }
@@ -124,6 +126,12 @@ bool Events::ConsumeNuclearTestRequest() {
 bool Events::ConsumeNuclearTestBRequest() {
   const bool requested = nuclear_test_b_requested;
   nuclear_test_b_requested = false;
+  return requested;
+}
+
+bool Events::ConsumeDiscoTestRequest() {
+  const bool requested = disco_test_requested;
+  disco_test_requested = false;
   return requested;
 }
 
@@ -221,6 +229,12 @@ void Events::update() {
       if (keycode == SDLK_b) {
         if (!is_repeat) {
           nuclear_test_b_requested = true;
+        }
+        continue;
+      }
+      if (keycode == SDLK_d) {
+        if (!is_repeat) {
+          disco_test_requested = true;
         }
         continue;
       }

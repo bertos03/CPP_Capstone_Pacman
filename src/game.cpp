@@ -75,6 +75,11 @@ GetExplosionParticleMotionTuning(ExplosionParticleKind kind) {
             PLASTIC_EXPLOSIVE_WALL_DEBRIS_LIFETIME_MS,
             PLASTIC_EXPLOSIVE_WALL_DUST_SPAWN_INTERVAL_MS,
             ExplosionSmokePuffKind::WallDust};
+  case ExplosionParticleKind::NuclearDebris:
+    return {NUCLEAR_BOMB_DEBRIS_GRAVITY_CELLS_PER_SEC2,
+            NUCLEAR_BOMB_DEBRIS_LIFETIME_MS,
+            NUCLEAR_BOMB_DUST_SPAWN_INTERVAL_MS,
+            ExplosionSmokePuffKind::NuclearDust};
   case ExplosionParticleKind::MonsterExplosion:
   default:
     return {MONSTER_EXPLOSION_PARTICLE_GRAVITY_CELLS_PER_SEC2,
@@ -108,6 +113,8 @@ Uint32 GetSmokePuffLifetimeMs(ExplosionSmokePuffKind kind) {
     return NUCLEAR_B_CAP_SMOKE_LIFETIME_MS;
   case ExplosionSmokePuffKind::WallDust:
     return PLASTIC_EXPLOSIVE_WALL_DUST_LIFETIME_MS;
+  case ExplosionSmokePuffKind::NuclearDust:
+    return NUCLEAR_BOMB_DUST_LIFETIME_MS;
   case ExplosionSmokePuffKind::GoatRedDust:
     return 2400;
   case ExplosionSmokePuffKind::MonsterDustCloud:
@@ -557,6 +564,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   active_nuclear_bomb_drop = {};
   active_nuclear_explosion = {};
   active_nuclear_explosion_b = {};
+  active_disco_easteregg = {};
   simulation_started = false;
   death_started_ticks = 0;
   life_recovery_until_ticks = 0;
@@ -574,6 +582,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   ScheduleNextNuclearBombSpawn(last_update_ticks);
   ScheduleNextLovePotionSpawn(last_update_ticks);
   ScheduleNextLifePickupSpawn(last_update_ticks);
+  ScheduleNextDiscoPickupSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -634,12 +643,36 @@ void Game::ResumeSimulation(Uint32 paused_duration_ms) {
   events->Keyreset();
 }
 
+bool Game::IsDiscoEasterEggActive() const {
+  return active_disco_easteregg.is_active;
+}
+
+void Game::RequestDiscoEasterEggEnd(Uint32 now) {
+  if (!active_disco_easteregg.is_active ||
+      active_disco_easteregg.is_ending) {
+    return;
+  }
+
+  active_disco_easteregg.is_ending = true;
+  active_disco_easteregg.ending_started_ticks = now;
+  active_disco_easteregg.music_fade_started = true;
+#ifdef AUDIO
+  if (audio != nullptr) {
+    audio->FadeOutDiscoMusic(DISCO_MUSIC_FADE_OUT_MS);
+  }
+#endif
+}
+
 /**
  * @brief Game logic - is called during each cyclee
  * 
  */
 void Game::Update() {
   const Uint32 now = SDL_GetTicks();
+  if (active_disco_easteregg.is_active) {
+    UpdateDiscoEasterEgg(now);
+    return;
+  }
   CleanupEffects(now);
   UpdateScheduledMonsterBlasts(now);
   UpdateInvulnerability(now);
@@ -684,6 +717,10 @@ void Game::Update() {
   UpdateNuclearBombPickup(now);
   UpdateLovePotionPickup(now);
   UpdateLifePickup(now);
+  UpdateDiscoPickup(now);
+  if (active_disco_easteregg.is_active) {
+    return;
+  }
   TryUseBiohazardBeam(now);
   UpdateBiohazardBeam(now);
   TryUseNuclearBomb(now);
@@ -1222,6 +1259,14 @@ void Game::ScheduleNextLovePotionSpawn(Uint32 now) {
                                  tuning.extra_spawn_interval_scale);
 }
 
+void Game::ScheduleNextDiscoPickupSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  disco_pickup.next_spawn_ticks =
+      now + RandomScaledInterval(DISCO_PICKUP_SPAWN_MIN_INTERVAL_MS,
+                                 DISCO_PICKUP_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
+}
+
 bool Game::IsWithinRadius(MapCoord center, MapCoord target,
                           int radius_cells) const {
   const int clamped_radius = std::max(0, radius_cells);
@@ -1376,6 +1421,9 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
   }
   if (life_pickup.is_visible &&
       SameCoord(coord, life_pickup.coord)) {
+    return false;
+  }
+  if (disco_pickup.is_visible && SameCoord(coord, disco_pickup.coord)) {
     return false;
   }
 
@@ -1560,6 +1608,9 @@ bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
   }
   if (life_pickup.is_visible &&
       SameCoord(coord, life_pickup.coord)) {
+    return false;
+  }
+  if (disco_pickup.is_visible && SameCoord(coord, disco_pickup.coord)) {
     return false;
   }
 
@@ -1843,6 +1894,9 @@ bool Game::IsCellFreeForBiohazardPickup(MapCoord coord) const {
       SameCoord(coord, life_pickup.coord)) {
     return false;
   }
+  if (disco_pickup.is_visible && SameCoord(coord, disco_pickup.coord)) {
+    return false;
+  }
 
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
@@ -1899,6 +1953,10 @@ bool Game::IsCellFreeForLovePotionPickup(MapCoord coord) const {
 }
 
 bool Game::IsCellFreeForLifePickup(MapCoord coord) const {
+  return IsCellFreeForBiohazardPickup(coord);
+}
+
+bool Game::IsCellFreeForDiscoPickup(MapCoord coord) const {
   return IsCellFreeForBiohazardPickup(coord);
 }
 
@@ -2590,6 +2648,132 @@ void Game::UpdateLifePickup(Uint32 now) {
   }
 }
 
+void Game::TrySpawnDiscoPickup(Uint32 now) {
+  if (disco_pickup.is_visible || active_disco_easteregg.is_active ||
+      now < disco_pickup.next_spawn_ticks) {
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForDiscoPickup(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    disco_pickup.next_spawn_ticks = now + DISCO_PICKUP_RETRY_DELAY_MS;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  disco_pickup.coord = candidates[distribution(RandomGenerator())];
+  disco_pickup.appeared_ticks = now;
+  disco_pickup.fade_started_ticks = 0;
+  disco_pickup.animation_seed =
+      static_cast<int>((now % DISCO_PICKUP_ANIMATION_SEED_MODULUS) +
+                       disco_pickup.coord.u *
+                           DISCO_PICKUP_ANIMATION_SEED_ROW_MULTIPLIER +
+                       disco_pickup.coord.v *
+                           DISCO_PICKUP_ANIMATION_SEED_COL_MULTIPLIER);
+  disco_pickup.is_visible = true;
+  disco_pickup.is_fading = false;
+#ifdef AUDIO
+  audio->PlayPotionSpawn();
+#endif
+}
+
+void Game::UpdateDiscoPickup(Uint32 now) {
+  TrySpawnDiscoPickup(now);
+  if (!disco_pickup.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, disco_pickup.coord)) {
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
+    disco_pickup.is_visible = false;
+    disco_pickup.is_fading = false;
+    disco_pickup.fade_started_ticks = 0;
+    ScheduleNextDiscoPickupSpawn(now);
+    StartDiscoEasterEgg(now);
+    return;
+  }
+
+  if (!disco_pickup.is_fading &&
+      now - disco_pickup.appeared_ticks >= DISCO_PICKUP_VISIBLE_MS) {
+    disco_pickup.is_fading = true;
+    disco_pickup.fade_started_ticks = now;
+  }
+
+  if (disco_pickup.is_fading &&
+      now - disco_pickup.fade_started_ticks >= DISCO_PICKUP_FADE_MS) {
+    disco_pickup.is_visible = false;
+    disco_pickup.is_fading = false;
+    disco_pickup.fade_started_ticks = 0;
+    ScheduleNextDiscoPickupSpawn(now);
+  }
+}
+
+void Game::StartDiscoEasterEgg(Uint32 now) {
+  if (active_disco_easteregg.is_active || events == nullptr) {
+    return;
+  }
+
+  active_disco_easteregg = {};
+  active_disco_easteregg.is_active = true;
+  active_disco_easteregg.started_ticks = now;
+  active_disco_easteregg.frozen_started_ticks = now;
+  active_disco_easteregg.animation_seed =
+      static_cast<int>((now % DISCO_EASTER_EGG_ANIMATION_SEED_MODULUS) +
+                       pacman->map_coord.u *
+                           DISCO_EASTER_EGG_ANIMATION_SEED_ROW_MULTIPLIER +
+                       pacman->map_coord.v *
+                           DISCO_EASTER_EGG_ANIMATION_SEED_COL_MULTIPLIER);
+  events->SetGameplayFrozen(true);
+  events->Keyreset();
+#ifdef AUDIO
+  if (audio != nullptr) {
+    audio->StartDiscoMusic();
+  }
+#endif
+}
+
+void Game::UpdateDiscoEasterEgg(Uint32 now) {
+  if (!active_disco_easteregg.is_active) {
+    return;
+  }
+
+  if (!active_disco_easteregg.is_ending) {
+    return;
+  }
+
+  const Uint32 elapsed = now - active_disco_easteregg.ending_started_ticks;
+  const Uint32 finish_ms =
+      std::max({DISCO_BRIGHTEN_MS, DISCO_BALL_RAISE_MS,
+                DISCO_MUSIC_FADE_OUT_MS});
+  if (elapsed < finish_ms) {
+    return;
+  }
+
+#ifdef AUDIO
+  if (audio != nullptr) {
+    audio->StopDiscoMusic();
+  }
+#endif
+  const Uint32 paused_duration_ms =
+      now - active_disco_easteregg.frozen_started_ticks;
+  active_disco_easteregg = {};
+  ShiftPausedTimers(paused_duration_ms);
+  events->SetGameplayFrozen(false);
+  events->Keyreset();
+}
+
 void Game::TryUseBiohazardBeam(Uint32 now) {
   if (events == nullptr || pacman == nullptr) {
     return;
@@ -3079,6 +3263,9 @@ void Game::ApplyCheats() {
   if (events->ConsumeCheatRequest(ExtraSlot::LovePotion)) {
     love_potion_inventory++;
   }
+  if (events->ConsumeDiscoTestRequest()) {
+    StartDiscoEasterEgg(SDL_GetTicks());
+  }
 }
 
 void Game::TryFireRocket(Uint32 now) {
@@ -3234,6 +3421,8 @@ void Game::TriggerNuclearExplosionAt(SDL_FPoint world_center,
   active_nuclear_explosion.crater_created = true;
   CreateNuclearCrater(active_nuclear_explosion, now,
                       now + NUCLEAR_CRATER_REVEAL_DELAY_MS);
+
+  SpawnNuclearBombFragments(world_center, now);
 }
 
 void Game::TryTriggerNuclearExplosion(Uint32 now) {
@@ -3379,6 +3568,12 @@ void Game::CreateNuclearCrater(const ActiveNuclearExplosion &explosion,
         life_pickup.is_visible = false;
         life_pickup.is_fading = false;
         ScheduleNextLifePickupSpawn(now);
+      }
+      if (disco_pickup.is_visible &&
+          SameCoord(disco_pickup.coord, coord)) {
+        disco_pickup.is_visible = false;
+        disco_pickup.is_fading = false;
+        ScheduleNextDiscoPickupSpawn(now);
       }
       if (nuclear_bomb_target_marker.is_marked &&
           SameCoord(nuclear_bomb_target_marker.coord, coord)) {
@@ -3551,6 +3746,8 @@ void Game::TryTriggerNuclearExplosionB(Uint32 now) {
   effect.has_precise_world_center = true;
   effect.precise_world_center = world_center;
   effects.push_back(effect);
+
+  SpawnNuclearBombFragments(world_center, now);
 }
 
 void Game::UpdateNuclearExplosionB(Uint32 now) {
@@ -4782,6 +4979,46 @@ void Game::SpawnWallDestructionParticles(SDL_FPoint world_center, Uint32 now) {
     puff.shape_seed = seed_dist(rng);
     puff.kind = ExplosionSmokePuffKind::WallDust;
     explosion_smoke_puffs.push_back(puff);
+  }
+}
+
+void Game::SpawnNuclearBombFragments(SDL_FPoint world_center, Uint32 now) {
+  static thread_local std::mt19937 rng{std::random_device{}()};
+  std::uniform_int_distribution<int> count_dist(
+      NUCLEAR_BOMB_DEBRIS_MIN_COUNT, NUCLEAR_BOMB_DEBRIS_MAX_COUNT);
+  std::uniform_real_distribution<float> angle_dist(
+      0.0f, static_cast<float>(2.0 * M_PI));
+  std::uniform_real_distribution<float> speed_dist(
+      NUCLEAR_BOMB_DEBRIS_MIN_SPEED_CELLS_PER_SEC,
+      NUCLEAR_BOMB_DEBRIS_MAX_SPEED_CELLS_PER_SEC);
+  std::uniform_real_distribution<float> radius_dist(0.75f, 1.35f);
+  std::uniform_real_distribution<float> spawn_offset_dist(
+      -NUCLEAR_BOMB_DEBRIS_SPAWN_SPREAD_CELLS,
+      NUCLEAR_BOMB_DEBRIS_SPAWN_SPREAD_CELLS);
+  std::uniform_int_distribution<Uint32> seed_dist(1, 0xFFFFFFFFu);
+
+  const int count = count_dist(rng);
+  for (int i = 0; i < count; ++i) {
+    const float angle = angle_dist(rng);
+    const float speed = speed_dist(rng);
+    ExplosionParticle particle;
+    particle.world_position = {
+        world_center.x + spawn_offset_dist(rng),
+        world_center.y + spawn_offset_dist(rng)};
+    particle.velocity_cells_per_sec.x = std::cos(angle) * speed;
+    particle.velocity_cells_per_sec.y =
+        std::sin(angle) * speed -
+        NUCLEAR_BOMB_DEBRIS_INITIAL_UPWARD_BIAS * speed;
+    particle.spawned_ticks = now;
+    particle.last_smoke_spawn_ticks =
+        (now > NUCLEAR_BOMB_DUST_SPAWN_INTERVAL_MS)
+            ? (now - NUCLEAR_BOMB_DUST_SPAWN_INTERVAL_MS)
+            : 0;
+    particle.shape_seed = seed_dist(rng);
+    particle.radius_cells =
+        NUCLEAR_BOMB_DEBRIS_RADIUS_CELLS * radius_dist(rng);
+    particle.kind = ExplosionParticleKind::NuclearDebris;
+    explosion_particles.push_back(particle);
   }
 }
 

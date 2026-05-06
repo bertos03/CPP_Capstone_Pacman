@@ -131,6 +131,13 @@ private:
   void drawbiohazardpickup();
   void drawnuclearbombpickup();
   void drawlovepotionpickup();
+  void drawDiscoEasterEggOverlay(Uint32 now);
+  void drawDiscoPickupIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                           double animation_clock);
+  void drawDiscoBall(int center_x, int center_y, int radius_px,
+                     double rotation_phase, bool spinning, Uint8 alpha);
+  void drawDiscoLightSpots(int axis_x, int axis_y, double rotation_phase,
+                           double intensity);
   void drawNuclearBombTargetMarker();
   void drawActiveNuclearBombDrop();
   void drawpacman();

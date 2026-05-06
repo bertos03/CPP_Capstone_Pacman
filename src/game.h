@@ -159,6 +159,26 @@ struct LifePickup {
   bool is_fading = false;
 };
 
+struct DiscoPickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
+struct ActiveDiscoEasterEgg {
+  Uint32 started_ticks = 0;
+  Uint32 ending_started_ticks = 0;
+  Uint32 frozen_started_ticks = 0;
+  int animation_seed = 0;
+  bool is_active = false;
+  bool is_ending = false;
+  bool music_fade_started = false;
+};
+
 struct NuclearBombTargetMarker {
   bool is_marked = false;
   MapCoord coord{0, 0};
@@ -293,7 +313,8 @@ struct ActiveNuclearExplosionB {
 
 enum class ExplosionParticleKind {
   MonsterExplosion,
-  WallDebris
+  WallDebris,
+  NuclearDebris
 };
 
 struct ExplosionParticle {
@@ -309,6 +330,7 @@ struct ExplosionParticle {
 enum class ExplosionSmokePuffKind {
   MonsterSmoke,
   WallDust,
+  NuclearDust,
   BlastSmoke,
   RocketBlastSmoke,
   RocketTrailSmoke,
@@ -377,6 +399,8 @@ public:
   void StartSimulation();
   void PauseSimulation();
   void ResumeSimulation(Uint32 paused_duration_ms);
+  bool IsDiscoEasterEggActive() const;
+  void RequestDiscoEasterEggEnd(Uint32 now);
   void Update();
 
 protected:
@@ -410,6 +434,8 @@ private:
   NuclearBombPickup nuclear_bomb_pickup;
   LovePotionPickup love_potion_pickup;
   LifePickup life_pickup;
+  DiscoPickup disco_pickup;
+  ActiveDiscoEasterEgg active_disco_easteregg;
   NuclearBombTargetMarker nuclear_bomb_target_marker;
   ActiveNuclearBombDrop active_nuclear_bomb_drop;
   std::vector<PlacedDynamite> placed_dynamites;
@@ -480,6 +506,11 @@ private:
   void ScheduleNextLifePickupSpawn(Uint32 now);
   void TrySpawnLifePickup(Uint32 now);
   void UpdateLifePickup(Uint32 now);
+  void ScheduleNextDiscoPickupSpawn(Uint32 now);
+  void TrySpawnDiscoPickup(Uint32 now);
+  void UpdateDiscoPickup(Uint32 now);
+  void StartDiscoEasterEgg(Uint32 now);
+  void UpdateDiscoEasterEgg(Uint32 now);
   void TryUseAirstrike(Uint32 now);
   void TryFireRocket(Uint32 now);
   void TryUseBiohazardBeam(Uint32 now);
@@ -519,6 +550,7 @@ private:
   bool IsCellFreeForNuclearBombPickup(MapCoord coord) const;
   bool IsCellFreeForLovePotionPickup(MapCoord coord) const;
   bool IsCellFreeForLifePickup(MapCoord coord) const;
+  bool IsCellFreeForDiscoPickup(MapCoord coord) const;
   bool CanPlacePlasticExplosiveAt(MapCoord coord) const;
   bool IsCraterCell(MapCoord coord) const;
   bool IsWithinRadius(MapCoord center, MapCoord target, int radius_cells) const;
@@ -540,6 +572,7 @@ private:
   void SpawnMonsterExplosionParticles(SDL_FPoint world_center, Uint32 now);
   void SpawnMonsterDustCloud(SDL_FPoint world_center, Uint32 now);
   void SpawnWallDestructionParticles(SDL_FPoint world_center, Uint32 now);
+  void SpawnNuclearBombFragments(SDL_FPoint world_center, Uint32 now);
   void SpawnWallRubble(MapCoord destroyed_coord);
   void HandleGoatRequests(Uint32 now);
   Monster *FindClosestMonsterInGoatSight(Monster *goat,

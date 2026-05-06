@@ -233,6 +233,7 @@ Audio::Audio() {
   SFX_goat_bleat = nullptr;
   SFX_rubble_crash = nullptr;
   menu_music = nullptr;
+  disco_music = nullptr;
   win_music = nullptr;
   lose_music = nullptr;
   rocket_launch_channel = 0;
@@ -297,6 +298,8 @@ Audio::Audio() {
   const std::string nuclear_bomb_explosion_sound_path =
       Paths::GetDataFilePath(NUCLEAR_BOMB_EXPLOSION_SOUND_PATH);
   const std::string menu_music_path = Paths::GetDataFilePath("menu_music.mp3");
+  const std::string disco_music_path =
+      Paths::GetDataFilePath(DISCO_MUSIC_PATH);
   const std::string win_music_path = Paths::GetDataFilePath("win_melody.mp3");
   const std::string lose_music_path = Paths::GetDataFilePath("lose_melody.mp3");
 
@@ -427,6 +430,11 @@ Audio::Audio() {
   menu_music = Mix_LoadMUS(menu_music_path.c_str());
   if (menu_music == nullptr) {
     std::cerr << "Failed to load menu music " << menu_music_path << ": "
+              << Mix_GetError() << "\n";
+  }
+  disco_music = Mix_LoadMUS(disco_music_path.c_str());
+  if (disco_music == nullptr) {
+    std::cerr << "Failed to load disco music " << disco_music_path << ": "
               << Mix_GetError() << "\n";
   }
   win_music = Mix_LoadMUS(win_music_path.c_str());
@@ -610,6 +618,9 @@ Audio::~Audio() {
   }
   if (menu_music != nullptr) {
     Mix_FreeMusic(menu_music);
+  }
+  if (disco_music != nullptr) {
+    Mix_FreeMusic(disco_music);
   }
   if (win_music != nullptr) {
     Mix_FreeMusic(win_music);
@@ -1622,6 +1633,47 @@ bool Audio::FadeOutMenuMusic(int fade_out_ms) {
 }
 
 void Audio::StopMenuMusic() {
+  if (!audio_ready) {
+    return;
+  }
+
+  menu_music_active = false;
+  if (Mix_PlayingMusic() != 0) {
+    Mix_HaltMusic();
+  }
+  ClearMenuSpectrumLevels();
+}
+
+bool Audio::StartDiscoMusic() {
+  if (!audio_ready || disco_music == nullptr) {
+    return false;
+  }
+
+  menu_music_active = false;
+  ClearMenuSpectrumLevels();
+  if (Mix_PlayingMusic() != 0) {
+    Mix_HaltMusic();
+  }
+
+  return Mix_PlayMusic(disco_music, -1) == 0;
+}
+
+bool Audio::FadeOutDiscoMusic(int fade_out_ms) {
+  if (!audio_ready || disco_music == nullptr || Mix_PlayingMusic() == 0) {
+    return false;
+  }
+
+  menu_music_active = false;
+  if (fade_out_ms <= 0) {
+    Mix_HaltMusic();
+    ClearMenuSpectrumLevels();
+    return true;
+  }
+
+  return Mix_FadeOutMusic(fade_out_ms) == 1;
+}
+
+void Audio::StopDiscoMusic() {
   if (!audio_ready) {
     return;
   }

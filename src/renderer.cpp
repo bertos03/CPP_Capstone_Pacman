@@ -1006,6 +1006,7 @@ void Renderer::Render(bool show_pause_overlay, bool show_exit_dialog,
                       int exit_dialog_selected) {
   beginSupersampledFrame();
   renderFrame(true);
+  drawDiscoEasterEggOverlay(SDL_GetTicks());
   if (show_pause_overlay || show_exit_dialog) {
     drawGameplayPauseOverlay(show_exit_dialog, exit_dialog_selected);
   }
@@ -1897,6 +1898,85 @@ void Renderer::renderFrame(bool show_hud) {
           }
         }
 
+        const auto &disco = game->disco_pickup;
+        if (disco.is_visible) {
+          double alpha_factor = 1.0;
+          if (disco.is_fading) {
+            alpha_factor =
+                1.0 - std::clamp(static_cast<double>(
+                                      now - disco.fade_started_ticks) /
+                                     static_cast<double>(DISCO_PICKUP_FADE_MS),
+                                 0.0, 1.0);
+          }
+          if (alpha_factor > 0.0) {
+            const MapCoord coord = disco.coord;
+            const double depth =
+                projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
+            push_depth_command(depth, [&, coord, disco, alpha_factor, now]() {
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
+                    const double animation_clock =
+                        static_cast<double>(
+                            now + disco.animation_seed *
+                                      DISCO_PICKUP_RENDER_ANIMATION_SEED_MULTIPLIER) /
+                        DISCO_PICKUP_RENDER_ANIMATION_DIVISOR_MS;
+                    const double pulse =
+                        DISCO_PICKUP_PULSE_BASE +
+                        DISCO_PICKUP_PULSE_SWING *
+                            std::sin(animation_clock *
+                                     DISCO_PICKUP_PULSE_FREQUENCY);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(DISCO_PICKUP_GLOW_ALPHA_BASE * alpha_factor,
+                                   0.0, DISCO_PICKUP_GLOW_ALPHA_MAX));
+                    const Uint8 body_alpha = static_cast<Uint8>(
+                        std::clamp(DISCO_PICKUP_BODY_ALPHA_BASE * alpha_factor,
+                                   0.0, 255.0));
+
+                    SDL_SetRenderDrawColor(sdl_renderer, DISCO_PICKUP_GLOW_COLOR.r,
+                                           DISCO_PICKUP_GLOW_COLOR.g,
+                                           DISCO_PICKUP_GLOW_COLOR.b,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(DISCO_PICKUP_GLOW_MIN_RADIUS_PX,
+                                 static_cast<int>(element_size *
+                                                  DISCO_PICKUP_GLOW_RADIUS_CELLS *
+                                                  pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, DISCO_PICKUP_RING_COLOR.r,
+                                           DISCO_PICKUP_RING_COLOR.g,
+                                           DISCO_PICKUP_RING_COLOR.b,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(DISCO_PICKUP_RING_MIN_RADIUS_PX,
+                                 static_cast<int>(element_size *
+                                                  DISCO_PICKUP_RING_RADIUS_CELLS *
+                                                  pulse)));
+
+                    const int icon_size =
+                        std::max(DISCO_PICKUP_ICON_MIN_SIZE_PX,
+                                 static_cast<int>(
+                                     element_size *
+                                     DISCO_PICKUP_ICON_SIZE_CELLS));
+                    const SDL_Rect icon_rect{center_x - icon_size / 2,
+                                             center_y - icon_size / 2,
+                                             icon_size, icon_size};
+                    drawDiscoPickupIcon(icon_rect, body_alpha,
+                                        animation_clock);
+                  });
+            });
+          }
+        }
+
         const auto &nuclear_marker = game->nuclear_bomb_target_marker;
         if (nuclear_marker.is_marked) {
           const MapCoord coord = nuclear_marker.coord;
@@ -2085,11 +2165,32 @@ void Renderer::renderFrame(bool show_hud) {
                   pixel_delta_to_cells(game->pacman->px_delta.x);
               const double delta_row_cells =
                   pixel_delta_to_cells(game->pacman->px_delta.y);
-              const SDL_Rect pacman_rect =
+              SDL_Rect pacman_rect =
                   makeBillboardRect(game->pacman->map_coord.v,
                                     game->pacman->map_coord.u, 0.9, 0.9,
                                     kSpriteFootRowFactor, delta_col_cells,
                                     delta_row_cells);
+              if (game->active_disco_easteregg.is_active) {
+                const int phase_seed =
+                    game->active_disco_easteregg.animation_seed +
+                    DISCO_PACMAN_DANCE_PHASE_SEED_OFFSET;
+                const double beat = std::sin(
+                    static_cast<double>(
+                        now + phase_seed *
+                                  DISCO_DANCE_PHASE_SEED_MULTIPLIER_A) /
+                    DISCO_DANCE_BEAT_DIVISOR_MS);
+                const double gate = std::sin(
+                    static_cast<double>(
+                        now + phase_seed *
+                                  DISCO_DANCE_PHASE_SEED_MULTIPLIER_B) /
+                    DISCO_DANCE_GATE_DIVISOR_MS);
+                if (gate > DISCO_DANCE_GATE_THRESHOLD) {
+                  pacman_rect.y -= static_cast<int>(std::lround(
+                      std::max(DISCO_DANCE_JUMP_MIN_PX,
+                               element_size * DISCO_DANCE_JUMP_HEIGHT_CELLS) *
+                      std::max(0.0, beat)));
+                }
+              }
               const double depth =
                   projectScene(0.5,
                                game->pacman->map_coord.u + kSpriteFootRowFactor +
@@ -2281,6 +2382,24 @@ void Renderer::renderFrame(bool show_hud) {
                                 kMonsterRenderScale, kMonsterRenderScale,
                                 kSpriteFootRowFactor, delta_col_cells,
                                 delta_row_cells);
+          if (game->active_disco_easteregg.is_active && !waiting_for_blast) {
+            const int phase_seed = monster->id * DISCO_MONSTER_DANCE_ID_MULTIPLIER +
+                                   game->active_disco_easteregg.animation_seed;
+            const double beat = std::sin(
+                static_cast<double>(
+                    now + phase_seed * DISCO_DANCE_PHASE_SEED_MULTIPLIER_A) /
+                DISCO_DANCE_BEAT_DIVISOR_MS);
+            const double gate = std::sin(
+                static_cast<double>(
+                    now + phase_seed * DISCO_DANCE_PHASE_SEED_MULTIPLIER_B) /
+                DISCO_DANCE_GATE_DIVISOR_MS);
+            if (gate > DISCO_DANCE_GATE_THRESHOLD) {
+              monster_rect.y -= static_cast<int>(std::lround(
+                  std::max(DISCO_DANCE_JUMP_MIN_PX,
+                           element_size * DISCO_DANCE_JUMP_HEIGHT_CELLS) *
+                  std::max(0.0, beat)));
+            }
+          }
           if (goat_stunned) {
             const double sway = std::sin(static_cast<double>(now) / 120.0) *
                                 element_size * 0.04;
@@ -6789,6 +6908,566 @@ void Renderer::drawPulsingHeart(int center_x, int center_y, int size_px,
   SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
 }
 
+void Renderer::drawDiscoPickupIcon(const SDL_Rect &icon_rect, Uint8 alpha,
+                                   double animation_clock) {
+  if (alpha == 0 || icon_rect.w <= 0 || icon_rect.h <= 0) {
+    return;
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const int cx = icon_rect.x + icon_rect.w / 2;
+  const int top =
+      icon_rect.y +
+      std::max(1, static_cast<int>(icon_rect.h /
+                                   DISCO_PICKUP_ICON_CHAIN_TOP_DIVISOR));
+  const int chain_bottom =
+      icon_rect.y +
+      static_cast<int>(icon_rect.h /
+                       DISCO_PICKUP_ICON_CHAIN_BOTTOM_DIVISOR);
+  SDL_SetRenderDrawColor(sdl_renderer, DISCO_PICKUP_ICON_CHAIN_COLOR.r,
+                         DISCO_PICKUP_ICON_CHAIN_COLOR.g,
+                         DISCO_PICKUP_ICON_CHAIN_COLOR.b, alpha);
+  for (int y = top; y < chain_bottom;
+       y += std::max(3, static_cast<int>(
+                            icon_rect.h /
+                            DISCO_PICKUP_ICON_CHAIN_STEP_DIVISOR))) {
+    SDL_Rect link{
+        cx - std::max(1, static_cast<int>(
+                             icon_rect.w /
+                             DISCO_PICKUP_ICON_CHAIN_LINK_X_DIVISOR)),
+        y,
+        std::max(2, static_cast<int>(
+                        icon_rect.w /
+                        DISCO_PICKUP_ICON_CHAIN_LINK_W_DIVISOR)),
+        std::max(3, static_cast<int>(
+                        icon_rect.h /
+                        DISCO_PICKUP_ICON_CHAIN_LINK_H_DIVISOR))};
+    SDL_RenderDrawRect(sdl_renderer, &link);
+  }
+
+  const int radius = std::max(
+      3, static_cast<int>(icon_rect.w /
+                          DISCO_PICKUP_ICON_BALL_RADIUS_DIVISOR));
+  drawDiscoBall(cx,
+                icon_rect.y + icon_rect.h / 2 +
+                    static_cast<int>(radius /
+                                     DISCO_PICKUP_ICON_BALL_CENTER_Y_DIVISOR),
+                radius,
+                std::fmod(animation_clock /
+                              DISCO_PICKUP_ICON_ROTATION_DIVISOR,
+                          1.0),
+                true, alpha);
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
+void Renderer::drawDiscoLightSpots(int axis_x, int axis_y,
+                                   double rotation_phase, double intensity) {
+  if (sdl_soft_puff_texture == nullptr || intensity <= 0.0) {
+    return;
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+
+  const double base_angle = rotation_phase * 2.0 * kLogoPi;
+  const int field_w =
+      std::max(1, static_cast<int>(cols) * (element_size + 1));
+  const int field_h =
+      std::max(1, static_cast<int>(rows) * (element_size + 1));
+  const double kDiscoAxisTiltRadians =
+      DISCO_AXIS_TILT_DEGREES * kLogoPi / 180.0;
+  const double tilt_cos = std::cos(kDiscoAxisTiltRadians);
+  const double tilt_sin = std::sin(kDiscoAxisTiltRadians);
+
+  for (int i = 0; i < DISCO_LIGHT_SPOT_COUNT; ++i) {
+    const double seed_a = i * DISCO_LIGHT_SPOT_GOLDEN_ANGLE_RADIANS;
+    const double seed_b =
+        std::sin(i * DISCO_LIGHT_SPOT_HASH_A + DISCO_LIGHT_SPOT_HASH_B) *
+        DISCO_LIGHT_SPOT_HASH_SCALE;
+    const double jitter = seed_b - std::floor(seed_b);
+    const double radial =
+        std::sqrt((static_cast<double>(
+                       (i * DISCO_LIGHT_SPOT_RADIAL_STEP) %
+                       DISCO_LIGHT_SPOT_COUNT) +
+                   DISCO_LIGHT_SPOT_RADIAL_BASE +
+                   jitter * DISCO_LIGHT_SPOT_RADIAL_JITTER_SCALE) /
+                  static_cast<double>(DISCO_LIGHT_SPOT_COUNT));
+    const double orbit =
+        base_angle + seed_a +
+        DISCO_LIGHT_SPOT_ORBIT_WOBBLE *
+            std::sin(base_angle * DISCO_LIGHT_SPOT_ORBIT_WOBBLE_FREQUENCY + i);
+    const double local_x =
+        std::cos(orbit) * radial * field_w * DISCO_LIGHT_SPOT_FIELD_RADIUS_X;
+    const double local_y =
+        std::sin(orbit) * radial * field_h * DISCO_LIGHT_SPOT_FIELD_RADIUS_Y;
+    const double local_z = local_y * tilt_sin;
+    const double perspective_y =
+        (local_y * tilt_cos) *
+        (DISCO_LIGHT_SPOT_PERSPECTIVE_BASE +
+         DISCO_LIGHT_SPOT_PERSPECTIVE_SWING * std::cos(seed_a + base_angle)) *
+        (1.0 + std::clamp(local_z / std::max(1.0, field_h * DISCO_LIGHT_SPOT_DEPTH_DENOMINATOR),
+                          DISCO_LIGHT_SPOT_DEPTH_SCALE_MIN,
+                          DISCO_LIGHT_SPOT_DEPTH_SCALE_MAX));
+    const int x = axis_x + static_cast<int>(std::lround(local_x));
+    const int y = axis_y + static_cast<int>(std::lround(perspective_y));
+    const int w = std::max(
+        DISCO_LIGHT_SPOT_MIN_WIDTH_PX,
+        static_cast<int>(element_size *
+                         (DISCO_LIGHT_SPOT_WIDTH_CELLS +
+                          DISCO_LIGHT_SPOT_WIDTH_JITTER_CELLS * jitter)));
+    const int h =
+        std::max(DISCO_LIGHT_SPOT_MIN_HEIGHT_PX,
+                 static_cast<int>(w * (DISCO_LIGHT_SPOT_HEIGHT_SCALE +
+                                       DISCO_LIGHT_SPOT_HEIGHT_RADIAL_SCALE *
+                                           radial)));
+    SDL_Rect dst{x - w / 2, y - h / 2, w, h};
+    const SDL_Color color = DISCO_LIGHT_SPOT_COLORS[static_cast<size_t>(
+        i % DISCO_LIGHT_SPOT_COLORS.size())];
+    const Uint8 alpha = static_cast<Uint8>(
+        std::clamp(DISCO_LIGHT_SPOT_ALPHA_BASE * intensity *
+                       (DISCO_LIGHT_SPOT_ALPHA_MIN_FACTOR +
+                        DISCO_LIGHT_SPOT_ALPHA_SWING *
+                            std::sin(orbit *
+                                     DISCO_LIGHT_SPOT_ALPHA_PHASE_SCALE)) *
+                       (1.0 - DISCO_LIGHT_SPOT_ALPHA_RADIAL_FADE * radial),
+                   0.0, DISCO_LIGHT_SPOT_ALPHA_MAX));
+    SDL_SetTextureColorMod(sdl_soft_puff_texture, color.r, color.g, color.b);
+    SDL_SetTextureAlphaMod(sdl_soft_puff_texture,
+                           static_cast<Uint8>(std::clamp<int>(
+                               alpha / DISCO_LIGHT_SPOT_HALO_ALPHA_DIVISOR,
+                               0, 255)));
+    SDL_Rect halo_dst{
+        dst.x - dst.w / DISCO_LIGHT_SPOT_HALO_EXPAND_DIVISOR,
+        dst.y - dst.h / DISCO_LIGHT_SPOT_HALO_EXPAND_DIVISOR,
+        dst.w + (dst.w * 2) / DISCO_LIGHT_SPOT_HALO_EXPAND_DIVISOR,
+        dst.h + (dst.h * 2) / DISCO_LIGHT_SPOT_HALO_EXPAND_DIVISOR};
+    SDL_RenderCopyEx(sdl_renderer, sdl_soft_puff_texture, nullptr, &halo_dst,
+                     orbit * 180.0 / kLogoPi, nullptr, SDL_FLIP_NONE);
+    SDL_SetTextureAlphaMod(sdl_soft_puff_texture, alpha);
+    SDL_RenderCopyEx(sdl_renderer, sdl_soft_puff_texture, nullptr, &dst,
+                     orbit * 180.0 / kLogoPi, nullptr, SDL_FLIP_NONE);
+  }
+
+  SDL_SetTextureColorMod(sdl_soft_puff_texture, 255, 255, 255);
+  SDL_SetTextureAlphaMod(sdl_soft_puff_texture, 255);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
+void Renderer::drawDiscoBall(int center_x, int center_y, int radius_px,
+                             double rotation_phase, bool spinning,
+                             Uint8 alpha) {
+  if (radius_px <= 0 || alpha == 0) {
+    return;
+  }
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+  const double kDiscoAxisTiltRadians =
+      DISCO_AXIS_TILT_DEGREES * kLogoPi / 180.0;
+  const double tilt_cos = std::cos(kDiscoAxisTiltRadians);
+  const double tilt_sin = std::sin(kDiscoAxisTiltRadians);
+
+  const auto project_fragment_corner = [&](double theta,
+                                           double phi) -> SDL_FPoint {
+    const double local_x = std::sin(phi) * std::cos(theta);
+    const double local_y = std::sin(theta);
+    const double local_z = std::cos(phi) * std::cos(theta);
+    const double x3 = local_x;
+    const double y3 = local_y * tilt_cos - local_z * tilt_sin;
+    return SDL_FPoint{
+        static_cast<float>(center_x + x3 * radius_px),
+        static_cast<float>(center_y + y3 * radius_px * DISCO_BALL_SCREEN_Y_SCALE)};
+  };
+  const auto corner_inside_ball = [&](SDL_FPoint point) {
+    const double dx = (point.x - center_x) / static_cast<double>(radius_px);
+    const double dy =
+        (point.y - center_y) /
+        static_cast<double>(radius_px * DISCO_BALL_SCREEN_Y_SCALE);
+    return dx * dx + dy * dy <=
+           DISCO_BALL_CORNER_CLIP_RADIUS * DISCO_BALL_CORNER_CLIP_RADIUS;
+  };
+  struct NormalizedDiscoBallLight {
+    double x;
+    double y;
+    double z;
+    SDL_Color color;
+    double diffuse;
+    double specular;
+  };
+  const auto normalize_light =
+      [](const DiscoDirectionalLight &light) -> NormalizedDiscoBallLight {
+    const double x = light.x;
+    const double y = light.y;
+    const double z = light.z;
+    const double len = std::max(0.0001, std::sqrt(x * x + y * y + z * z));
+    return NormalizedDiscoBallLight{x / len, y / len, z / len, light.color,
+                                    light.diffuse, light.specular};
+  };
+  std::array<NormalizedDiscoBallLight, DISCO_BALL_DIRECTIONAL_LIGHTS.size()>
+      lights{};
+  for (size_t light_index = 0; light_index < lights.size(); ++light_index) {
+    lights[light_index] =
+        normalize_light(DISCO_BALL_DIRECTIONAL_LIGHTS[light_index]);
+  }
+
+  const double spin = -rotation_phase * 2.0 * kLogoPi;
+  const double theta_step = kLogoPi / DISCO_BALL_LATITUDE_COUNT;
+  const double phi_step = 2.0 * kLogoPi / DISCO_BALL_LONGITUDE_COUNT;
+  for (int lat_index = 1; lat_index < DISCO_BALL_LATITUDE_COUNT; ++lat_index) {
+    const double theta =
+        -0.5 * kLogoPi + static_cast<double>(lat_index) * theta_step;
+    const double cos_theta = std::cos(theta);
+    const double sin_theta = std::sin(theta);
+
+    for (int lon_index = 0; lon_index < DISCO_BALL_LONGITUDE_COUNT;
+         ++lon_index) {
+      const double phi = spin + static_cast<double>(lon_index) * phi_step;
+      const double local_x = std::sin(phi) * cos_theta;
+      const double local_y = sin_theta;
+      const double local_z = std::cos(phi) * cos_theta;
+      const double x3 = local_x;
+      const double y3 = local_y * tilt_cos - local_z * tilt_sin;
+      const double z3 = local_y * tilt_sin + local_z * tilt_cos;
+      if (z3 < DISCO_BALL_BACKFACE_CULL_Z) {
+        continue;
+      }
+
+      const double theta_half =
+          theta_step * DISCO_BALL_FRAGMENT_THETA_HALF_SCALE;
+      const double phi_half = phi_step * DISCO_BALL_FRAGMENT_PHI_HALF_SCALE;
+      SDL_FPoint corners[4]{
+          project_fragment_corner(theta - theta_half, phi - phi_half),
+          project_fragment_corner(theta - theta_half, phi + phi_half),
+          project_fragment_corner(theta + theta_half, phi + phi_half),
+          project_fragment_corner(theta + theta_half, phi - phi_half)};
+      if (!corner_inside_ball(corners[0]) || !corner_inside_ball(corners[1]) ||
+          !corner_inside_ball(corners[2]) || !corner_inside_ball(corners[3])) {
+        continue;
+      }
+
+      double light = std::clamp(
+          DISCO_BALL_AMBIENT_BASE +
+              DISCO_BALL_VIEW_LIGHT_SCALE * std::max(0.0, z3),
+          0.0, 1.0);
+      double red_accum =
+          DISCO_BALL_RED_BASE + light * DISCO_BALL_RED_VIEW_SCALE;
+      double green_accum =
+          DISCO_BALL_GREEN_BASE + light * DISCO_BALL_GREEN_VIEW_SCALE;
+      double blue_accum =
+          DISCO_BALL_BLUE_BASE + light * DISCO_BALL_BLUE_VIEW_SCALE;
+      double strongest_specular = 0.0;
+      SDL_Color strongest_specular_color{235, 242, 255, 255};
+      for (const NormalizedDiscoBallLight &light_source : lights) {
+        const double ndotl = std::max(
+            0.0, x3 * light_source.x + y3 * light_source.y +
+                     z3 * light_source.z);
+        const double diffuse = ndotl * light_source.diffuse;
+
+        const double reflect_x = 2.0 * ndotl * x3 - light_source.x;
+        const double reflect_y = 2.0 * ndotl * y3 - light_source.y;
+        const double reflect_z = 2.0 * ndotl * z3 - light_source.z;
+        const double specular =
+            std::pow(std::max(0.0, reflect_z), DISCO_BALL_SPECULAR_POWER) *
+            light_source.specular;
+
+        red_accum +=
+            light_source.color.r *
+            (diffuse * DISCO_BALL_DIFFUSE_COLOR_SCALE +
+             specular * DISCO_BALL_SPECULAR_COLOR_SCALE);
+        green_accum +=
+            light_source.color.g *
+            (diffuse * DISCO_BALL_DIFFUSE_COLOR_SCALE +
+             specular * DISCO_BALL_SPECULAR_COLOR_SCALE);
+        blue_accum +=
+            light_source.color.b *
+            (diffuse * DISCO_BALL_DIFFUSE_COLOR_SCALE +
+             specular * DISCO_BALL_SPECULAR_COLOR_SCALE);
+        light = std::max(light, diffuse + specular);
+        if (specular > strongest_specular) {
+          strongest_specular = specular;
+          strongest_specular_color = light_source.color;
+        }
+      }
+
+      const double facet_noise =
+          DISCO_BALL_FACET_NOISE_BASE +
+          DISCO_BALL_FACET_NOISE_SWING *
+              std::sin(lon_index * DISCO_BALL_FACET_NOISE_LON_SCALE +
+                       lat_index * DISCO_BALL_FACET_NOISE_LAT_SCALE);
+      const Uint8 red = static_cast<Uint8>(
+          std::clamp(red_accum * facet_noise, 0.0, 255.0));
+      const Uint8 green = static_cast<Uint8>(
+          std::clamp(green_accum * facet_noise, 0.0, 255.0));
+      const Uint8 blue = static_cast<Uint8>(
+          std::clamp(blue_accum * facet_noise, 0.0, 255.0));
+      const Uint8 tile_alpha = static_cast<Uint8>(
+          std::clamp(static_cast<double>(alpha) *
+                         (DISCO_BALL_TILE_ALPHA_BASE +
+                          DISCO_BALL_TILE_ALPHA_LIGHT_SCALE *
+                              std::clamp(light, 0.0, 1.0)),
+                     0.0, 255.0));
+      SDL_Vertex vertices[4]{
+          {corners[0], SDL_Color{red, green, blue, tile_alpha}, SDL_FPoint{0, 0}},
+          {corners[1], SDL_Color{red, green, blue, tile_alpha}, SDL_FPoint{0, 0}},
+          {corners[2], SDL_Color{red, green, blue, tile_alpha}, SDL_FPoint{0, 0}},
+          {corners[3], SDL_Color{red, green, blue, tile_alpha}, SDL_FPoint{0, 0}}};
+      const int indices[6]{0, 1, 2, 0, 2, 3};
+      SDL_RenderGeometry(sdl_renderer, nullptr, vertices, 4, indices, 6);
+
+      if (strongest_specular > DISCO_BALL_SPECULAR_GLINT_THRESHOLD) {
+        const SDL_FPoint center{
+            static_cast<float>(center_x + x3 * radius_px),
+            static_cast<float>(center_y + y3 * radius_px *
+                                              DISCO_BALL_SCREEN_Y_SCALE)};
+        const SDL_Color glint_color{strongest_specular_color.r,
+                                    strongest_specular_color.g,
+                                    strongest_specular_color.b,
+                                    static_cast<Uint8>(std::clamp(
+                                        strongest_specular * alpha, 0.0,
+                                        DISCO_BALL_SPECULAR_GLINT_ALPHA_MAX))};
+        SDL_RenderFillCircleAA(sdl_renderer, center.x, center.y,
+                               std::max(DISCO_BALL_SPECULAR_GLINT_MIN_RADIUS_PX,
+                                        radius_px *
+                                            DISCO_BALL_SPECULAR_GLINT_RADIUS_CELLS),
+                               glint_color);
+      }
+
+      SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255,
+                             static_cast<Uint8>(
+                                 tile_alpha / DISCO_BALL_EDGE_ALPHA_DIVISOR));
+      SDL_RenderDrawAALine(sdl_renderer, corners[0].x, corners[0].y,
+                           corners[1].x, corners[1].y,
+                           {255, 255, 255,
+                            static_cast<Uint8>(
+                                tile_alpha / DISCO_BALL_EDGE_ALPHA_DIVISOR)});
+      SDL_RenderDrawAALine(sdl_renderer, corners[1].x, corners[1].y,
+                           corners[2].x, corners[2].y,
+                           {255, 255, 255,
+                            static_cast<Uint8>(
+                                tile_alpha / DISCO_BALL_EDGE_ALPHA_DIVISOR)});
+      SDL_RenderDrawAALine(sdl_renderer, corners[2].x, corners[2].y,
+                           corners[3].x, corners[3].y,
+                           {255, 255, 255,
+                            static_cast<Uint8>(
+                                tile_alpha / DISCO_BALL_EDGE_ALPHA_DIVISOR)});
+      SDL_RenderDrawAALine(sdl_renderer, corners[3].x, corners[3].y,
+                           corners[0].x, corners[0].y,
+                           {255, 255, 255,
+                            static_cast<Uint8>(
+                                tile_alpha / DISCO_BALL_EDGE_ALPHA_DIVISOR)});
+    }
+  }
+
+  for (int ring = 0; ring < 3; ++ring) {
+    SDL_SetRenderDrawColor(
+        sdl_renderer, 238, 246, 255,
+        static_cast<Uint8>(std::clamp(56 - ring * 18, 0, 80)));
+    SDL_RenderDrawCircle(sdl_renderer, center_x, center_y,
+                         std::max(1, radius_px - ring));
+  }
+
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+}
+
+void Renderer::drawDiscoEasterEggOverlay(Uint32 now) {
+  if (game == nullptr || !game->active_disco_easteregg.is_active) {
+    return;
+  }
+
+  const ActiveDiscoEasterEgg &disco = game->active_disco_easteregg;
+  const Uint32 intro_elapsed = now - disco.started_ticks;
+  const double dim_in =
+      std::clamp(static_cast<double>(intro_elapsed) /
+                     static_cast<double>(std::max<Uint32>(1, DISCO_DIM_DOWN_MS)),
+                 0.0, 1.0);
+  double dim_factor = dim_in;
+  if (disco.is_ending) {
+    dim_factor =
+        1.0 - std::clamp(static_cast<double>(now - disco.ending_started_ticks) /
+                             static_cast<double>(
+                                 std::max<Uint32>(1, DISCO_BRIGHTEN_MS)),
+                         0.0, 1.0);
+  }
+
+  drawDimmer(static_cast<Uint8>(
+      std::clamp(dim_factor * DISCO_MAX_DIM_ALPHA, 0.0, 255.0)));
+
+  const int axis_x = screen_res_x / 2;
+  const int axis_y = scene_origin_y + (rows * element_size) / 2;
+  const Uint32 rotation_ticks =
+      disco.is_ending ? (disco.ending_started_ticks - disco.started_ticks)
+                      : (now - disco.started_ticks);
+  const double rotation_phase =
+      std::fmod(static_cast<double>(rotation_ticks) /
+                    std::max(1.0, DISCO_ROTATION_PERIOD_MS),
+                1.0);
+  if (!disco.is_ending) {
+    drawDiscoLightSpots(axis_x, axis_y, rotation_phase, dim_in);
+  }
+
+  double drop = std::clamp(static_cast<double>(intro_elapsed) /
+                               static_cast<double>(
+                                   std::max<Uint32>(1, DISCO_BALL_DROP_MS)),
+                           0.0, 1.0);
+  if (disco.is_ending) {
+    drop = 1.0 -
+           std::clamp(static_cast<double>(now - disco.ending_started_ticks) /
+                          static_cast<double>(
+                              std::max<Uint32>(1, DISCO_BALL_RAISE_MS)),
+                      0.0, 1.0);
+  }
+
+  const int radius =
+      std::max(DISCO_BALL_MIN_RADIUS_PX,
+               static_cast<int>(element_size * DISCO_BALL_RADIUS_CELLS));
+  const int ball_y_top = -radius * 2;
+  const int ball_y_down = scene_origin_y + std::max(radius + 18, element_size * 2);
+  const double eased_drop = 1.0 - std::pow(1.0 - drop, 3.0);
+  const int ball_y = static_cast<int>(
+      std::lround(ball_y_top + (ball_y_down - ball_y_top) * eased_drop));
+
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  SDL_GetRenderDrawBlendMode(sdl_renderer, &previous_blend_mode);
+  SDL_SetRenderDrawBlendMode(sdl_renderer, SDL_BLENDMODE_BLEND);
+  const int chain_top = DISCO_CHAIN_TOP_Y;
+  const double kDiscoAxisTiltRadians =
+      DISCO_AXIS_TILT_DEGREES * kLogoPi / 180.0;
+  const int chain_bottom = ball_y;
+  const double chain_spin = -rotation_phase * 2.0 * kLogoPi;
+  const int link_step =
+      std::max(DISCO_CHAIN_LINK_MIN_STEP_PX,
+               element_size / DISCO_CHAIN_LINK_STEP_CELL_DIVISOR);
+  const int chain_depth =
+      std::max(DISCO_CHAIN_DEPTH_MIN_PX,
+               radius / DISCO_CHAIN_DEPTH_RADIUS_DIVISOR);
+  int link_index = 0;
+  for (int y = chain_top; y < chain_bottom; y += link_step / 2, ++link_index) {
+    const double phase =
+        chain_spin + link_index *
+                         (kLogoPi * DISCO_CHAIN_LINK_PHASE_STEP_RADIANS_SCALE);
+    const bool vertical_link = (link_index % 2) == 0;
+    const double twist = std::sin(phase);
+    const double facing = vertical_link ? (0.65 + 0.35 * std::cos(phase))
+                                        : (0.65 + 0.35 * std::sin(phase));
+    const int link_x =
+        axis_x + static_cast<int>(std::lround(twist * chain_depth * 0.55));
+    const int link_y = y + link_step / 2;
+    const int base_w = std::max(
+        DISCO_CHAIN_LINK_MIN_WIDTH_PX,
+        static_cast<int>(std::lround(
+            radius * (DISCO_CHAIN_LINK_WIDTH_BASE +
+                      DISCO_CHAIN_LINK_WIDTH_FACING_SCALE * facing))));
+    const int base_h = std::max(
+        DISCO_CHAIN_LINK_MIN_HEIGHT_PX,
+        static_cast<int>(std::lround(
+            radius * (DISCO_CHAIN_LINK_HEIGHT_BASE -
+                      DISCO_CHAIN_LINK_HEIGHT_FACING_SCALE * facing))));
+    const int link_w = vertical_link ? base_w : std::max(base_w, base_h);
+    const int link_h = vertical_link ? std::max(base_h, base_w) : base_w;
+    const Uint8 back_alpha = static_cast<Uint8>(
+        std::clamp(DISCO_CHAIN_BACK_ALPHA_BASE +
+                       DISCO_CHAIN_BACK_ALPHA_SCALE * (1.0 - facing),
+                   0.0, 190.0));
+    const Uint8 metal_alpha = static_cast<Uint8>(
+        std::clamp(DISCO_CHAIN_METAL_ALPHA_BASE +
+                       DISCO_CHAIN_METAL_ALPHA_SCALE * facing,
+                   0.0, 235.0));
+    const Uint8 highlight_alpha = static_cast<Uint8>(
+        std::clamp(DISCO_CHAIN_HIGHLIGHT_ALPHA_BASE +
+                       DISCO_CHAIN_HIGHLIGHT_ALPHA_SCALE * facing,
+                   0.0, 180.0));
+
+    const int outer_rx =
+        std::max(3, static_cast<int>(
+                        std::lround(link_w *
+                                    DISCO_CHAIN_OUTER_RADIUS_X_SCALE)));
+    const int outer_ry =
+        std::max(5, static_cast<int>(
+                        std::lround(link_h *
+                                    DISCO_CHAIN_OUTER_RADIUS_Y_SCALE)));
+    const int inner_rx =
+        std::max(1, static_cast<int>(
+                        std::lround(link_w *
+                                    DISCO_CHAIN_INNER_RADIUS_X_SCALE)));
+    const int inner_ry =
+        std::max(2, static_cast<int>(
+                        std::lround(link_h *
+                                    DISCO_CHAIN_INNER_RADIUS_Y_SCALE)));
+
+    const auto draw_link_arc = [&](int cx, int cy, int rx, int ry,
+                                   double start_angle, double end_angle,
+                                   SDL_Color color, int thickness) {
+      const int segments = 18;
+      for (int segment = 0; segment < segments; ++segment) {
+        const double t0 = static_cast<double>(segment) / segments;
+        const double t1 = static_cast<double>(segment + 1) / segments;
+        const double a0 = start_angle + (end_angle - start_angle) * t0;
+        const double a1 = start_angle + (end_angle - start_angle) * t1;
+        const double x0 = cx + std::cos(a0) * rx;
+        const double y0 = cy + std::sin(a0) * ry;
+        const double x1 = cx + std::cos(a1) * rx;
+        const double y1 = cy + std::sin(a1) * ry;
+        for (int band = -thickness; band <= thickness; ++band) {
+          SDL_RenderDrawAALine(sdl_renderer, x0 + band * 0.45, y0,
+                               x1 + band * 0.45, y1, color);
+          SDL_RenderDrawAALine(sdl_renderer, x0, y0 + band * 0.45,
+                               x1, y1 + band * 0.45, color);
+        }
+      }
+    };
+
+    const int thickness = std::max(2, std::min(outer_rx, outer_ry) / 4);
+    const SDL_Color shadow_color{DISCO_CHAIN_SHADOW_COLOR.r,
+                                 DISCO_CHAIN_SHADOW_COLOR.g,
+                                 DISCO_CHAIN_SHADOW_COLOR.b, back_alpha};
+    const SDL_Color metal_color{DISCO_CHAIN_METAL_COLOR.r,
+                                DISCO_CHAIN_METAL_COLOR.g,
+                                DISCO_CHAIN_METAL_COLOR.b, metal_alpha};
+    const bool front_first = std::cos(phase) >= 0.0;
+    const double front_start = vertical_link ? -0.08 * kLogoPi : 0.42 * kLogoPi;
+    const double front_end = vertical_link ? 1.08 * kLogoPi : 1.58 * kLogoPi;
+    const double back_start = front_end;
+    const double back_end = front_start + 2.0 * kLogoPi;
+
+    draw_link_arc(link_x + DISCO_CHAIN_SHADOW_OFFSET_X_PX,
+                  link_y + DISCO_CHAIN_SHADOW_OFFSET_Y_PX, outer_rx, outer_ry,
+                  0.0, 2.0 * kLogoPi, shadow_color, thickness);
+    if (front_first) {
+      draw_link_arc(link_x, link_y, outer_rx, outer_ry, back_start, back_end,
+                    metal_color, thickness);
+      draw_link_arc(link_x, link_y, outer_rx, outer_ry, front_start, front_end,
+                    metal_color, thickness + 1);
+    } else {
+      draw_link_arc(link_x, link_y, outer_rx, outer_ry, front_start, front_end,
+                    metal_color, thickness);
+      draw_link_arc(link_x, link_y, outer_rx, outer_ry, back_start, back_end,
+                    metal_color, thickness + 1);
+    }
+    SDL_RenderDrawAALine(
+        sdl_renderer, link_x + link_w * DISCO_CHAIN_HIGHLIGHT_X0_SCALE,
+        link_y + link_h * DISCO_CHAIN_HIGHLIGHT_Y0_SCALE,
+        link_x + link_w * DISCO_CHAIN_HIGHLIGHT_X1_SCALE,
+        link_y + link_h * DISCO_CHAIN_HIGHLIGHT_Y1_SCALE,
+        {DISCO_CHAIN_HIGHLIGHT_COLOR.r, DISCO_CHAIN_HIGHLIGHT_COLOR.g,
+         DISCO_CHAIN_HIGHLIGHT_COLOR.b, highlight_alpha});
+    SDL_RenderDrawAALine(
+        sdl_renderer, link_x + link_w * DISCO_CHAIN_SHADOW_LINE_X0_SCALE,
+        link_y + link_h * DISCO_CHAIN_SHADOW_LINE_Y0_SCALE,
+        link_x + link_w * DISCO_CHAIN_SHADOW_LINE_X1_SCALE,
+        link_y + link_h * DISCO_CHAIN_SHADOW_LINE_Y1_SCALE,
+        DISCO_CHAIN_SHADOW_LINE_COLOR);
+  }
+  SDL_SetRenderDrawBlendMode(sdl_renderer, previous_blend_mode);
+
+  drawDiscoBall(axis_x, ball_y, radius, rotation_phase, !disco.is_ending, 255);
+}
+
 void Renderer::drawPacmanShield(int center_x, int center_y, int base_radius,
                                 double pulse_clock) {
   SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
@@ -7811,6 +8490,22 @@ void Renderer::drawExplosionParticles() {
           PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_AMPLITUDE_CELLS,
           PLASTIC_EXPLOSIVE_WALL_DUST_WOBBLE_FREQUENCY_HZ,
           0.0f};
+    case ExplosionSmokePuffKind::NuclearDust:
+      return SmokeRenderTuning{
+          NUCLEAR_BOMB_DUST_LIFETIME_MS,
+          NUCLEAR_BOMB_DUST_INITIAL_RADIUS_CELLS,
+          NUCLEAR_BOMB_DUST_FINAL_RADIUS_CELLS,
+          NUCLEAR_BOMB_DUST_INITIAL_ALPHA,
+          NUCLEAR_BOMB_DUST_COLOR,
+          NUCLEAR_BOMB_DUST_HIGHLIGHT_COLOR,
+          NUCLEAR_BOMB_DUST_BLOB_MIN_COUNT,
+          NUCLEAR_BOMB_DUST_BLOB_MAX_COUNT,
+          NUCLEAR_BOMB_DUST_BLOB_OFFSET_FACTOR,
+          NUCLEAR_BOMB_DUST_BLOB_RADIUS_MIN_FACTOR,
+          NUCLEAR_BOMB_DUST_BLOB_RADIUS_MAX_FACTOR,
+          NUCLEAR_BOMB_DUST_WOBBLE_AMPLITUDE_CELLS,
+          NUCLEAR_BOMB_DUST_WOBBLE_FREQUENCY_HZ,
+          0.0f};
     case ExplosionSmokePuffKind::GoatRedDust:
       return SmokeRenderTuning{
           2400,
@@ -7921,6 +8616,19 @@ void Renderer::drawExplosionParticles() {
           PLASTIC_EXPLOSIVE_WALL_DEBRIS_BLOB_OFFSET_FACTOR,
           PLASTIC_EXPLOSIVE_WALL_DEBRIS_BLOB_RADIUS_MIN_FACTOR,
           PLASTIC_EXPLOSIVE_WALL_DEBRIS_BLOB_RADIUS_MAX_FACTOR,
+          0.24f,
+          true};
+    case ExplosionParticleKind::NuclearDebris:
+      return ParticleRenderTuning{
+          NUCLEAR_BOMB_DEBRIS_LIFETIME_MS,
+          NUCLEAR_BOMB_DEBRIS_INITIAL_ALPHA,
+          NUCLEAR_BOMB_DEBRIS_COLOR,
+          NUCLEAR_BOMB_DEBRIS_HIGHLIGHT_COLOR,
+          NUCLEAR_BOMB_DEBRIS_BLOB_MIN_COUNT,
+          NUCLEAR_BOMB_DEBRIS_BLOB_MAX_COUNT,
+          NUCLEAR_BOMB_DEBRIS_BLOB_OFFSET_FACTOR,
+          NUCLEAR_BOMB_DEBRIS_BLOB_RADIUS_MIN_FACTOR,
+          NUCLEAR_BOMB_DEBRIS_BLOB_RADIUS_MAX_FACTOR,
           0.24f,
           true};
     case ExplosionParticleKind::MonsterExplosion:
