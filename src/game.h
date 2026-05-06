@@ -149,6 +149,16 @@ struct LovePotionPickup {
   bool is_fading = false;
 };
 
+struct LifePickup {
+  MapCoord coord{0, 0};
+  Uint32 appeared_ticks = 0;
+  Uint32 fade_started_ticks = 0;
+  Uint32 next_spawn_ticks = 0;
+  int animation_seed = 0;
+  bool is_visible = false;
+  bool is_fading = false;
+};
+
 struct NuclearBombTargetMarker {
   bool is_marked = false;
   MapCoord coord{0, 0};
@@ -399,6 +409,7 @@ private:
   BiohazardPickup biohazard_pickup;
   NuclearBombPickup nuclear_bomb_pickup;
   LovePotionPickup love_potion_pickup;
+  LifePickup life_pickup;
   NuclearBombTargetMarker nuclear_bomb_target_marker;
   ActiveNuclearBombDrop active_nuclear_bomb_drop;
   std::vector<PlacedDynamite> placed_dynamites;
@@ -466,6 +477,9 @@ private:
   void ScheduleNextLovePotionSpawn(Uint32 now);
   void TrySpawnLovePotion(Uint32 now);
   void UpdateLovePotionPickup(Uint32 now);
+  void ScheduleNextLifePickupSpawn(Uint32 now);
+  void TrySpawnLifePickup(Uint32 now);
+  void UpdateLifePickup(Uint32 now);
   void TryUseAirstrike(Uint32 now);
   void TryFireRocket(Uint32 now);
   void TryUseBiohazardBeam(Uint32 now);
@@ -504,6 +518,7 @@ private:
   bool IsCellFreeForBiohazardPickup(MapCoord coord) const;
   bool IsCellFreeForNuclearBombPickup(MapCoord coord) const;
   bool IsCellFreeForLovePotionPickup(MapCoord coord) const;
+  bool IsCellFreeForLifePickup(MapCoord coord) const;
   bool CanPlacePlasticExplosiveAt(MapCoord coord) const;
   bool IsCraterCell(MapCoord coord) const;
   bool IsWithinRadius(MapCoord center, MapCoord target, int radius_cells) const;

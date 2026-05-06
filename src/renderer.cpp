@@ -1838,6 +1838,65 @@ void Renderer::renderFrame(bool show_hud) {
           }
         }
 
+        const auto &life = game->life_pickup;
+        if (life.is_visible) {
+          double alpha_factor = 1.0;
+          if (life.is_fading) {
+            alpha_factor =
+                1.0 - std::clamp(static_cast<double>(
+                                      now - life.fade_started_ticks) /
+                                     static_cast<double>(LIFE_PICKUP_FADE_MS),
+                                 0.0, 1.0);
+          }
+          if (alpha_factor > 0.0) {
+            const MapCoord coord = life.coord;
+            const double depth =
+                projectScene(0.5, coord.u + kFloorObjectDepthRowFactor, 0.0).y;
+            push_depth_command(depth, [&, coord, life, alpha_factor, now]() {
+              draw_with_wall_occlusion(
+                  static_cast<double>(coord.v) + 0.5,
+                  static_cast<double>(coord.u) + kFloorObjectDepthRowFactor,
+                  [&]() {
+                    const SDL_FPoint center =
+                        projectScene(coord.v + 0.5,
+                                     coord.u + kFloorObjectDepthRowFactor, 0.0);
+                    const int center_x = static_cast<int>(std::lround(center.x));
+                    const int center_y =
+                        static_cast<int>(std::lround(center.y)) -
+                        non_character_sprite_lift_px;
+                    const double animation_clock =
+                        static_cast<double>(
+                            now + life.animation_seed * 53) /
+                        160.0;
+                    const double pulse =
+                        0.86 + 0.18 * std::sin(animation_clock * 1.5);
+                    const Uint8 glow_alpha = static_cast<Uint8>(
+                        std::clamp(140.0 * alpha_factor, 0.0, 200.0));
+                    const Uint8 body_alpha = static_cast<Uint8>(
+                        std::clamp(255.0 * alpha_factor, 0.0, 255.0));
+
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 30, 54,
+                                           glow_alpha / 2);
+                    SDL_RenderFillCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(8, static_cast<int>(element_size * 0.34 *
+                                                     pulse)));
+                    SDL_SetRenderDrawColor(sdl_renderer, 255, 150, 160,
+                                           glow_alpha);
+                    SDL_RenderDrawCircle(
+                        sdl_renderer, center_x, center_y,
+                        std::max(10, static_cast<int>(element_size * 0.45 *
+                                                      pulse)));
+
+                    const int heart_size =
+                        std::max(12, static_cast<int>(element_size * 0.78));
+                    drawPulsingHeart(center_x, center_y, heart_size, body_alpha,
+                                     pulse);
+                  });
+            });
+          }
+        }
+
         const auto &nuclear_marker = game->nuclear_bomb_target_marker;
         if (nuclear_marker.is_marked) {
           const MapCoord coord = nuclear_marker.coord;

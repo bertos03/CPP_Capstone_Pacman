@@ -573,6 +573,7 @@ Game::Game(Map *_map, Events *_events, Audio *_audio, Difficulty _difficulty,
   ScheduleNextBiohazardSpawn(last_update_ticks);
   ScheduleNextNuclearBombSpawn(last_update_ticks);
   ScheduleNextLovePotionSpawn(last_update_ticks);
+  ScheduleNextLifePickupSpawn(last_update_ticks);
 
   // create Monster objects
   for (int i = 0; i < map->get_number_monsters(); i++) {
@@ -682,6 +683,7 @@ void Game::Update() {
   UpdateBiohazardPickup(now);
   UpdateNuclearBombPickup(now);
   UpdateLovePotionPickup(now);
+  UpdateLifePickup(now);
   TryUseBiohazardBeam(now);
   UpdateBiohazardBeam(now);
   TryUseNuclearBomb(now);
@@ -873,6 +875,9 @@ void Game::ShiftPausedTimers(Uint32 paused_duration_ms) {
   ShiftActiveTicks(love_potion_pickup.appeared_ticks, paused_duration_ms);
   ShiftActiveTicks(love_potion_pickup.fade_started_ticks, paused_duration_ms);
   ShiftActiveTicks(love_potion_pickup.next_spawn_ticks, paused_duration_ms);
+  ShiftActiveTicks(life_pickup.appeared_ticks, paused_duration_ms);
+  ShiftActiveTicks(life_pickup.fade_started_ticks, paused_duration_ms);
+  ShiftActiveTicks(life_pickup.next_spawn_ticks, paused_duration_ms);
   ShiftActiveTicks(nuclear_bomb_target_marker.marked_ticks, paused_duration_ms);
   ShiftActiveTicks(active_nuclear_bomb_drop.alarm_started_ticks,
                    paused_duration_ms);
@@ -1201,6 +1206,14 @@ void Game::ScheduleNextNuclearBombSpawn(Uint32 now) {
                                  tuning.extra_spawn_interval_scale);
 }
 
+void Game::ScheduleNextLifePickupSpawn(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  life_pickup.next_spawn_ticks =
+      now + RandomScaledInterval(LIFE_PICKUP_SPAWN_MIN_INTERVAL_MS,
+                                 LIFE_PICKUP_SPAWN_MAX_INTERVAL_MS,
+                                 tuning.extra_spawn_interval_scale);
+}
+
 void Game::ScheduleNextLovePotionSpawn(Uint32 now) {
   const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
   love_potion_pickup.next_spawn_ticks =
@@ -1361,6 +1374,10 @@ bool Game::IsCellFreeForDynamitePickup(MapCoord coord) const {
       SameCoord(coord, love_potion_pickup.coord)) {
     return false;
   }
+  if (life_pickup.is_visible &&
+      SameCoord(coord, life_pickup.coord)) {
+    return false;
+  }
 
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
@@ -1474,6 +1491,10 @@ bool Game::IsCellFreeForInvulnerabilityPotion(MapCoord coord) const {
       SameCoord(coord, love_potion_pickup.coord)) {
     return false;
   }
+  if (life_pickup.is_visible &&
+      SameCoord(coord, life_pickup.coord)) {
+    return false;
+  }
 
   for (const auto &dynamite : placed_dynamites) {
     if (SameCoord(coord, dynamite.coord)) {
@@ -1535,6 +1556,10 @@ bool Game::IsCellFreeForPlasticExplosivePickup(MapCoord coord) const {
 
   if (love_potion_pickup.is_visible &&
       SameCoord(coord, love_potion_pickup.coord)) {
+    return false;
+  }
+  if (life_pickup.is_visible &&
+      SameCoord(coord, life_pickup.coord)) {
     return false;
   }
 
@@ -1624,6 +1649,10 @@ bool Game::IsCellFreeForWalkieTalkiePickup(MapCoord coord) const {
 
   if (love_potion_pickup.is_visible &&
       SameCoord(coord, love_potion_pickup.coord)) {
+    return false;
+  }
+  if (life_pickup.is_visible &&
+      SameCoord(coord, life_pickup.coord)) {
     return false;
   }
 
@@ -1716,6 +1745,10 @@ bool Game::IsCellFreeForRocketPickup(MapCoord coord) const {
       SameCoord(coord, love_potion_pickup.coord)) {
     return false;
   }
+  if (life_pickup.is_visible &&
+      SameCoord(coord, life_pickup.coord)) {
+    return false;
+  }
 
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
@@ -1806,6 +1839,10 @@ bool Game::IsCellFreeForBiohazardPickup(MapCoord coord) const {
       SameCoord(coord, love_potion_pickup.coord)) {
     return false;
   }
+  if (life_pickup.is_visible &&
+      SameCoord(coord, life_pickup.coord)) {
+    return false;
+  }
 
   for (const auto *monster : monsters) {
     if ((monster->is_alive ||
@@ -1861,6 +1898,10 @@ bool Game::IsCellFreeForLovePotionPickup(MapCoord coord) const {
   return IsCellFreeForBiohazardPickup(coord);
 }
 
+bool Game::IsCellFreeForLifePickup(MapCoord coord) const {
+  return IsCellFreeForBiohazardPickup(coord);
+}
+
 bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
   if (!IsInsideMapBounds(map, coord)) {
     return false;
@@ -1900,6 +1941,10 @@ bool Game::CanPlacePlasticExplosiveAt(MapCoord coord) const {
   }
   if (love_potion_pickup.is_visible &&
       SameCoord(coord, love_potion_pickup.coord)) {
+    return false;
+  }
+  if (life_pickup.is_visible &&
+      SameCoord(coord, life_pickup.coord)) {
     return false;
   }
   for (const auto &dynamite : placed_dynamites) {
@@ -2467,6 +2512,81 @@ void Game::UpdateLovePotionPickup(Uint32 now) {
     love_potion_pickup.is_fading = false;
     love_potion_pickup.fade_started_ticks = 0;
     ScheduleNextLovePotionSpawn(now);
+  }
+}
+
+void Game::TrySpawnLifePickup(Uint32 now) {
+  if (life_pickup.is_visible || now < life_pickup.next_spawn_ticks) {
+    return;
+  }
+  if (remaining_lives >= PLAYER_LIVES_MAX) {
+    life_pickup.next_spawn_ticks = now + 2000;
+    return;
+  }
+
+  std::vector<MapCoord> candidates;
+  candidates.reserve(map->get_map_rows() * map->get_map_cols());
+  for (size_t row = 0; row < map->get_map_rows(); row++) {
+    for (size_t col = 0; col < map->get_map_cols(); col++) {
+      MapCoord coord{static_cast<int>(row), static_cast<int>(col)};
+      if (IsCellFreeForLifePickup(coord)) {
+        candidates.push_back(coord);
+      }
+    }
+  }
+
+  if (candidates.empty()) {
+    life_pickup.next_spawn_ticks = now + 1000;
+    return;
+  }
+
+  std::uniform_int_distribution<size_t> distribution(0, candidates.size() - 1);
+  life_pickup.coord = candidates[distribution(RandomGenerator())];
+  life_pickup.appeared_ticks = now;
+  life_pickup.fade_started_ticks = 0;
+  life_pickup.animation_seed =
+      static_cast<int>((now % 991) + life_pickup.coord.u * 113 +
+                       life_pickup.coord.v * 73);
+  life_pickup.is_visible = true;
+  life_pickup.is_fading = false;
+#ifdef AUDIO
+  audio->PlayPotionSpawn();
+#endif
+}
+
+void Game::UpdateLifePickup(Uint32 now) {
+  const DifficultyTuning tuning = GetDifficultyTuning(difficulty);
+  TrySpawnLifePickup(now);
+  if (!life_pickup.is_visible) {
+    return;
+  }
+
+  if (SameCoord(pacman->map_coord, life_pickup.coord)) {
+    if (remaining_lives < PLAYER_LIVES_MAX) {
+      remaining_lives++;
+    }
+#ifdef AUDIO
+    audio->PlayCoin();
+#endif
+    life_pickup.is_visible = false;
+    life_pickup.is_fading = false;
+    life_pickup.fade_started_ticks = 0;
+    ScheduleNextLifePickupSpawn(now);
+    return;
+  }
+
+  if (!life_pickup.is_fading &&
+      now - life_pickup.appeared_ticks >= tuning.pickup_visible_ms) {
+    life_pickup.is_fading = true;
+    life_pickup.fade_started_ticks = now;
+  }
+
+  if (life_pickup.is_fading &&
+      now - life_pickup.fade_started_ticks >= LIFE_PICKUP_FADE_MS) {
+    life_pickup.is_visible = false;
+    life_pickup.is_fading = false;
+    life_pickup.fade_started_ticks = 0;
+    ScheduleNextLifePickupSpawn(now);
   }
 }
 
@@ -3253,6 +3373,12 @@ void Game::CreateNuclearCrater(const ActiveNuclearExplosion &explosion,
         love_potion_pickup.is_visible = false;
         love_potion_pickup.is_fading = false;
         ScheduleNextLovePotionSpawn(now);
+      }
+      if (life_pickup.is_visible &&
+          SameCoord(life_pickup.coord, coord)) {
+        life_pickup.is_visible = false;
+        life_pickup.is_fading = false;
+        ScheduleNextLifePickupSpawn(now);
       }
       if (nuclear_bomb_target_marker.is_marked &&
           SameCoord(nuclear_bomb_target_marker.coord, coord)) {
@@ -4878,6 +5004,11 @@ void Game::HandleGoatRequests(Uint32 now) {
         monster->goat_slide_remaining_steps = GOAT_SLIDE_TILES;
         monster->grazing_until_ticks = 0;
         monster->goat_is_jumping = true;
+#ifdef AUDIO
+        if (audio != nullptr) {
+          audio->PlayGoatBleat();
+        }
+#endif
       }
     }
     if (monster->is_alive && monster->goat_love_target_id != -1) {
