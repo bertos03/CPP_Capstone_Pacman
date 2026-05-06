@@ -7292,13 +7292,7 @@ void Renderer::drawDiscoEasterEggOverlay(Uint32 now) {
 
   const int axis_x = screen_res_x / 2;
   const int axis_y = scene_origin_y + (rows * element_size) / 2;
-  const Uint32 rotation_ticks =
-      disco.is_ending ? (disco.ending_started_ticks - disco.started_ticks)
-                      : (now - disco.started_ticks);
-  const double rotation_phase =
-      std::fmod(static_cast<double>(rotation_ticks) /
-                    std::max(1.0, DISCO_ROTATION_PERIOD_MS),
-                1.0);
+  const double rotation_phase = std::fmod(disco.rotation_phase_turns, 1.0);
   if (!disco.is_ending) {
     drawDiscoLightSpots(axis_x, axis_y, rotation_phase, dim_in);
   }

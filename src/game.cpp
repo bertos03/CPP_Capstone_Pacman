@@ -653,6 +653,7 @@ void Game::RequestDiscoEasterEggEnd(Uint32 now) {
     return;
   }
 
+  UpdateDiscoRotationPhase(now);
   active_disco_easteregg.is_ending = true;
   active_disco_easteregg.ending_started_ticks = now;
   active_disco_easteregg.music_fade_started = true;
@@ -661,6 +662,19 @@ void Game::RequestDiscoEasterEggEnd(Uint32 now) {
     audio->FadeOutDiscoMusic(DISCO_MUSIC_FADE_OUT_MS);
   }
 #endif
+}
+
+void Game::AdjustDiscoRotationSpeed(double delta) {
+  if (!active_disco_easteregg.is_active ||
+      active_disco_easteregg.is_ending) {
+    return;
+  }
+
+  const Uint32 now = SDL_GetTicks();
+  UpdateDiscoRotationPhase(now);
+  active_disco_easteregg.rotation_speed_scale =
+      std::clamp(active_disco_easteregg.rotation_speed_scale + delta,
+                 DISCO_ROTATION_SPEED_MIN, DISCO_ROTATION_SPEED_MAX);
 }
 
 /**
@@ -2729,6 +2743,9 @@ void Game::StartDiscoEasterEgg(Uint32 now) {
   active_disco_easteregg.is_active = true;
   active_disco_easteregg.started_ticks = now;
   active_disco_easteregg.frozen_started_ticks = now;
+  active_disco_easteregg.last_rotation_update_ticks = now;
+  active_disco_easteregg.rotation_phase_turns = 0.0;
+  active_disco_easteregg.rotation_speed_scale = 1.0;
   active_disco_easteregg.animation_seed =
       static_cast<int>((now % DISCO_EASTER_EGG_ANIMATION_SEED_MODULUS) +
                        pacman->map_coord.u *
@@ -2744,10 +2761,30 @@ void Game::StartDiscoEasterEgg(Uint32 now) {
 #endif
 }
 
+void Game::UpdateDiscoRotationPhase(Uint32 now) {
+  if (!active_disco_easteregg.is_active ||
+      active_disco_easteregg.last_rotation_update_ticks == 0 ||
+      active_disco_easteregg.is_ending) {
+    return;
+  }
+
+  const Uint32 elapsed =
+      now - active_disco_easteregg.last_rotation_update_ticks;
+  active_disco_easteregg.last_rotation_update_ticks = now;
+  active_disco_easteregg.rotation_phase_turns =
+      std::fmod(active_disco_easteregg.rotation_phase_turns +
+                    (static_cast<double>(elapsed) /
+                     std::max(1.0, DISCO_ROTATION_PERIOD_MS)) *
+                        active_disco_easteregg.rotation_speed_scale,
+                1.0);
+}
+
 void Game::UpdateDiscoEasterEgg(Uint32 now) {
   if (!active_disco_easteregg.is_active) {
     return;
   }
+
+  UpdateDiscoRotationPhase(now);
 
   if (!active_disco_easteregg.is_ending) {
     return;

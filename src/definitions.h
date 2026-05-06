@@ -317,6 +317,9 @@ inline constexpr Uint32 DISCO_BRIGHTEN_MS = 1300;
 inline constexpr Uint32 DISCO_BALL_RAISE_MS = 1500;
 inline constexpr Uint32 DISCO_MUSIC_FADE_OUT_MS = 1800;
 inline constexpr double DISCO_ROTATION_PERIOD_MS = 2800.0;
+inline constexpr double DISCO_ROTATION_SPEED_MIN = 0.25;
+inline constexpr double DISCO_ROTATION_SPEED_MAX = 3.0;
+inline constexpr double DISCO_ROTATION_SPEED_STEP = 0.15;
 inline constexpr Uint8 DISCO_MAX_DIM_ALPHA = 165;
 inline constexpr double DISCO_AXIS_TILT_DEGREES = -18.0;
 inline constexpr int DISCO_LIGHT_SPOT_COUNT = 240;
@@ -643,20 +646,20 @@ inline constexpr float
 // Atombomben-Fragmente: gleiche Logik wie Mauer-Debris, aber graue
 // Truemmerstuecke und graue Rauchspuren. Riesige Anzahl an Partikeln, die in
 // parabelfoermiger Flugbahn weggeschleudert werden.
-inline constexpr int NUCLEAR_BOMB_DEBRIS_MIN_COUNT = 380;
-inline constexpr int NUCLEAR_BOMB_DEBRIS_MAX_COUNT = 540;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_MIN_SPEED_CELLS_PER_SEC = 4.5f;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_MAX_SPEED_CELLS_PER_SEC = 16.0f;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_GRAVITY_CELLS_PER_SEC2 = 10.4f;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_MIN_COUNT = 280;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_MAX_COUNT = 340;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_MIN_SPEED_CELLS_PER_SEC = 3.5f;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_MAX_SPEED_CELLS_PER_SEC = 12.0f;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_GRAVITY_CELLS_PER_SEC2 = 12.4f;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_INITIAL_UPWARD_BIAS = 1.32f;
 inline constexpr Uint32 NUCLEAR_BOMB_DEBRIS_LIFETIME_MS = 5200;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_RADIUS_CELLS = 0.22f;
-inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MIN_COUNT = 3;
-inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MAX_COUNT = 9;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MIN_COUNT = 4;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MAX_COUNT = 12;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_OFFSET_FACTOR = 0.68f;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_RADIUS_MIN_FACTOR = 0.42f;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_RADIUS_MAX_FACTOR = 0.94f;
-inline constexpr Uint8 NUCLEAR_BOMB_DEBRIS_INITIAL_ALPHA = 232;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_RADIUS_MIN_FACTOR = 0.52f;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_RADIUS_MAX_FACTOR = 1.44f;
+inline constexpr Uint8 NUCLEAR_BOMB_DEBRIS_INITIAL_ALPHA = 202;
 inline constexpr SDL_Color NUCLEAR_BOMB_DEBRIS_COLOR{96, 92, 88, 255};
 inline constexpr SDL_Color NUCLEAR_BOMB_DEBRIS_HIGHLIGHT_COLOR{162, 156, 150,
                                                                 255};

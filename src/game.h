@@ -173,6 +173,9 @@ struct ActiveDiscoEasterEgg {
   Uint32 started_ticks = 0;
   Uint32 ending_started_ticks = 0;
   Uint32 frozen_started_ticks = 0;
+  Uint32 last_rotation_update_ticks = 0;
+  double rotation_phase_turns = 0.0;
+  double rotation_speed_scale = 1.0;
   int animation_seed = 0;
   bool is_active = false;
   bool is_ending = false;
@@ -401,6 +404,7 @@ public:
   void ResumeSimulation(Uint32 paused_duration_ms);
   bool IsDiscoEasterEggActive() const;
   void RequestDiscoEasterEggEnd(Uint32 now);
+  void AdjustDiscoRotationSpeed(double delta);
   void Update();
 
 protected:
@@ -511,6 +515,7 @@ private:
   void UpdateDiscoPickup(Uint32 now);
   void StartDiscoEasterEgg(Uint32 now);
   void UpdateDiscoEasterEgg(Uint32 now);
+  void UpdateDiscoRotationPhase(Uint32 now);
   void TryUseAirstrike(Uint32 now);
   void TryFireRocket(Uint32 now);
   void TryUseBiohazardBeam(Uint32 now);

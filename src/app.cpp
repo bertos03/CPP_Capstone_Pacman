@@ -1379,6 +1379,16 @@ int BobManApp::Run() {
           if (events->ConsumeConfirmRequest()) {
             events->Keyreset();
           }
+          if (game->IsDiscoEasterEggActive()) {
+            const Directions disco_move = events->get_next_move();
+            if (disco_move == Directions::Left) {
+              game->AdjustDiscoRotationSpeed(-DISCO_ROTATION_SPEED_STEP);
+              events->Keyreset();
+            } else if (disco_move == Directions::Right) {
+              game->AdjustDiscoRotationSpeed(DISCO_ROTATION_SPEED_STEP);
+              events->Keyreset();
+            }
+          }
           if (events->ConsumePauseToggleRequest()) {
             if (game->IsDiscoEasterEggActive()) {
               game->RequestDiscoEasterEggEnd(SDL_GetTicks());
