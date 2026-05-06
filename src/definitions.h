@@ -641,8 +641,8 @@ inline constexpr float
     PLASTIC_EXPLOSIVE_WALL_DUST_INITIAL_SPREAD_CELLS = 0.34f;
 
 // Atombomben-Fragmente: gleiche Logik wie Mauer-Debris, aber graue
-// Trümmerstücke und graue Rauchspuren. Riesige Anzahl an Partikeln, die in
-// parabelförmiger Flugbahn weggeschleudert werden.
+// Truemmerstuecke und graue Rauchspuren. Riesige Anzahl an Partikeln, die in
+// parabelfoermiger Flugbahn weggeschleudert werden.
 inline constexpr int NUCLEAR_BOMB_DEBRIS_MIN_COUNT = 900;
 inline constexpr int NUCLEAR_BOMB_DEBRIS_MAX_COUNT = 1300;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_MIN_SPEED_CELLS_PER_SEC = 4.5f;
