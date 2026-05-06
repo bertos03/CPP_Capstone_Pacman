@@ -643,14 +643,14 @@ inline constexpr float
 // Atombomben-Fragmente: gleiche Logik wie Mauer-Debris, aber graue
 // Truemmerstuecke und graue Rauchspuren. Riesige Anzahl an Partikeln, die in
 // parabelfoermiger Flugbahn weggeschleudert werden.
-inline constexpr int NUCLEAR_BOMB_DEBRIS_MIN_COUNT = 900;
-inline constexpr int NUCLEAR_BOMB_DEBRIS_MAX_COUNT = 1300;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_MIN_COUNT = 380;
+inline constexpr int NUCLEAR_BOMB_DEBRIS_MAX_COUNT = 540;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_MIN_SPEED_CELLS_PER_SEC = 4.5f;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_MAX_SPEED_CELLS_PER_SEC = 16.0f;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_GRAVITY_CELLS_PER_SEC2 = 10.4f;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_INITIAL_UPWARD_BIAS = 1.32f;
 inline constexpr Uint32 NUCLEAR_BOMB_DEBRIS_LIFETIME_MS = 5200;
-inline constexpr float NUCLEAR_BOMB_DEBRIS_RADIUS_CELLS = 0.12f;
+inline constexpr float NUCLEAR_BOMB_DEBRIS_RADIUS_CELLS = 0.22f;
 inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MIN_COUNT = 3;
 inline constexpr int NUCLEAR_BOMB_DEBRIS_BLOB_MAX_COUNT = 9;
 inline constexpr float NUCLEAR_BOMB_DEBRIS_BLOB_OFFSET_FACTOR = 0.68f;
@@ -660,11 +660,11 @@ inline constexpr Uint8 NUCLEAR_BOMB_DEBRIS_INITIAL_ALPHA = 232;
 inline constexpr SDL_Color NUCLEAR_BOMB_DEBRIS_COLOR{96, 92, 88, 255};
 inline constexpr SDL_Color NUCLEAR_BOMB_DEBRIS_HIGHLIGHT_COLOR{162, 156, 150,
                                                                 255};
-inline constexpr Uint32 NUCLEAR_BOMB_DUST_SPAWN_INTERVAL_MS = 28;
-inline constexpr Uint32 NUCLEAR_BOMB_DUST_LIFETIME_MS = 900;
-inline constexpr float NUCLEAR_BOMB_DUST_INITIAL_RADIUS_CELLS = 0.10f;
-inline constexpr float NUCLEAR_BOMB_DUST_FINAL_RADIUS_CELLS = 0.62f;
-inline constexpr Uint8 NUCLEAR_BOMB_DUST_INITIAL_ALPHA = 56;
+inline constexpr Uint32 NUCLEAR_BOMB_DUST_SPAWN_INTERVAL_MS = 12;
+inline constexpr Uint32 NUCLEAR_BOMB_DUST_LIFETIME_MS = 1500;
+inline constexpr float NUCLEAR_BOMB_DUST_INITIAL_RADIUS_CELLS = 0.18f;
+inline constexpr float NUCLEAR_BOMB_DUST_FINAL_RADIUS_CELLS = 0.95f;
+inline constexpr Uint8 NUCLEAR_BOMB_DUST_INITIAL_ALPHA = 150;
 inline constexpr SDL_Color NUCLEAR_BOMB_DUST_COLOR{110, 108, 104, 255};
 inline constexpr SDL_Color NUCLEAR_BOMB_DUST_HIGHLIGHT_COLOR{170, 166, 160,
                                                               255};
